@@ -1,77 +1,636 @@
-# Mathematical helpers and convenience functions.
+# math helpers, use it like: import math, then math.sqrt(16)
+# angles are in radians and bad input gives nan instead of crashing
 class Math
-    def square(x)
-        return x * x
+    # constants
+    const pi      = 3.141592653589793
+    const e       = 2.718281828459045
+    const tau     = 6.283185307179586
+    const ln2     = 0.6931471805599453
+    const ln10    = 2.302585092994046
+    const log2e   = 1.4426950408889634
+    const log10e  = 0.4342944819032518
+    const sqrt2   = 1.4142135623730951
+    const sqrt1_2 = 0.7071067811865476
+    const inf     = 1.0 / 0.0
+    const neg_inf = -1.0 / 0.0
+    const nan     = 0.0 / 0.0
+
+    # above 2^52 every float is already whole, so we skip int() there
+    const max_safe_int = 4503599627370496.0
+
+    def initialize()
+        self.random_seed = 1
     end
 
-    def cube(x)
-        return x * x * x
+    # basic
+    def abs(x)
+        if x < 0
+            return -x
+        end
+        return x
+    end
+
+    # -1, 0 or 1 (nan stays nan)
+    def sign(x)
+        if self.is_nan(x)
+            return nan
+        else if x > 0
+            return 1
+        else if x < 0
+            return -1
+        else
+            return 0
+        end
+    end
+
+    def min(a, b)
+        if a < b
+            return a
+        end
+        return b
+    end
+
+    def max(a, b)
+        if a > b
+            return a
+        end
+        return b
     end
 
     def clamp(x, low, high)
         if x < low
             return low
-        else if x > high
+        end
+        if x > high
             return high
         end
         return x
     end
 
-    def even(x)
-        return x % 2 == 0
-    end
-
-    def odd(x)
-        return x % 2 != 0
-    end
-
-    def abs(x)
-        return abs(x)
-    end
-
-    def sqrt(x)
-        return sqrt(x)
-    end
-
-    def pow(x, y)
-        return pow(x, y)
-    end
-
-    def sin(x)
-        return sin(x)
-    end
-
-    def cos(x)
-        return cos(x)
-    end
-
-    def tan(x)
-        return tan(x)
-    end
-
     def floor(x)
-        return floor(x)
+        if !self.is_finite(x) || x >= max_safe_int || x <= -max_safe_int
+            return x
+        end
+        i = int(x)
+        if x < i
+            return i - 1
+        end
+        return i
     end
 
     def ceil(x)
-        return ceil(x)
+        if !self.is_finite(x) || x >= max_safe_int || x <= -max_safe_int
+            return x
+        end
+        i = int(x)
+        if x > i
+            return i + 1
+        end
+        return i
     end
 
-    def log(x)
-        return log(x)
+    # halves go away from zero: 2.5 -> 3, -2.5 -> -3
+    def round(x)
+        if x >= 0
+            return self.floor(x + 0.5)
+        end
+        return self.ceil(x - 0.5)
     end
 
-    def min(a, b)
-        return min(a, b)
+    def trunc(x)
+        if !self.is_finite(x) || x >= max_safe_int || x <= -max_safe_int
+            return x
+        end
+        return int(x)
     end
 
-    def max(a, b)
-        return max(a, b)
+    def fract(x)
+        return x - self.floor(x)
+    end
+
+    # result takes the sign of b, like ruby's %
+    def mod(a, b)
+        if b == 0
+            return nan
+        end
+        return a - b * self.floor(a / b)
+    end
+
+    # result takes the sign of a, like c++ fmod
+    def rem(a, b)
+        if b == 0
+            return nan
+        end
+        return a % b
+    end
+
+    # power / roots / exponential
+    def pow(base, power)
+        if power == 0
+            return 1
+        end
+        if self.is_integer(power)
+            return self.pow_int(base, power)
+        end
+        if self.is_nan(base) || self.is_nan(power) || base < 0
+            return nan
+        end
+        if base == 0
+            if power > 0
+                return 0
+            end
+            return inf
+        end
+        return self.exp(power * self.ln(base))
+    end
+
+    # square-and-multiply, integer powers only
+    def pow_int(base, power)
+        if power == 0
+            return 1
+        end
+
+        if power < 0
+            if base == 0
+                return inf
+            end
+            return 1.0 / self.pow_int(base, -power)
+        end
+
+        result = 1
+        while power > 0
+            if power % 2 == 1
+                result *= base
+            end
+            power = self.floor(power / 2)
+            if power > 0
+                base *= base
+            end
+        end
+
+        return result
+    end
+
+    def sqrt(x)
+        if self.is_nan(x) || x < 0
+            return nan
+        end
+        if x == 0 || x == inf
+            return x
+        end
+
+        # shrink x into [1, 4) so newton converges fast
+        scale = 1.0
+        while x >= 4
+            x /= 4
+            scale *= 2
+        end
+        while x < 1
+            x *= 4
+            scale /= 2
+        end
+
+        guess = (1 + x) / 2
+        i = 0
+        while i < 8
+            guess = (guess + x / guess) / 2
+            i += 1
+        end
+
+        return guess * scale
+    end
+
+    def cbrt(x)
+        if self.is_nan(x) || self.is_inf(x) || x == 0
+            return x
+        end
+        if x < 0
+            return -self.cbrt(-x)
+        end
+
+        # same idea, shrink x into [1, 8)
+        scale = 1.0
+        while x >= 8
+            x /= 8
+            scale *= 2
+        end
+        while x < 1
+            x *= 8
+            scale /= 2
+        end
+
+        guess = (1 + x) / 2
+        i = 0
+        while i < 12
+            guess = (2 * guess + x / (guess * guess)) / 3
+            i += 1
+        end
+
+        return guess * scale
+    end
+
+    def hypot(x, y)
+        return self.sqrt(x * x + y * y)
+    end
+
+    def exp(x)
+        if self.is_nan(x)
+            return x
+        end
+        if x > 709.782712893384
+            return inf
+        end
+        if x < -745.2
+            return 0
+        end
+
+        # split into 2^k * exp(r) with a small r
+        k = self.round(x / ln2)
+        r = x - k * ln2
+
+        total = 1.0
+        term = 1.0
+        i = 1
+        while i <= 20
+            term = term * r / i
+            total += term
+            i += 1
+        end
+
+        # apply 2^k in two halves so it can't overflow by itself
+        half = self.floor(k / 2)
+        return total * self.pow_int(2.0, half) * self.pow_int(2.0, k - half)
+    end
+
+    def exp2(x)
+        return self.pow(2, x)
+    end
+
+    # exp(x) - 1 without losing precision near 0
+    def expm1(x)
+        if self.abs(x) < 0.5
+            term = x
+            total = x
+            i = 2
+            while i <= 25
+                term = term * x / i
+                total += term
+                i += 1
+            end
+            return total
+        end
+        return self.exp(x) - 1
+    end
+
+    # logarithms
+    def ln(x)
+        if self.is_nan(x) || x < 0
+            return nan
+        end
+        if x == 0
+            return neg_inf
+        end
+        if x == inf
+            return inf
+        end
+
+        # pull x into [1/sqrt2, sqrt2], count the powers of two
+        k = 0
+        while x > sqrt2
+            x /= 2
+            k += 1
+        end
+        while x < sqrt1_2
+            x *= 2
+            k -= 1
+        end
+
+        # ln(x) = 2 * (z + z^3/3 + z^5/5 + ...), z = (x - 1) / (x + 1)
+        z = (x - 1) / (x + 1)
+        z_squared = z * z
+        term = z
+        total = 0.0
+        n = 1
+        i = 0
+        while i < 25
+            total += term / n
+            term *= z_squared
+            n += 2
+            i += 1
+        end
+
+        return 2 * total + k * ln2
+    end
+
+    def log(x, base)
+        if x <= 0
+            return nan
+        end
+        if base <= 0 || base == 1
+            return nan
+        end
+        return self.ln(x) / self.ln(base)
+    end
+
+    def log2(x)
+        if x <= 0
+            return nan
+        end
+        return self.ln(x) / ln2
+    end
+
+    def log10(x)
+        if x <= 0
+            return nan
+        end
+        return self.ln(x) / ln10
+    end
+
+    # ln(1 + x) without losing precision near 0
+    def log1p(x)
+        if x < -1
+            return nan
+        end
+        if x == -1
+            return neg_inf
+        end
+        if self.abs(x) <= 0.5
+            total = 0.0
+            term = x
+            n = 1
+            direction = 1
+            i = 0
+            while i < 60
+                total += direction * term / n
+                term *= x
+                n += 1
+                direction = -direction
+                i += 1
+            end
+            return total
+        end
+        return self.ln(1 + x)
+    end
+
+    # trigonometry
+    def sin(x)
+        if !self.is_finite(x)
+            return nan
+        end
+
+        # wrap x into [-pi, pi]
+        x = x - tau * self.floor(x / tau + 0.5)
+
+        x2 = x * x
+        term = x
+        result = x
+        n = 1
+        while n <= 15
+            term *= -x2 / ((2 * n) * (2 * n + 1))
+            result += term
+            n += 1
+        end
+
+        return result
+    end
+
+    def cos(x)
+        if !self.is_finite(x)
+            return nan
+        end
+
+        # wrap x into [-pi, pi]
+        x = x - tau * self.floor(x / tau + 0.5)
+
+        x2 = x * x
+        term = 1.0
+        result = 1.0
+        n = 1
+        while n <= 15
+            term *= -x2 / ((2 * n - 1) * (2 * n))
+            result += term
+            n += 1
+        end
+
+        return result
+    end
+
+    def tan(x)
+        s = self.sin(x)
+        c = self.cos(x)
+
+        if c == 0
+            if s >= 0
+                return inf
+            end
+            return neg_inf
+        end
+
+        return s / c
+    end
+
+    def arctan(x)
+        if self.is_nan(x)
+            return nan
+        end
+        if x == 0
+            return 0
+        end
+        if x < 0
+            return -self.arctan(-x)
+        end
+        if x > 1
+            return pi / 2 - self.arctan(1 / x)
+        end
+
+        # for x in (0.5, 1]: atan(x) = pi/4 + atan((x - 1) / (x + 1))
+        offset = 0
+        if x > 0.5
+            offset = pi / 4
+            x = (x - 1) / (x + 1)
+        end
+
+        # atan(x) = x - x^3/3 + x^5/5 - ...
+        x2 = x * x
+        term = x
+        total = 0.0
+        n = 0
+        while n < 25
+            if n % 2 == 0
+                total += term / (2 * n + 1)
+            else
+                total -= term / (2 * n + 1)
+            end
+            term *= x2
+            n += 1
+        end
+
+        return offset + total
+    end
+
+    def arcsin(x)
+        if x < -1 || x > 1
+            return nan
+        end
+        if x == 1
+            return pi / 2
+        end
+        if x == -1
+            return -pi / 2
+        end
+        return self.arctan(x / self.sqrt(1 - x * x))
+    end
+
+    def arccos(x)
+        if x < -1 || x > 1
+            return nan
+        end
+        return pi / 2 - self.arcsin(x)
+    end
+
+    def arctan2(y, x)
+        if x > 0
+            return self.arctan(y / x)
+        end
+        if x < 0 && y >= 0
+            return self.arctan(y / x) + pi
+        end
+        if x < 0 && y < 0
+            return self.arctan(y / x) - pi
+        end
+        if x == 0 && y > 0
+            return pi / 2
+        end
+        if x == 0 && y < 0
+            return -pi / 2
+        end
+        if x == 0 && y == 0
+            return 0
+        end
+        return nan
+    end
+
+    # hyperbolic
+    def sinh(x)
+        return (self.expm1(x) - self.expm1(-x)) / 2
+    end
+
+    def cosh(x)
+        return (self.exp(x) + self.exp(-x)) / 2
+    end
+
+    def tanh(x)
+        if x > 20
+            return 1
+        end
+        if x < -20
+            return -1
+        end
+        return self.sinh(x) / self.cosh(x)
+    end
+
+    def arcsinh(x)
+        if x < 0
+            return -self.arcsinh(-x)
+        end
+        return self.ln(x + self.sqrt(x * x + 1))
+    end
+
+    def arccosh(x)
+        if x < 1
+            return nan
+        end
+        return self.ln(x + self.sqrt(x - 1) * self.sqrt(x + 1))
+    end
+
+    # aliases
+    def atan(x)
+        return self.arctan(x)
+    end
+
+    def asin(x)
+        return self.arcsin(x)
+    end
+
+    def acos(x)
+        return self.arccos(x)
+    end
+
+    def atan2(y, x)
+        return self.arctan2(y, x)
+    end
+
+    def asinh(x)
+        return self.arcsinh(x)
+    end
+
+    def acosh(x)
+        return self.arccosh(x)
+    end
+
+    # checks
+    def is_nan(x)
+        return x != x
+    end
+
+    def is_inf(x)
+        return x == inf || x == neg_inf
+    end
+
+    def is_finite(x)
+        return !self.is_nan(x) && !self.is_inf(x)
+    end
+
+    def is_integer(x)
+        if !self.is_finite(x)
+            return false
+        end
+        return x == self.floor(x)
+    end
+
+    def is_normal(x)
+        if !self.is_finite(x)
+            return false
+        end
+        if x == 0
+            return false
+        end
+        # smallest normal double is 2^-1022
+        return self.abs(x) >= 1.0 / self.pow_int(2.0, 1022)
+    end
+
+    # angle conversion
+    def to_radians(deg)
+        return deg * pi / 180
+    end
+
+    def to_degrees(rad)
+        return rad * 180 / pi
+    end
+
+    # integer helpers
+    def gcd(a, b)
+        a = self.abs(a)
+        b = self.abs(b)
+        while b != 0
+            temp = b
+            b = a % b
+            a = temp
+        end
+        return a
+    end
+
+    def lcm(a, b)
+        if a == 0 || b == 0
+            return 0
+        end
+        # divide first so the number stays small
+        return self.abs(int(a / self.gcd(a, b)) * b)
     end
 
     def factorial(n)
         if n < 0
-            throw "factorial expects a non-negative integer"
+            return nan
         end
         result = 1
         i = 2
@@ -82,67 +641,303 @@ class Math
         return result
     end
 
-    def gcd(a, b)
-        a = abs(a)
-        b = abs(b)
-        while b != 0
-            remainder = a % b
-            a = b
-            b = remainder
+    def is_prime(n)
+        if n < 2
+            return false
         end
-        return a
+        if n == 2
+            return true
+        end
+        if n % 2 == 0
+            return false
+        end
+
+        i = 3
+        while i * i <= n
+            if n % i == 0
+                return false
+            end
+            i += 2
+        end
+
+        return true
     end
 
-    def lcm(a, b)
-        if a == 0 or b == 0
+    def next_prime(n)
+        if n < 2
+            return 2
+        end
+
+        candidate = n + 1
+        while !self.is_prime(candidate)
+            candidate += 1
+        end
+
+        return candidate
+    end
+
+    # combinatorics
+    def comb(n, k)
+        if k < 0 || k > n
             return 0
         end
-        return int(abs((a / self.gcd(a, b)) * b))
+        if k > n - k
+            k = n - k
+        end
+
+        result = 1
+        i = 1
+        while i <= k
+            result = result * (n - k + i) / i
+            i += 1
+        end
+
+        return result
     end
 
-    def average(values)
-        if values.length() == 0
-            return nil
+    def perm(n, k)
+        if k < 0 || k > n
+            return 0
         end
-        return sum(values) / values.length()
+
+        result = 1
+        i = 0
+        while i < k
+            result *= (n - i)
+            i += 1
+        end
+
+        return result
+    end
+
+    # statistics
+    def sum(list)
+        result = 0
+        for item in list
+            result += item
+        end
+        return result
+    end
+
+    def mean(list)
+        if list.length() == 0
+            return nan
+        end
+        return self.sum(list) * 1.0 / list.length()
+    end
+
+    # smallest item of a list (min(a, b) is for two numbers)
+    def min_of(list)
+        if list.length() == 0
+            return nan
+        end
+
+        result = list[0]
+        for item in list
+            if item < result
+                result = item
+            end
+        end
+
+        return result
+    end
+
+    # biggest item of a list (max(a, b) is for two numbers)
+    def max_of(list)
+        if list.length() == 0
+            return nan
+        end
+
+        result = list[0]
+        for item in list
+            if item > result
+                result = item
+            end
+        end
+
+        return result
+    end
+
+    # sorted copy via insertion sort, original stays as is
+    def sorted(list)
+        arr = []
+        for item in list
+            arr.push(item)
+        end
+
+        i = 1
+        while i < arr.length()
+            value = arr[i]
+            j = i - 1
+            while j >= 0 && arr[j] > value
+                arr[j + 1] = arr[j]
+                j -= 1
+            end
+            arr[j + 1] = value
+            i += 1
+        end
+
+        return arr
+    end
+
+    def median(list)
+        if list.length() == 0
+            return nan
+        end
+
+        arr = self.sorted(list)
+        n = arr.length()
+        mid = self.floor(n / 2)
+
+        if n % 2 == 1
+            return arr[mid]
+        end
+
+        return (arr[mid - 1] + arr[mid]) / 2.0
+    end
+
+    # population variance (divides by n)
+    def variance(list)
+        if list.length() == 0
+            return nan
+        end
+
+        avg = self.mean(list)
+        total = 0.0
+        for item in list
+            diff = item - avg
+            total += diff * diff
+        end
+
+        return total / list.length()
+    end
+
+    def stddev(list)
+        return self.sqrt(self.variance(list))
+    end
+
+    # random
+    def seed(value)
+        self.random_seed = self.abs(int(value)) % 2147483648
+    end
+
+    # float in [0, 1)
+    def random()
+        self.random_seed = (self.random_seed * 1103515245 + 12345) % 2147483648
+        return self.random_seed / 2147483648.0
+    end
+
+    # integer in [low, high], both ends included
+    def rand_int(low, high)
+        if high < low
+            return nan
+        end
+        return low + self.floor(self.random() * (high - low + 1))
+    end
+
+    # float in [low, high)
+    def rand_float(low, high)
+        return low + self.random() * (high - low)
+    end
+
+    def choice(list)
+        if list.length() == 0
+            return nan
+        end
+
+        index = self.rand_int(0, list.length() - 1)
+        return list[index]
+    end
+
+    # shuffled copy (fisher-yates), original stays as is
+    def shuffle(list)
+        arr = []
+        for item in list
+            arr.push(item)
+        end
+
+        i = arr.length() - 1
+        while i > 0
+            j = self.rand_int(0, i)
+            temp = arr[i]
+            arr[i] = arr[j]
+            arr[j] = temp
+            i -= 1
+        end
+
+        return arr
+    end
+
+    # geometry / vectors
+    def distance(x1, y1, x2, y2)
+        return self.hypot(x2 - x1, y2 - y1)
+    end
+
+    def lerp(a, b, t)
+        return a + (b - a) * t
+    end
+
+    def inverse_lerp(a, b, x)
+        if a == b
+            return nan
+        end
+        return (x - a) / (b - a)
+    end
+
+    def map_range(x, in_min, in_max, out_min, out_max)
+        if in_min == in_max
+            return nan
+        end
+
+        t = (x - in_min) / (in_max - in_min)
+        return out_min + (out_max - out_min) * t
+    end
+
+    def dot(v1, v2)
+        if v1.length() != v2.length()
+            return nan
+        end
+
+        result = 0
+        i = 0
+        while i < v1.length()
+            result += v1[i] * v2[i]
+            i += 1
+        end
+
+        return result
+    end
+
+    def cross(v1, v2)
+        if v1.length() != 3 || v2.length() != 3
+            return nan
+        end
+
+        return [
+            v1[1] * v2[2] - v1[2] * v2[1],
+            v1[2] * v2[0] - v1[0] * v2[2],
+            v1[0] * v2[1] - v1[1] * v2[0]
+        ]
+    end
+
+    # vector length
+    def length(v)
+        return self.sqrt(self.dot(v, v))
+    end
+
+    def normalize(v)
+        len = self.length(v)
+        if len == 0
+            return nan
+        end
+
+        result = []
+        for item in v
+            result.push(item / len)
+        end
+
+        return result
     end
 end
 
 math = Math.new()
-
-# Flat public math API.
-def _math_abs(x); return x.abs(); end
-def _math_sqrt(x); return x.sqrt(); end
-def _math_pow(x, y); return x.pow(y); end
-def _math_sin(x); return x.sin(); end
-def _math_cos(x); return x.cos(); end
-def _math_tan(x); return x.tan(); end
-def _math_floor(x); return x.floor(); end
-def _math_ceil(x); return x.ceil(); end
-def _math_log(x); return x.log(); end
-def _math_log10(x); return x.log() / 2.302585092994046; end
-def _math_exp(x); return __math_exp(x); end
-def square(x); return x * x; end
-def cube(x); return x * x * x; end
-def clamp(x, low, high); if x < low; return low; else if x > high; return high; end; return x; end
-def even(x); return x % 2 == 0; end
-def odd(x); return x % 2 != 0; end
-def abs(x); return _math_abs(x); end
-def sqrt(x); return _math_sqrt(x); end
-def pow(x, y); return _math_pow(x, y); end
-def sin(x); return _math_sin(x); end
-def cos(x); return _math_cos(x); end
-def tan(x); return _math_tan(x); end
-def floor(x); return _math_floor(x); end
-def ceil(x); return _math_ceil(x); end
-def log(x); return _math_log(x); end
-def log10(x); return _math_log10(x); end
-def exp(x); return _math_exp(x); end
-def min(a, b); if a < b; return a; end; return b; end
-def max(a, b); if a > b; return a; end; return b; end
-def factorial(n); return Math.new().factorial(n); end
-def gcd(a, b); return Math.new().gcd(a, b); end
-def lcm(a, b); return Math.new().lcm(a, b); end
-def average(values); return Math.new().average(values); end
-def pi(); return 3.141592653589793; end
-def e(); return 2.718281828459045; end
