@@ -100,6 +100,34 @@ name(parameter: value)
 def name(required, optional = value, *rest)
 ```
 
+Parenthesized calls, arrays, maps, lambda parameter lists, and function parameter lists may span multiple lines. Newlines inside these delimiters are formatting and do not terminate the expression.
+
+```lucy
+text(
+    "hello",
+    name,
+    end
+)
+
+items = [
+    1,
+    2,
+    3
+]
+
+user = {
+    name: "Nima",
+    version: 1
+}
+
+def add(
+    a,
+    b
+)
+    return a + b
+end
+```
+
 ## Operators
 
 ```text

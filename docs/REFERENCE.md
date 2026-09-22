@@ -61,7 +61,34 @@ The first executable statement is simply the first statement in the file.
 
 ---
 
-## 3. Comments
+## 3. Source layout and multiline expressions
+
+A newline normally separates statements. Inside matching `()`, `[]`, and `{}` delimiters, newlines are ignored so expressions can be formatted across multiple lines. The same rule applies to function and lambda parameter lists.
+
+```lucy
+response = http.get(
+    url,
+    headers,
+    options
+)
+
+items = [
+    first,
+    second,
+    third
+]
+
+config = {
+    host: "localhost",
+    port: 8080
+}
+```
+
+This does not turn arbitrary newlines into whitespace: two top-level expressions on separate lines remain separate statements.
+
+---
+
+## 4. Comments
 
 ### Single-line comments
 
@@ -87,7 +114,7 @@ The closing marker must be `=end`.
 
 ---
 
-## 4. Values and types
+## 5. Values and types
 
 Lucy is dynamically typed. A variable does not have a permanently declared type.
 
@@ -135,7 +162,7 @@ instance
 
 ---
 
-## 5. Truthiness
+## 6. Truthiness
 
 Lucy uses truthiness in conditions.
 
@@ -165,7 +192,7 @@ This rule is also used by `not`, `and`, `or`, `assert`, and loop conditions.
 
 ---
 
-## 6. Literals
+## 7. Literals
 
 ### `nil`
 
@@ -225,7 +252,7 @@ Unknown escapes are preserved as a backslash followed by the character.
 
 ---
 
-## 7. String interpolation
+## 8. String interpolation
 
 A `$name` sequence inside a string is replaced with the value of the variable.
 
@@ -249,7 +276,7 @@ An unknown interpolation target raises `NameError`.
 
 # Part II — Variables and Scope
 
-## 8. Variables
+## 9. Variables
 
 Variables are created by assignment:
 
@@ -269,7 +296,7 @@ If assignment targets an existing variable in an enclosing scope, Lucy updates t
 
 ---
 
-## 9. Constants
+## 10. Constants
 
 Use `const` for a binding that cannot be reassigned:
 
@@ -289,7 +316,7 @@ const VALUE
 
 ---
 
-## 10. Global variables
+## 11. Global variables
 
 Use `global` when a declaration should be placed directly in the global environment:
 
@@ -301,7 +328,7 @@ This is mainly useful when code is executing inside another scope and needs to d
 
 ---
 
-## 11. Block scope
+## 12. Block scope
 
 Control-flow blocks and explicit statement blocks use child environments.
 
@@ -331,7 +358,7 @@ This prints `20`.
 
 ---
 
-## 12. Closures
+## 13. Closures
 
 Functions capture their lexical environment.
 
@@ -358,7 +385,7 @@ The returned function continues to access the captured `value` after `make_count
 
 # Part III — Operators
 
-## 13. Arithmetic operators
+## 14. Arithmetic operators
 
 Lucy supports:
 
@@ -389,7 +416,7 @@ Division or modulo by zero raises `ZeroDivisionError`.
 
 ---
 
-## 14. String addition
+## 15. String addition
 
 If the left operand of `+` is a string, Lucy converts the right operand to its string representation and concatenates it.
 
@@ -399,7 +426,7 @@ print "count: " + 10
 
 ---
 
-## 15. Array addition
+## 16. Array addition
 
 If the left operand is an array:
 
@@ -415,7 +442,7 @@ The original left array is not modified by `+`.
 
 ---
 
-## 16. Comparison operators
+## 17. Comparison operators
 
 ```text
 ==   !=   ===   !==
@@ -454,7 +481,7 @@ Comparing incompatible types raises `TypeError`.
 
 ---
 
-## 17. Logical operators
+## 18. Logical operators
 
 Lucy supports both word and symbolic forms:
 
@@ -486,7 +513,7 @@ They use short-circuit evaluation.
 
 ---
 
-## 18. Bitwise operators
+## 19. Bitwise operators
 
 ```text
 &   |   ^   ~   <<   >>
@@ -507,7 +534,7 @@ Compound assignment forms are also available.
 
 ---
 
-## 19. Membership operator
+## 20. Membership operator
 
 `in` checks whether the left value exists in the right value.
 
@@ -538,7 +565,7 @@ The right operand must be an array, map, or string.
 
 ---
 
-## 20. Ternary operator
+## 21. Ternary operator
 
 ```text
 condition ? value_if_true : value_if_false
@@ -552,7 +579,7 @@ status = age >= 18 ? "adult" : "minor"
 
 ---
 
-## 21. Ranges
+## 22. Ranges
 
 Lucy has inclusive and exclusive ranges:
 
@@ -584,7 +611,7 @@ Ranges are materialized as arrays by the current interpreter.
 
 ---
 
-## 22. Assignment operators
+## 23. Assignment operators
 
 Lucy supports:
 
@@ -605,7 +632,7 @@ Assignments may target variables, array indexes, instance fields, and map member
 
 ---
 
-## 23. Increment and decrement
+## 24. Increment and decrement
 
 Both prefix and postfix forms are recognized:
 
@@ -622,7 +649,7 @@ The postfix form returns the old value while updating the target. The prefix for
 
 # Part IV — Functions
 
-## 24. Defining functions
+## 25. Defining functions
 
 `def` defines a function:
 
@@ -644,7 +671,7 @@ Functions are first-class values and can be assigned, returned, and passed to ot
 
 ---
 
-## 25. Calling functions
+## 26. Calling functions
 
 Normal call syntax:
 
@@ -663,7 +690,7 @@ Parentheses are preferred when expressions become complex.
 
 ---
 
-## 26. Return values
+## 27. Return values
 
 ```lucy
 def square(x)
@@ -685,7 +712,7 @@ A function that reaches its `end` without returning a value returns `nil`.
 
 ---
 
-## 27. Default arguments
+## 28. Default arguments
 
 A parameter can have a default expression:
 
@@ -702,7 +729,7 @@ Required parameters cannot appear after a parameter that has a default value.
 
 ---
 
-## 28. Named arguments
+## 29. Named arguments
 
 Named arguments use `name: value` at the call site:
 
@@ -723,7 +750,7 @@ Rules:
 
 ---
 
-## 29. Variadic arguments
+## 30. Variadic arguments
 
 A parameter prefixed with `*` collects remaining positional arguments into an array:
 
@@ -743,7 +770,7 @@ Calling `total()` produces an empty array for `values`.
 
 # Part V — Control Flow
 
-## 30. `if`, `else if`, and `else`
+## 31. `if`, `else if`, and `else`
 
 ```lucy
 if score >= 90
@@ -759,7 +786,7 @@ The first truthy branch is executed.
 
 ---
 
-## 31. `while`
+## 32. `while`
 
 ```lucy
 count = 0
@@ -775,7 +802,7 @@ The interpreter has a safety limit of 10,000,000 iterations for a single `while`
 
 ---
 
-## 32. `for`
+## 33. `for`
 
 `for` iterates over an array or range:
 
@@ -789,7 +816,7 @@ The iterable must evaluate to an array.
 
 ---
 
-## 33. `foreach`
+## 34. `foreach`
 
 `foreach` is an alias-like spelling of the array iteration form:
 
@@ -803,7 +830,7 @@ It uses the same runtime behavior as `for`.
 
 ---
 
-## 34. `loop`
+## 35. `loop`
 
 `loop` creates an unconditional loop:
 
@@ -818,7 +845,7 @@ It also has a 10,000,000-iteration safety limit.
 
 ---
 
-## 35. `break`
+## 36. `break`
 
 `break` exits the nearest `while`, `for`, `foreach`, or `loop`.
 
@@ -833,7 +860,7 @@ end
 
 ---
 
-## 36. `continue`
+## 37. `continue`
 
 `continue` skips the remainder of the current loop iteration.
 
@@ -850,7 +877,7 @@ end
 
 # Part VI — Arrays
 
-## 37. Array literals
+## 38. Array literals
 
 ```lucy
 numbers = [1, 2, 3]
@@ -862,7 +889,7 @@ Arrays are ordered and mutable.
 
 ---
 
-## 38. Array indexing
+## 39. Array indexing
 
 Indexes are zero-based:
 
@@ -882,7 +909,7 @@ An out-of-range index raises `IndexError`.
 
 ---
 
-## 39. Array assignment
+## 40. Array assignment
 
 ```lucy
 items = [1, 2, 3]
@@ -893,7 +920,7 @@ Assignment requires an existing index; Lucy does not automatically grow an array
 
 ---
 
-## 40. Array methods
+## 41. Array methods
 
 Every array supports these methods:
 
@@ -1027,7 +1054,7 @@ Returns true only if every callback result is truthy. An empty array returns tru
 
 # Part VII — Maps
 
-## 41. Map literals
+## 42. Map literals
 
 Map keys in a literal are identifiers and are stored as strings:
 
@@ -1044,7 +1071,7 @@ Maps are mutable.
 
 ---
 
-## 42. Map indexing
+## 43. Map indexing
 
 Map indexes must be strings:
 
@@ -1057,7 +1084,7 @@ A missing key returns `nil` through normal map indexing.
 
 ---
 
-## 43. Map member syntax
+## 44. Map member syntax
 
 A string key can also be accessed as a member:
 
@@ -1070,7 +1097,7 @@ This is map key access, not a class method.
 
 ---
 
-## 44. Map methods
+## 45. Map methods
 
 | Method | Signature | Return |
 |---|---|---|
@@ -1090,7 +1117,7 @@ Map keys supplied to these methods must be strings.
 
 # Part VIII — Strings
 
-## 45. String indexing
+## 46. String indexing
 
 Strings can be indexed with integer positions:
 
@@ -1104,7 +1131,7 @@ The current implementation indexes bytes rather than Unicode code points. `lengt
 
 ---
 
-## 46. String methods
+## 47. String methods
 
 | Method | Signature | Return |
 |---|---|---|
@@ -1153,7 +1180,7 @@ Returns a one-character string at an index, or `nil` when the index is invalid.
 
 # Part IX — Numbers
 
-## 47. Number methods
+## 48. Number methods
 
 Both `int` and `double` values support these methods:
 
@@ -1180,7 +1207,7 @@ Both `int` and `double` values support these methods:
 
 # Part X — Functions as Values
 
-## 48. First-class functions
+## 49. First-class functions
 
 A function can be assigned to a variable:
 
@@ -1199,7 +1226,7 @@ Functions can be passed to methods such as `map`, `filter`, and `each`.
 
 # Part XI — Classes and Objects
 
-## 49. Defining a class
+## 50. Defining a class
 
 ```lucy
 class User
@@ -1217,7 +1244,7 @@ A class can contain methods. The current parser does not support arbitrary execu
 
 ---
 
-## 50. Creating an instance
+## 51. Creating an instance
 
 Use `.new(...)` on a class:
 
@@ -1233,7 +1260,7 @@ The constructor expression always returns the newly created instance. A value re
 
 ---
 
-## 51. Instance fields
+## 52. Instance fields
 
 Fields are normally assigned through `self`:
 
@@ -1258,7 +1285,7 @@ Fields are dynamically created when assigned.
 
 ---
 
-## 52. `self`
+## 53. `self`
 
 Inside an instance method, `self` refers to the current instance.
 
@@ -1272,7 +1299,7 @@ Outside an instance method, `self` does not automatically refer to a global obje
 
 ---
 
-## 53. Inheritance
+## 54. Inheritance
 
 A class may inherit from another class:
 
@@ -1300,7 +1327,7 @@ The `super` keyword is recognized by the lexer but full `super` call semantics a
 
 # Part XII — Exceptions
 
-## 54. Throwing an exception
+## 55. Throwing an exception
 
 ```lucy
 throw "something went wrong"
@@ -1314,7 +1341,7 @@ Exception: something went wrong
 
 ---
 
-## 55. `try` and `catch`
+## 56. `try` and `catch`
 
 ```lucy
 try
@@ -1328,7 +1355,7 @@ The caught variable contains the runtime error message as a string.
 
 ---
 
-## 56. Catching a general exception
+## 57. Catching a general exception
 
 ```lucy
 try
@@ -1342,7 +1369,7 @@ An untyped `catch` also catches exceptions.
 
 ---
 
-## 57. `finally`
+## 58. `finally`
 
 `finally` runs after the protected block and after a matching catch block:
 
@@ -1360,7 +1387,7 @@ If an exception is not caught, `finally` still runs before the exception continu
 
 ---
 
-## 58. Built-in error categories
+## 59. Built-in error categories
 
 The interpreter and standard library use error names such as:
 
@@ -1391,7 +1418,7 @@ The interpreter and standard library use error names such as:
 
 # Part XIII — Modules and Imports
 
-## 59. Importing a module
+## 60. Importing a module
 
 ```lucy
 import math
@@ -1402,7 +1429,7 @@ Lucy loads a module from a `.lucy` file.
 
 ---
 
-## 60. Import aliases
+## 61. Import aliases
 
 ```lucy
 import datetime as dt
@@ -1413,7 +1440,7 @@ The alias becomes the module object visible in the importing environment.
 
 ---
 
-## 61. Selective imports
+## 62. Selective imports
 
 Lucy also supports:
 
@@ -1431,7 +1458,7 @@ The imported names are placed directly in the current environment.
 
 ---
 
-## 62. Module lookup order
+## 63. Module lookup order
 
 When Lucy imports `name`, it searches in this order:
 
@@ -1447,7 +1474,7 @@ When Lucy imports `name`, it searches in this order:
 
 ---
 
-## 63. Module objects
+## 64. Module objects
 
 A normal `import` creates a module-like instance containing the module's exported values.
 
@@ -1468,7 +1495,7 @@ Circular imports are rejected with `ImportError`.
 
 # Part XIV — Shell Commands
 
-## 64. Backticks
+## 65. Backticks
 
 A command can be executed using backticks:
 
@@ -1487,7 +1514,7 @@ Backticks invoke the host shell. Do not place untrusted input into shell command
 
 # Part XV — Built-in Functions
 
-## 65. `print`
+## 66. `print`
 
 ```lucy
 print(value, ...)
@@ -1501,7 +1528,7 @@ Returns `nil`.
 print "Lucy", 1.0, true
 ```
 
-## 66. `puts`
+## 67. `puts`
 
 ```lucy
 puts(value, ...)
@@ -1509,7 +1536,7 @@ puts(value, ...)
 
 Alias of `print`.
 
-## 67. `input`
+## 68. `input`
 
 ```lucy
 input()
@@ -1520,7 +1547,7 @@ Reads one line from standard input. With a prompt, the prompt is printed without
 
 Returns a string.
 
-## 68. `len`
+## 69. `len`
 
 ```lucy
 len(value)
@@ -1530,7 +1557,7 @@ Returns the length of a string, array, or map.
 
 For strings this is the current byte length.
 
-## 69. `str`
+## 70. `str`
 
 ```lucy
 str(value)
@@ -1538,7 +1565,7 @@ str(value)
 
 Returns the value's display string.
 
-## 70. `int`
+## 71. `int`
 
 ```lucy
 int(value)
@@ -1550,7 +1577,7 @@ Double-to-int conversion truncates toward zero using the C++ conversion semantic
 
 Invalid strings raise `ValueError`.
 
-## 71. `float`
+## 72. `float`
 
 ```lucy
 float(value)
@@ -1560,7 +1587,7 @@ Accepts an `int`, `double`, or numeric string.
 
 Invalid strings raise `ValueError`.
 
-## 72. `type` and `typeof`
+## 73. `type` and `typeof`
 
 ```lucy
 type(value)
@@ -1569,7 +1596,7 @@ typeof(value)
 
 Both return the same runtime type name.
 
-## 73. `range`
+## 74. `range`
 
 ```lucy
 range(stop)
@@ -1589,7 +1616,7 @@ print range(5, 0, -1)
 
 A step of zero raises `ValueError`.
 
-## 74. `sum`
+## 75. `sum`
 
 ```lucy
 sum(array)
@@ -1599,7 +1626,7 @@ Sums numeric array elements.
 
 The current implementation returns a numeric result using double accumulation.
 
-## 75. `min`
+## 76. `min`
 
 ```lucy
 min(value, ...)
@@ -1609,7 +1636,7 @@ Returns the smallest numeric argument.
 
 At least one argument is required.
 
-## 76. `max`
+## 77. `max`
 
 ```lucy
 max(value, ...)
@@ -1619,7 +1646,7 @@ Returns the largest numeric argument.
 
 At least one argument is required.
 
-## 77. `abs`
+## 78. `abs`
 
 ```lucy
 abs(number)
@@ -1627,7 +1654,7 @@ abs(number)
 
 Returns the absolute value.
 
-## 78. `sqrt`
+## 79. `sqrt`
 
 ```lucy
 sqrt(number)
@@ -1635,7 +1662,7 @@ sqrt(number)
 
 Returns the square root. Negative inputs raise `ValueError`.
 
-## 79. `sin`, `cos`, `tan`
+## 80. `sin`, `cos`, `tan`
 
 ```lucy
 sin(x)
@@ -1645,7 +1672,7 @@ tan(x)
 
 Use the host C++ mathematical functions. Arguments are interpreted as floating-point numbers.
 
-## 80. `exp`
+## 81. `exp`
 
 ```lucy
 exp(x)
@@ -1653,7 +1680,7 @@ exp(x)
 
 Returns `e` raised to the power `x`.
 
-## 81. `floor` and `ceil`
+## 82. `floor` and `ceil`
 
 ```lucy
 floor(x)
@@ -1662,7 +1689,7 @@ ceil(x)
 
 Return floating-point results using the host math functions.
 
-## 82. `log`
+## 83. `log`
 
 ```lucy
 log(x)
@@ -1670,7 +1697,7 @@ log(x)
 
 Returns the natural logarithm. `x` must be positive.
 
-## 83. `pow`
+## 84. `pow`
 
 ```lucy
 pow(base, exponent)
@@ -1678,7 +1705,7 @@ pow(base, exponent)
 
 Returns a floating-point power result.
 
-## 84. `assert`
+## 85. `assert`
 
 ```lucy
 assert(condition)
@@ -1687,7 +1714,7 @@ assert(condition, message)
 
 If the condition is falsey, `AssertionError` is raised.
 
-## 85. Legacy filesystem helpers
+## 86. Legacy filesystem helpers
 
 These built-ins remain available for compatibility:
 
@@ -1701,7 +1728,7 @@ getenv(name)
 
 The preferred public API is the `fs`, `fs`, `fs`, and `system` standard-library modules.
 
-## 86. `sleep`
+## 87. `sleep`
 
 ```lucy
 sleep(milliseconds)
@@ -1709,7 +1736,7 @@ sleep(milliseconds)
 
 Pauses the current interpreter thread for the requested number of milliseconds.
 
-## 87. `millis`
+## 88. `millis`
 
 ```lucy
 millis()
@@ -1719,7 +1746,7 @@ Returns milliseconds elapsed from an internal monotonic clock origin created by 
 
 It is not Unix time.
 
-## 88. `random_int`
+## 89. `random_int`
 
 ```lucy
 random_int(low, high)
@@ -1729,7 +1756,7 @@ Returns a random integer in the inclusive range `[low, high]`.
 
 The preferred public API is `random.integer`.
 
-## 89. `help`
+## 90. `help`
 
 ```lucy
 from repl import help
@@ -1747,15 +1774,15 @@ The exhaustive implementation inventory is in `docs/API.md`.
 
 # Part XVI — Global Constants and Runtime Values
 
-## 90. `PI`
+## 91. `PI`
 
 A read-only floating-point constant containing the mathematical constant pi.
 
-## 91. `E`
+## 92. `E`
 
 A read-only floating-point constant containing Euler's number.
 
-## 92. `VERSION`
+## 93. `VERSION`
 
 A read-only string containing the Lucy interpreter version.
 
@@ -1767,7 +1794,7 @@ print VERSION
 
 prints `1.0.1`.
 
-## 93. `PLATFORM`
+## 94. `PLATFORM`
 
 A read-only string describing the host platform.
 
@@ -1780,7 +1807,7 @@ linux
 unix
 ```
 
-## 94. `ARGV`
+## 95. `ARGV`
 
 `ARGV` is a read-only binding to an array containing command-line arguments passed to the Lucy source file.
 
@@ -1808,7 +1835,7 @@ two
 
 The source filename itself is not included in `ARGV`.
 
-## 95. `argv`
+## 96. `argv`
 
 `argv` is the lowercase alias of `ARGV` and refers to the same underlying array.
 
@@ -1820,7 +1847,7 @@ Both bindings are read-only at the variable-binding level, but the underlying ar
 
 # Part XVII — Command-Line Interface
 
-## 96. Running a script
+## 97. Running a script
 
 ```bash
 lucy program.lucy
@@ -1832,7 +1859,7 @@ Arguments after the source file become `ARGV` values:
 lucy program.lucy first second
 ```
 
-## 97. REPL
+## 98. REPL
 
 Start the interactive interpreter with either:
 
@@ -1922,7 +1949,7 @@ When standard input is redirected, Lucy automatically uses normal line-based inp
 
 # Part XVIII — Syntax Summary
 
-## 98. Keywords
+## 99. Keywords
 
 The lexer recognizes these language keywords:
 
@@ -1942,7 +1969,7 @@ Some recognized keywords are reserved for language evolution even though their c
 
 ---
 
-## 99. Operators at a glance
+## 100. Operators at a glance
 
 ```text
 Arithmetic:
@@ -1983,7 +2010,7 @@ Member/index/call:
 
 # Part XIX — Programming Patterns
 
-## 100. A small program
+## 101. A small program
 
 ```lucy
 import math
@@ -2009,11 +2036,11 @@ This example demonstrates imports, variables, arrays, functions, callbacks, a st
 
 # Part XX — Implementation Notes
 
-## 101. Dynamic value representation
+## 102. Dynamic value representation
 
 The interpreter stores runtime values as a tagged variant containing the supported value types. Arrays and maps are shared containers, so mutating an array or map through a reference changes the shared container.
 
-## 102. Native boundary
+## 103. Native boundary
 
 Public standard-library modules are normally `.lucy` files. Native C++ functions are intentionally prefixed with `__` and are implementation details.
 
@@ -2027,7 +2054,7 @@ regex.lucy
 
 Application code should use `regex.match`, not `__regex_match`.
 
-## 103. Current platform assumptions
+## 104. Current platform assumptions
 
 The runtime uses C++17 facilities and host operating-system APIs. Some standard-library features depend on external software:
 

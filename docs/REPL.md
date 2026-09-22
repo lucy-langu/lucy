@@ -54,7 +54,7 @@ Completion covers language keywords, loaded names, built-ins, module names, modu
 
 ## Multiline input
 
-Blocks use `end`. `do ... while` and `switch ... case ... default ... end` are also recognized by the REPL's block-depth tracker.
+Blocks use `end`. `do ... while` and `switch ... case ... default ... end` are also recognized by the REPL's block-depth tracker. Delimited expressions such as `foo(`, `[`, and `{` can be formatted across multiple lines; their closing delimiter completes the expression.
 
 ## Commands
 

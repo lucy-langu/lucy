@@ -3,6 +3,7 @@
   "displayName": "Lucy Language",
   "description": "Syntax highlighting for the Lucy programming language",
   "version": "1.0.0",
+  "repository": "https://github.com/yourusername/your-extension-repo",
   "publisher": "nimacpp",
   "license": "GPL-3.0-only",
   "icon": "icon.png",

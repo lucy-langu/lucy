@@ -54,7 +54,6 @@ class Interpreter {
 public:
     explicit Interpreter(std::vector<std::string> argv = {});
     ~Interpreter();
-
     Value run(const std::vector<StmtPtr>& statements, bool echo = false);
     Value execute(const StmtPtr& statement);
     Value evaluate(const ExprPtr& expression);
@@ -69,6 +68,7 @@ public:
     std::vector<std::string> completion_candidates(const std::string& input) const;
 
 private:
+    std::vector<std::pair<std::string, std::string>> list_modules() const;
     std::shared_ptr<Environment> globals_;
     std::shared_ptr<Environment> env_;
     std::vector<std::shared_ptr<Environment>> environments_;

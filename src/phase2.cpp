@@ -651,17 +651,102 @@ std::string stringify_csv(const Value& value, char delimiter) {
     }
     return result;
 }
+// ------------------------------ HTTP Headers Helper ------------------------------
+
+std::vector<std::pair<std::string, std::string>> extract_headers(
+    const Value& value, const std::string& name) {
+    std::vector<std::pair<std::string, std::string>> headers;
+
+    auto map = std::get_if<Value::MapPtr>(&value.data);
+    if (!map) {
+        throw std::runtime_error("TypeError: " + name + " expects a map for headers");
+    }
+
+    for (const auto& [key, item] : **map) {
+        std::string header_value;
+        if (auto text = std::get_if<std::string>(&item.data)) {
+            header_value = *text;
+        } else if (auto integer = std::get_if<long long>(&item.data)) {
+            header_value = std::to_string(*integer);
+        } else if (auto number = std::get_if<double>(&item.data)) {
+            header_value = std::to_string(*number);
+        } else if (auto boolean = std::get_if<bool>(&item.data)) {
+            header_value = *boolean ? "true" : "false";
+        } else {
+            throw std::runtime_error(
+                "TypeError: " + name + " header '" + key + "' must be a scalar value");
+        }
+        headers.emplace_back(key, header_value);
+    }
+
+    return headers;
+}
 
 // ------------------------------ HTTP ------------------------------
-
 Value http_request(const std::vector<Value>& args, const std::string& method) {
-    require_range(args, 1, 3, "http." + method);
+    require_range(args, 1, 5, "http." + method);
     const std::string url = string_arg(args[0], "http." + method);
 
     std::string body;
-    if (args.size() >= 2 && !std::holds_alternative<Nil>(args[1].data)) {
-        body = string_arg(args[1], "http." + method);
+    std::vector<std::pair<std::string, std::string>> headers;
+    Value::MapPtr options;
+
+    // arg 2: body or headers
+    if (args.size() >= 2) {
+        if (std::holds_alternative<Nil>(args[1].data)) {
+            // nil = no body
+        } else if (std::holds_alternative<Value::MapPtr>(args[1].data)) {
+            headers = extract_headers(args[1], "http." + method);
+        } else {
+            body = string_arg(args[1], "http." + method);
+        }
     }
+
+    // arg 3: headers when arg 2 is the body
+    if (args.size() >= 3 && std::holds_alternative<Value::MapPtr>(args[2].data)) {
+        headers = extract_headers(args[2], "http." + method);
+    }
+
+    // arg 4: explicit headers (kept for compatibility with the existing API)
+    if (args.size() >= 4 && !std::holds_alternative<Nil>(args[3].data)) {
+        headers = extract_headers(args[3], "http." + method);
+    }
+
+    // arg 5: request options
+    if (args.size() >= 5) {
+        auto map = std::get_if<Value::MapPtr>(&args[4].data);
+        if (!map) throw std::runtime_error("TypeError: http.request options must be a map");
+        options = *map;
+    }
+
+    int timeout = 30;
+    int connect_timeout = 0;
+    std::string proxy;
+    std::string user_agent;
+    bool follow_redirects = true;
+    bool insecure = false;
+
+    if (options) {
+        if (auto it = options->find("timeout"); it != options->end())
+            timeout = static_cast<int>(integer_arg(it->second, "http.timeout"));
+        if (auto it = options->find("connect_timeout"); it != options->end())
+            connect_timeout = static_cast<int>(integer_arg(it->second, "http.connect_timeout"));
+        if (auto it = options->find("proxy"); it != options->end())
+            proxy = string_arg(it->second, "http.proxy");
+        if (auto it = options->find("user_agent"); it != options->end())
+            user_agent = string_arg(it->second, "http.user_agent");
+        if (auto it = options->find("follow_redirects"); it != options->end()) {
+            if (auto value = std::get_if<bool>(&it->second.data)) follow_redirects = *value;
+            else throw std::runtime_error("TypeError: http.follow_redirects expects a boolean");
+        }
+        if (auto it = options->find("insecure"); it != options->end()) {
+            if (auto value = std::get_if<bool>(&it->second.data)) insecure = *value;
+            else throw std::runtime_error("TypeError: http.insecure expects a boolean");
+        }
+    }
+
+    if (timeout <= 0) throw std::runtime_error("ValueError: http.timeout must be greater than zero");
+    if (connect_timeout < 0) throw std::runtime_error("ValueError: http.connect_timeout cannot be negative");
 
     fs::path temp = fs::temp_directory_path() /
         ("lucy-http-" + std::to_string(std::random_device{}()));
@@ -685,8 +770,17 @@ Value http_request(const std::vector<Value>& args, const std::string& method) {
         data << body;
     }
 
-    std::string command = "curl --silent --show-error --location --max-time 30";
-    command += " --request " + method;
+    std::string command = "curl --silent --show-error --max-time " + std::to_string(timeout);
+    command += " --request " + shell_quote(method);
+    if (follow_redirects) command += " --location";
+    if (connect_timeout > 0) command += " --connect-timeout " + std::to_string(connect_timeout);
+    if (!proxy.empty()) command += " --proxy " + shell_quote(proxy);
+    if (!user_agent.empty()) command += " --user-agent " + shell_quote(user_agent);
+    if (insecure) command += " --insecure";
+
+    for (const auto& [key, value] : headers)
+        command += " --header " + shell_quote(key + ": " + value);
+
     command += " --dump-header " + shell_quote(header_path.string());
     command += " --output " + shell_quote(output_path.string());
     if (!body.empty()) command += " --data-binary " + shell_quote("@" + data_path.string());
@@ -694,9 +788,8 @@ Value http_request(const std::vector<Value>& args, const std::string& method) {
     command += " " + shell_quote(url);
 
     CommandResult result = run_command(command);
-    if (result.status != 0) {
+    if (result.status != 0)
         throw std::runtime_error("HTTPError: curl failed with status " + std::to_string(result.status));
-    }
 
     int status_code = 0;
     try {
@@ -710,7 +803,7 @@ Value http_request(const std::vector<Value>& args, const std::string& method) {
     response["body"] = read_text_file(output_path);
     response["headers"] = Map{};
 
-    auto headers = std::get<Value::MapPtr>(response["headers"].data);
+    auto response_headers = std::get<Value::MapPtr>(response["headers"].data);
     std::ifstream header_file(header_path);
     std::string line;
     while (std::getline(header_file, line)) {
@@ -721,7 +814,7 @@ Value http_request(const std::vector<Value>& args, const std::string& method) {
         std::string value = line.substr(colon + 1);
         while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) value.erase(value.begin());
         std::transform(key.begin(), key.end(), key.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        (*headers)[key] = value;
+        (*response_headers)[key] = value;
     }
 
     response["ok"] = status_code >= 200 && status_code < 300;
@@ -976,13 +1069,27 @@ void install_phase2_builtins(BuiltinMap& builtins) {
     builtins["__http_post"] = [](const std::vector<Value>& args) {
         return http_request(args, "POST");
     };
+    builtins["__http_put"] = [](const std::vector<Value>& args) {
+        return http_request(args, "PUT");
+    };
+    builtins["__http_delete"] = [](const std::vector<Value>& args) {
+        return http_request(args, "DELETE");
+    };
+    builtins["__http_head"] = [](const std::vector<Value>& args) {
+        return http_request(args, "HEAD");
+    };
+    builtins["__http_patch"] = [](const std::vector<Value>& args) {
+        return http_request(args, "PATCH");
+    };
 
     builtins["__http_request"] = [](const std::vector<Value>& args) {
-        require_range(args, 2, 3, "http.request");
+        require_range(args, 2, 5, "http.request");
         const std::string method = string_arg(args[0], "http.request");
         std::vector<Value> request_args;
         request_args.push_back(args[1]);
-        if (args.size() == 3) request_args.push_back(args[2]);
+        if (args.size() >= 3) request_args.push_back(args[2]);
+        if (args.size() >= 4) request_args.push_back(args[3]);
+        if (args.size() >= 5) request_args.push_back(args[4]);
         return http_request(request_args, method);
     };
 

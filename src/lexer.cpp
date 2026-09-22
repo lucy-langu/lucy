@@ -15,6 +15,7 @@ void Lexer::string(){
         if(c=='\\'){
             char n=advance();
             switch(n){
+                case 'b': x+='\b'; break;
                 case 'n': x+='\n'; break;
                 case 't': x+='\t'; break;
                 case 'r': x+='\r'; break;

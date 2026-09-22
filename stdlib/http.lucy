@@ -1,13 +1,22 @@
-# Lucy network client. HTTP, sockets, and name resolution are grouped here so one network library covers the common stack.
-# HTTP client with Ruby-inspired method names.
+# Lucy network library.
+# HTTP client, TCP sockets, and DNS resolution share one flat public module.
+
 class HTTPRequest
-    def initialize(method, url, body = "")
+    def initialize(method, url, body = "", headers = nil, options = nil)
         self.method = method
         self.url = url
         self.body = body
+        self.headers = headers
+        self.options = options
     end
 
     def execute()
+        if self.options
+            return __http_request(self.method, self.url, self.body, self.headers, self.options)
+        end
+        if self.headers
+            return __http_request(self.method, self.url, self.body, self.headers)
+        end
         return __http_request(self.method, self.url, self.body)
     end
 end
@@ -15,75 +24,124 @@ end
 class HTTP
     def initialize(url = "", proxy = nil)
         self.url = url
-        self.proxy_url = proxy
+        self.default_headers = nil
+        self.options = {}
+        if proxy
+            self.options["proxy"] = proxy
+        end
     end
 
-    def get(path = "")
-        return __http_request("GET", self.url + path, "")
+    def headers(value)
+        self.default_headers = value
+        return self
     end
 
-    def put(path = "", body = "")
-        return __http_request("PUT", self.url + path, body)
+    def timeout(seconds)
+        self.options["timeout"] = seconds
+        return self
     end
 
-    def delete(path = "")
-        return __http_request("DELETE", self.url + path, "")
-    end
-
-    def head(path = "")
-        return __http_request("HEAD", self.url + path, "")
-    end
-
-    def patch(path = "", body = "")
-        return __http_request("PATCH", self.url + path, body)
-    end
-
-    def post(path = "", body = "")
-        return __http_request("POST", self.url + path, body)
-    end
-
-    def request(method, path = "", body = "")
-        return __http_request(method, self.url + path, body)
-    end
-
-    def start()
+    def connect_timeout(seconds)
+        self.options["connect_timeout"] = seconds
         return self
     end
 
     def proxy(proxy_url)
-        self.proxy_url = proxy_url
+        self.options["proxy"] = proxy_url
         return self
+    end
+
+    def user_agent(value)
+        self.options["user_agent"] = value
+        return self
+    end
+
+    def follow_redirects(value)
+        self.options["follow_redirects"] = value
+        return self
+    end
+
+    def insecure(value = true)
+        self.options["insecure"] = value
+        return self
+    end
+
+    def get(path = "")
+        return self.request("GET", path)
+    end
+
+    def post(path = "", body = "")
+        return self.request("POST", path, body)
+    end
+
+    def put(path = "", body = "")
+        return self.request("PUT", path, body)
+    end
+
+    def patch(path = "", body = "")
+        return self.request("PATCH", path, body)
+    end
+
+    def delete(path = "")
+        return self.request("DELETE", path)
+    end
+
+    def head(path = "")
+        return self.request("HEAD", path)
+    end
+
+    def request(method, path = "", body = "", headers = nil)
+        actual_headers = headers
+        if actual_headers == nil
+            actual_headers = self.default_headers
+        end
+        if actual_headers
+            return __http_request(method, self.url + path, body, actual_headers, self.options)
+        end
+        return __http_request(method, self.url + path, body, nil, self.options)
     end
 end
 
-# Simple top-level helpers for one-shot requests.
-def get(url)
-    return __http_request("GET", url, "")
+# One-shot HTTP helpers.
+def request(method, url, body = "", headers = nil, options = nil)
+    if options
+        return __http_request(method, url, body, headers, options)
+    end
+    if headers
+        return __http_request(method, url, body, headers)
+    end
+    return __http_request(method, url, body)
 end
 
-def post(url, body = "")
-    return __http_request("POST", url, body)
+def get(url, headers = nil, options = nil)
+    return request("GET", url, "", headers, options)
 end
 
-def put(url, body = "")
-    return __http_request("PUT", url, body)
+def post(url, body = "", headers = nil, options = nil)
+    return request("POST", url, body, headers, options)
 end
 
-def delete(url)
-    return __http_request("DELETE", url, "")
+def put(url, body = "", headers = nil, options = nil)
+    return request("PUT", url, body, headers, options)
 end
 
-def head(url)
-    return __http_request("HEAD", url, "")
+def patch(url, body = "", headers = nil, options = nil)
+    return request("PATCH", url, body, headers, options)
 end
 
-def patch(url, body = "")
-    return __http_request("PATCH", url, body)
+def delete(url, headers = nil, options = nil)
+    return request("DELETE", url, "", headers, options)
 end
 
+def head(url, headers = nil, options = nil)
+    return request("HEAD", url, "", headers, options)
+end
 
-# Low-level TCP/UDP socket operations.
-# TCP socket API.
+def client(url = "", proxy = nil)
+    return HTTP.new(url, proxy)
+end
+
+# Low-level TCP socket API.
 class Socket
     def initialize()
         self.native = __socket_new()
@@ -128,8 +186,7 @@ end
 
 socket = SocketAPI.new()
 
-# Hostname and address lookup.
-# DNS resolution helpers.
+# DNS helpers.
 class Resolv
     def getaddress(host)
         return __resolv_getaddress(host)
@@ -142,42 +199,7 @@ end
 
 resolv = Resolv.new()
 
-# Unified network facade. The same object exposes HTTP plus low-level networking.
-http = HTTP.new()
-
-# Flat public network API. HTTP, sockets and DNS are all one level under `http`.
-def request(method, url, body = "")
-    return __http_request(method, url, body)
-end
-
-def get(url)
-    return request("GET", url)
-end
-
-def post(url, body = "")
-    return request("POST", url, body)
-end
-
-def put(url, body = "")
-    return request("PUT", url, body)
-end
-
-def delete(url)
-    return request("DELETE", url)
-end
-
-def head(url)
-    return request("HEAD", url)
-end
-
-def patch(url, body = "")
-    return request("PATCH", url, body)
-end
-
-def client(url = "", proxy = nil)
-    return HTTP.new(url, proxy)
-end
-
+# Convenience aliases for the flat networking API.
 def connect(host, port)
     s = Socket.new()
     s.connect(host, port)
@@ -218,3 +240,4 @@ def reverse(address)
     return __resolv_getname(address)
 end
 
+http = HTTP.new()
