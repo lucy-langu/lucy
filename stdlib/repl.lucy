@@ -1,30 +1,30 @@
 # Lucy's REPL control and help library.
 # This file is Lucy code so the REPL help surface can be edited without rebuilding Lucy.
 
-def banner()
+func banner() {
     return "Lucy " + VERSION + " Interactive REPL\nType :help for help, :quit or Ctrl-D to exit."
-end
+}
 
-def version()
+func version() {
     return VERSION
-end
+}
 
-def prompt(depth = 0)
-    if depth == 0
+func prompt(depth = 0) {
+    if depth == 0 {
         return "Lucy$ "
-    end
+    }
     return "... "
-end
+}
 
-def commands()
+func commands() {
     return [":help - Show REPL help", ":clear - Clear the terminal and current input buffer", ":history - Show recent command history", ":version - Show the Lucy version", ":quit - Exit the REPL", ":exit - Exit the REPL"]
-end
-def topics()
-    return ["print", "input", "len", "str", "int", "float", "type", "range", "sum", "min", "max", "assert", "array", "string", "map", "lambda", "switch", "do-while", "import", "class", "exceptions", "modules", "ARGV", "semicolon", "shell"]
-end
+}
+func topics() {
+    return ["print", "println", "input", "exit", "len", "str", "int", "float", "type", "range", "sum", "min", "max", "assert", "array", "string", "map", "lambda", "struct", "switch", "do-while", "import", "class", "exceptions", "modules", "ARGV", "semicolon", "shell"]
+}
 
-def help(topic = nil)
-    if topic == nil
+func help(topic = nil) {
+    if topic == nil {
         print "Lucy help"
         print ""
         print "REPL commands:"
@@ -52,59 +52,66 @@ def help(topic = nil)
         print "  Home/End    Move to line boundaries"
         print "  Tab         Complete names and members"
         return nil
-    end
+    }
 
-    if topic == "print"
-        print "print(value, ...) -> writes values separated by spaces and ends with a newline"
-    else if topic == "input"
+    if topic == "print" {
+        print "print(value, ...) -> writes values separated by spaces without adding a newline"
+        print "println(value, ...) -> writes values separated by spaces and adds a newline"
+    } else if topic == "println" {
+        print "println(value, ...) -> writes values separated by spaces and adds a newline"
+    } else if topic == "input" {
         print "input([prompt]) -> reads one line from standard input"
-    else if topic == "len"
+    } else if topic == "exit" {
+        print "exit([code]) -> terminates the current Lucy process with an optional integer exit code"
+    } else if topic == "len" {
         print "len(value) -> returns the length of a string, array, or map"
-    else if topic == "str"
+    } else if topic == "str" {
         print "str(value) -> converts a value to its string representation"
-    else if topic == "int"
+    } else if topic == "int" {
         print "int(value) -> converts a number or numeric string to an integer"
-    else if topic == "float"
+    } else if topic == "float" {
         print "float(value) -> converts a number or numeric string to a double"
-    else if topic == "type"
+    } else if topic == "type" {
         print "type(value) -> returns the runtime type name"
-    else if topic == "range"
+    } else if topic == "range" {
         print "range(stop) or range(start, stop[, step]) -> creates an integer array"
-    else if topic == "sum"
+    } else if topic == "sum" {
         print "sum(array) -> sums numeric array elements"
-    else if topic == "min"
+    } else if topic == "min" {
         print "min(value, ...) -> returns the smallest numeric argument"
-    else if topic == "max"
+    } else if topic == "max" {
         print "max(value, ...) -> returns the largest numeric argument"
-    else if topic == "assert"
+    } else if topic == "assert" {
         print "assert(condition[, message]) -> raises AssertionError when false"
-    else if topic == "array"
+    } else if topic == "array" {
         print "Array methods: push, pop, shift, unshift, insert, remove_at, clear, first, last, contains, count, index, join, reverse, length, size, each, map, filter, any, all"
-    else if topic == "string"
+    } else if topic == "string" {
         print "String methods: upper, upcase, lower, downcase, strip, trim, contains, starts_with, ends_with, length, size, reverse, repeat, to_int, to_float, slice, char_at, split, replace"
-    else if topic == "map"
+    } else if topic == "map" {
         print "Map methods: get, set, has, delete, keys, values, length, size, clear"
-    else if topic == "lambda"
-        print "lambda(x) => expression -> creates an anonymous function that captures its lexical environment"
-    else if topic == "switch"
-        print "switch value / case expression / default / end -> executes the first matching case"
-    else if topic == "do-while"
-        print "do / body / while condition -> executes the body at least once"
-    else if topic == "import"
+    } else if topic == "lambda" {
+        print "lambda x => expression or lambda(x, y) => expression -> creates an anonymous function with lexical capture"
+    } else if topic == "switch" {
+        print "switch value { case expression: ... default: ... } -> executes the first matching case"
+    } else if topic == "do-while" {
+        print "repeat { ... } while condition (or do { ... } while condition) -> executes the body at least once"
+    } else if topic == "import" {
         print "import module; from module import name; import module as alias"
-    else if topic == "class"
-        print "class Name [< Base] / def method / end -> defines a class and its methods"
-    else if topic == "exceptions"
-        print "try / catch Type as name / finally / end and throw value"
-    else if topic == "modules"
+    } else if topic == "class" {
+        print "class Name [< Base] { func method(...) { ... } } -> defines a class and its methods"
+    } else if topic == "struct" {
+        print "struct Point { x: Int; y: Int } -> defines aggregate fields with typed storage and Point.new(...) construction"
+    } else if topic == "exceptions" {
+        print "try { ... } catch Type as name { ... } finally { ... }"
+    } else if topic == "modules" {
         print "Modules are Lucy files. `import fs` creates the `fs` module object, so public calls are one level: `fs.read(path)`. Use `from fs import read` when direct access is preferred."
-    else if topic == "ARGV"
+    } else if topic == "ARGV" {
         print "ARGV and argv -> the mutable command-line argument array"
-    else if topic == "semicolon"
+    } else if topic == "semicolon" {
         print "Use ; to separate multiple statements on one line"
-    else if topic == "shell"
+    } else if topic == "shell" {
         print "`command` -> executes a host command and captures stdout"
-    else
+    } else {
         print "No documentation for '" + str(topic) + "'."
-    end
-end
+    }
+}

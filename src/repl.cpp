@@ -280,6 +280,9 @@ bool ReplLineEditor::read_line(const std::string& prompt, std::string& line,
     history_index_ = history_.size();
     bool completion_listed = false;
     std::string last_completion_prefix;
+    std::vector<std::string> completion_matches;
+    std::size_t completion_index = 0;
+    std::size_t completion_token_start = 0;
 
     std::cout << prompt << std::flush;
 
@@ -410,61 +413,63 @@ bool ReplLineEditor::read_line(const std::string& prompt, std::string& line,
         }
 
         if (key == '\t') {
-            std::vector<std::string> candidates = completer ? completer(line) : std::vector<std::string>{};
-            if (candidates.empty()) {
-                continue;
+            // Completion candidates are returned as member/builtin names.  For
+            // `object.me`, only `me` is replaced; `object.` stays untouched.
+            std::size_t expression_start = cursor;
+            while (expression_start > 0) {
+                const char ch = line[expression_start - 1];
+                if (!(std::isalnum(static_cast<unsigned char>(ch)) || ch == '_' || ch == '.' || ch == '?')) break;
+                --expression_start;
             }
 
-            std::sort(candidates.begin(), candidates.end());
-            candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
-
-            std::size_t token_start = cursor;
-            while (token_start > 0) {
-                const char ch = line[token_start - 1];
-                if (!(std::isalnum(static_cast<unsigned char>(ch)) || ch == '_' || ch == '.')) {
-                    break;
-                }
-                --token_start;
+            std::size_t token_start = expression_start;
+            const std::size_t last_dot = line.rfind('.', cursor == 0 ? 0 : cursor - 1);
+            if (last_dot != std::string::npos && last_dot >= expression_start && last_dot < cursor) {
+                token_start = last_dot + 1;
             }
 
             const std::string prefix = line.substr(token_start, cursor - token_start);
             std::vector<std::string> matches;
-            for (const auto& candidate : candidates) {
-                if (candidate.compare(0, prefix.size(), prefix) == 0) {
-                    matches.push_back(candidate);
+            if (completion_listed && completion_token_start == token_start && !completion_matches.empty()) {
+                matches = completion_matches;
+            } else {
+                const auto candidates = completer ? completer(line) : std::vector<std::string>{};
+                for (const auto& candidate : candidates) {
+                    if (candidate.rfind(prefix, 0) == 0) {
+                        matches.push_back(candidate);
+                    }
                 }
+                std::sort(matches.begin(), matches.end());
+                matches.erase(std::unique(matches.begin(), matches.end()), matches.end());
+                completion_matches = matches;
+                completion_index = 0;
+                completion_token_start = token_start;
             }
 
             if (matches.empty()) {
+                completion_listed = false;
                 continue;
             }
 
-            const std::string common = longest_common_prefix(matches);
-            if (common.size() > prefix.size()) {
-                line.replace(token_start, prefix.size(), common);
-                cursor = token_start + common.size();
-                render_line(prompt, line, cursor);
-                completion_listed = false;
-                last_completion_prefix = common;
-            } else if (matches.size() == 1) {
-                line.replace(token_start, prefix.size(), matches.front());
-                cursor = token_start + matches.front().size();
-                render_line(prompt, line, cursor);
-                completion_listed = false;
-            } else if (!completion_listed || last_completion_prefix != prefix) {
+            if (!completion_listed && matches.size() > 1) {
                 std::cout << '\n';
                 for (std::size_t i = 0; i < matches.size(); ++i) {
                     std::cout << matches[i];
-                    if ((i + 1) % 4 == 0 || i + 1 == matches.size()) {
-                        std::cout << '\n';
-                    } else {
-                        std::cout << "    ";
-                    }
+                    if ((i + 1) % 4 == 0 || i + 1 == matches.size()) std::cout << '\n';
+                    else std::cout << "    ";
                 }
                 render_line(prompt, line, cursor);
                 completion_listed = true;
-                last_completion_prefix = prefix;
+                continue;
             }
+
+            const std::string current_prefix = line.substr(token_start, cursor - token_start);
+            const std::string& selected = completion_matches[completion_index % completion_matches.size()];
+            line.replace(token_start, current_prefix.size(), selected);
+            cursor = token_start + selected.size();
+            render_line(prompt, line, cursor);
+            completion_index = (completion_index + 1) % completion_matches.size();
+            completion_listed = true;
             continue;
         }
 

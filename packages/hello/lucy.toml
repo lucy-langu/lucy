@@ -1,0 +1,4 @@
+name = "hello"
+version = "0.1.0"
+lucy = ">=2.0.0"
+entry = "src/init.lucy"

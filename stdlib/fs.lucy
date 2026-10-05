@@ -1,440 +1,207 @@
-# Lucy filesystem. Files, directories, paths, and streams live in one coherent library.
+# Lucy filesystem library.
+# Files, directories, paths, and streams use one flat public API.
 
-# High-level file operations.
-class File
-    def read(path)
-        return __file_read(path)
-    end
-
-    def write(path, content)
-        return __file_write(path, content)
-    end
-
-    def append(path, content)
-        return __file_append(path, content)
-    end
-
-    def read_lines(path)
-        return __file_lines(path)
-    end
-
-    def write_lines(path, lines)
-        return __file_write_lines(path, lines)
-    end
-
-    def exists(path)
-        return __file_exists(path)
-    end
-
-    def size(path)
-        return __file_size(path)
-    end
-
-    def delete(path)
-        return __file_delete(path)
-    end
-
-    def copy(source, destination)
-        return __file_copy(source, destination)
-    end
-
-    def move(source, destination)
-        return __file_move(source, destination)
-    end
-
-    def touch(path)
-        return __file_touch(path)
-    end
-
-    def chmod(mode, path)
-        return __file_chmod(path, mode)
-    end
-
-    def chown(uid, gid, path)
-        return __file_chown(path, uid, gid)
-    end
-
-    def read_json(path)
-        import data
-        return data.parse(self.read(path))
-    end
-
-    def write_json(path, value)
-        import data
-        return self.write(path, data.stringify(value))
-    end
-
-    def append_line(path, line)
-        return self.append(path, line + "\n")
-    end
-end
-
-file = File.new()
-
-# Directory operations.
-class Dir
-    def foreach(path, callback)
-        entries = __dir_entries(path)
-        for entry in entries
-            callback(entry)
-        end
-        return nil
-    end
-
-    def open(path)
-        return Dir.new(path)
-    end
-
-    def initialize(path = ".")
-        self.path = path
-    end
-
-    def new(path = ".")
-        return Dir.new(path)
-    end
-
-    def entries(path = self.path)
-        return __dir_entries(path)
-    end
-
-    def files(path = self.path)
-        return __dir_files(path)
-    end
-
-    def dirs(path = self.path)
-        return __dir_dirs(path)
-    end
-
-    def exists(path = self.path)
-        return __dir_exists(path)
-    end
-
-    def mkdir(path, parents = false)
-        return __dir_mkdir(path, parents)
-    end
-
-    def rmdir(path)
-        return __dir_rmdir(path)
-    end
-
-    def empty(path = self.path)
-        return __dir_empty(path)
-    end
-
-    def glob(pattern)
-        return __dir_glob(pattern)
-    end
-
-    def walk(path = self.path)
-        return __dir_walk(path)
-    end
-end
-
-dir = Dir.new()
-
-# Cross-platform path manipulation.
-class Path
-    def join(parts)
-        return __path_join(parts)
-    end
-
-    def absolute(path)
-        return __path_absolute(path)
-    end
-
-    def expand(path)
-        return __path_expand(path)
-    end
-
-    def basename(path)
-        return __path_basename(path)
-    end
-
-    def dirname(path)
-        return __path_dirname(path)
-    end
-
-    def extname(path)
-        return __path_extname(path)
-    end
-
-    def stem(path)
-        return __path_stem(path)
-    end
-
-    def join_all(first, second)
-        parts = [first]
-        parts.push(second)
-        return self.join(parts)
-    end
-
-    def with_extension(path, extension)
-        if extension == ""
-            return path
-        end
-        base = self.stem(path)
-        directory = self.dirname(path)
-        if extension[0] != "."
-            extension = "." + extension
-        end
-        return self.join([directory, base + extension])
-    end
-end
-
-path = Path.new()
-
-# File operation helpers inspired by Ruby FileUtils.
-class FileUtils
-    def chmod(mode, path)
-        return __file_chmod(path, mode)
-    end
-
-    def chown(uid, gid, path)
-        return __file_chown(path, uid, gid)
-    end
-
-    def ln(source, destination)
-        return __fileutils_link(source, destination)
-    end
-
-    def symlink(source, destination)
-        return __fileutils_symlink(source, destination)
-    end
-
-    def link(source, destination)
-        return self.ln(source, destination)
-    end
-end
-
-fileutils = FileUtils.new()
-
-# Console and file IO.
-class IO
-    def initialize(path = nil, mode = "r")
-        self.path = path
-        self.mode = mode
-        if path != nil
-            self.native = __io_open(path, mode)
-        end
-    end
-
-    def print(values)
-        return print(values)
-    end
-
-    def write(text)
-        if self.native != nil
-            return __io_write_file(self.native, text)
-        end
-        return __io_write(text)
-    end
-
-    def read(prompt = "")
-        if self.native != nil
-            if prompt == ""
-                return __io_read_file(self.native)
-            end
-            return __io_read_file(self.native, int(prompt))
-        end
-        return __io_read(prompt)
-    end
-
-    def ask(prompt)
-        return __io_read(prompt)
-    end
-
-    def seek(offset, whence = 0)
-        return __io_seek(self.native, offset, whence)
-    end
-
-    def pos()
-        return __io_pos(self.native)
-    end
-
-    def rewind()
-        return __io_rewind(self.native)
-    end
-
-    def eof()
-        return __io_eof(self.native)
-    end
-
-    def fileno()
-        return __io_fileno(self.native)
-    end
-
-    def close()
-        return __io_close(self.native)
-    end
-
-    def pipe()
-        return __io_pipe()
-    end
-
-    def popen(command)
-        return __io_popen(command)
-    end
-end
-
-io = IO.new()
-
-# Direct path helpers.
-def join(parts)
-    return __path_join(parts)
-end
-
-def absolute(path)
-    return __path_absolute(path)
-end
-
-def basename(path)
-    return __path_basename(path)
-end
-
-def dirname(path)
-    return __path_dirname(path)
-end
-
-def exists(path)
-    return __file_exists(path)
-end
-
-# Flat public filesystem API. Use `fs.read(path)`, never `fs.fs.read(path)`.
-def read(path)
+func read(path) {
     return __file_read(path)
-end
+}
 
-def write(path, content)
+func write(path, content) {
     return __file_write(path, content)
-end
+}
 
-def append(path, content)
+func append(path, content) {
     return __file_append(path, content)
-end
+}
 
-def read_lines(path)
+func read_lines(path) {
     return __file_lines(path)
-end
+}
 
-def write_lines(path, lines)
+func write_lines(path, lines) {
     return __file_write_lines(path, lines)
-end
+}
 
-def exists(path)
+func exists(path) {
     return __file_exists(path) or __dir_exists(path)
-end
+}
 
-def size(path)
+func size(path) {
     return __file_size(path)
-end
+}
 
-def remove(path)
+func remove(path) {
     return __file_delete(path)
-end
+}
 
-def copy(source, destination)
+func copy(source, destination) {
     return __file_copy(source, destination)
-end
+}
 
-def move(source, destination)
+func move(source, destination) {
     return __file_move(source, destination)
-end
+}
 
-def touch(path)
+func touch(path) {
     return __file_touch(path)
-end
+}
 
-def chmod(path, mode)
+func chmod(path, mode) {
     return __file_chmod(path, mode)
-end
+}
 
-def chown(path, uid, gid)
+func chown(path, uid, gid) {
     return __file_chown(path, uid, gid)
-end
+}
 
-def entries(path = ".")
+func entries(path = ".") {
     return __dir_entries(path)
-end
+}
 
-def files(path = ".")
+func files(path = ".") {
     return __dir_files(path)
-end
+}
 
-def dirs(path = ".")
+func dirs(path = ".") {
     return __dir_dirs(path)
-end
+}
 
-def mkdir(path, parents = false)
+func mkdir(path, parents = false) {
     return __dir_mkdir(path, parents)
-end
+}
 
-def rmdir(path)
+func rmdir(path) {
     return __dir_rmdir(path)
-end
+}
 
-def empty(path = ".")
+func empty(path = ".") {
     return __dir_empty(path)
-end
+}
 
-def glob(pattern)
+func glob(pattern) {
     return __dir_glob(pattern)
-end
+}
 
-def walk(path = ".")
+func walk(path = ".") {
     return __dir_walk(path)
-end
+}
 
-def join(parts)
+func join(parts) {
     return __path_join(parts)
-end
+}
 
-def absolute(path)
+func absolute(path) {
     return __path_absolute(path)
-end
+}
 
-def expand(path)
+func expand(path) {
     return __path_expand(path)
-end
+}
 
-def basename(path)
+func basename(path) {
     return __path_basename(path)
-end
+}
 
-def dirname(path)
+func dirname(path) {
     return __path_dirname(path)
-end
+}
 
-def extension(path)
+func extension(path) {
     return __path_extname(path)
-end
+}
 
-def stem(path)
+func stem(path) {
     return __path_stem(path)
-end
+}
 
-def link(source, destination)
+func link(source, destination) {
     return __fileutils_link(source, destination)
-end
+}
 
-def symlink(source, destination)
+func symlink(source, destination) {
     return __fileutils_symlink(source, destination)
-end
+}
 
-def open(path, mode = "r")
+func open(path, mode = "r") {
     return IO.new(path, mode)
-end
+}
 
-def console(prompt = "")
+func console(prompt = "") {
     return __io_read(prompt)
-end
+}
 
-def read_json(path)
+func read_json(path) {
     import data
     return data.parse(read(path))
-end
+}
 
-def write_json(path, value)
+func write_json(path, value) {
     import data
     return write(path, data.stringify(value))
-end
+}
 
+class IO {
+    func initialize(path = nil, mode = "r") {
+        self.path = path
+        self.mode = mode
+        if path != nil {
+            self.native = __io_open(path, mode)
+        }
+    }
+
+    func print(values) {
+        return print(values)
+    }
+
+    func write(text) {
+        if self.native != nil {
+            return __io_write_file(self.native, text)
+        }
+        return __io_write(text)
+    }
+
+    func read(prompt = "") {
+        if self.native != nil {
+            if prompt == "" {
+                return __io_read_file(self.native)
+            }
+            return __io_read_file(self.native, int(prompt))
+        }
+        return __io_read(prompt)
+    }
+
+    func ask(prompt) {
+        return __io_read(prompt)
+    }
+
+    func seek(offset, whence = 0) {
+        return __io_seek(self.native, offset, whence)
+    }
+
+    func pos() {
+        return __io_pos(self.native)
+    }
+
+    func rewind() {
+        return __io_rewind(self.native)
+    }
+
+    func eof() {
+        return __io_eof(self.native)
+    }
+
+    func fileno() {
+        return __io_fileno(self.native)
+    }
+
+    func close() {
+        return __io_close(self.native)
+    }
+
+    func pipe() {
+        return __io_pipe()
+    }
+
+    func popen(command) {
+        return __io_popen(command)
+    }
+}

@@ -4,6 +4,7 @@
 #include "lucy/phase2.hpp"
 #include "lucy/repl.hpp"
 #include "lucy/stdlib_native.hpp"
+#include "lucy/extension.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -16,12 +17,17 @@
 #include <regex>
 #include <sstream>
 #include <thread>
+#include <memory>
 #include <set>
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <dlfcn.h>
+#endif
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
 #endif
 #ifdef _WIN32
-#include <windows.h>
 #else
 #include <unistd.h>
 #endif
@@ -36,7 +42,34 @@
 #endif
 using namespace lucy;
 namespace fs = std::filesystem;
-void Environment::define(const std::string &n, Value v, bool c) { values_[n] = {std::move(v), c}; }
+static fs::path executable_path();
+static bool type_matches(const std::string &expected, const Value &value)
+{
+    if (expected.empty() || expected == "Any" || expected == "any") return true;
+    const std::string actual = value.type_name();
+    if (expected == "Int" || expected == "int") return actual == "int";
+    if (expected == "Double" || expected == "double" || expected == "Float" || expected == "float") return actual == "double";
+    if (expected == "Number" || expected == "number") return value.is_number();
+    if (expected == "String" || expected == "string") return actual == "string";
+    if (expected == "Bool" || expected == "bool") return actual == "bool";
+    if (expected == "Nil" || expected == "nil") return actual == "nil";
+    if (expected == "Array" || expected == "array") return actual == "array";
+    if (expected == "Map" || expected == "map") return actual == "map";
+    if (expected == "Function" || expected == "function") return actual == "function";
+    if (expected == "Class" || expected == "class") return actual == "class";
+    if (expected == "Native" || expected == "native") return actual == "native";
+    if (expected == "Instance" || expected == "instance") return actual == "instance";
+    if (auto i = std::get_if<Value::InstancePtr>(&value.data)) return *i && (*i)->klass && (*i)->klass->name == expected;
+    return false;
+}
+
+static void require_type(const std::string &expected, const Value &value, const std::string &where)
+{
+    if (!type_matches(expected, value))
+        throw std::runtime_error("TypeError: " + where + " expects " + expected + ", got " + value.type_name());
+}
+
+void Environment::define(const std::string &n, Value v, bool c, const std::string &type) { values_[n] = {std::move(v), c, type}; }
 bool Environment::local(const std::string &n) const { return values_.count(n) != 0; }
 bool Environment::constant(const std::string &n) const
 {
@@ -50,10 +83,18 @@ bool Environment::assign(const std::string &n, Value v)
     {
         if (i->second.constant)
             throw std::runtime_error("NameError: cannot assign to constant '" + n + "'");
+        if (!i->second.type_name.empty())
+            require_type(i->second.type_name, v, "variable '" + n + "'");
         i->second.value = std::move(v);
         return true;
     }
     return parent_ && parent_->assign(n, std::move(v));
+}
+bool Environment::type_check(const std::string &name, const Value &value) const
+{
+    auto i = values_.find(name);
+    if (i != values_.end()) return i->second.type_name.empty() || type_matches(i->second.type_name, value);
+    return parent_ ? parent_->type_check(name, value) : true;
 }
 Value Environment::get(const std::string &n) const
 {
@@ -98,11 +139,44 @@ static long long integer(const Value &v, const std::string &op)
         return (long long)*p;
     throw std::runtime_error("TypeError: operator '" + op + "' requires an integer, got " + v.type_name());
 }
+
+void Interpreter::register_native_function(const std::string &module, const std::string &name, NativeFunction fn)
+{
+    if (module.empty() || name.empty())
+        throw std::runtime_error("ExtensionError: module and function names cannot be empty");
+    auto f = std::make_shared<Function>();
+    f->name = module + "." + name;
+    f->native = [this, fn = std::move(fn)](const std::vector<Value> &args) -> Value {
+        return fn(*this, args);
+    };
+    native_modules_[module][name] = Value(f);
+}
+
+void Interpreter::register_native_constant(const std::string &module, const std::string &name, Value value)
+{
+    if (module.empty() || name.empty())
+        throw std::runtime_error("ExtensionError: module and constant names cannot be empty");
+    native_modules_[module][name] = std::move(value);
+}
+
+Value Interpreter::make_native_function(const std::string &name, NativeFunction fn)
+{
+    auto f = std::make_shared<Function>();
+    f->name = name;
+    f->native = [this, fn = std::move(fn)](const std::vector<Value> &args) -> Value {
+        return fn(*this, args);
+    };
+    return Value(f);
+}
+
 Interpreter::~Interpreter()
 {
     for (auto &environment : environments_)
         environment->clear();
     environments_.clear();
+    native_modules_.clear();
+    loaded_extensions_.clear();
+    extension_handles_.clear();
     globals_.reset();
     env_.reset();
 }
@@ -113,10 +187,11 @@ Interpreter::Interpreter(std::vector<std::string> argv)
     env_ = globals_;
 
     install_builtins();
+    install_builtin_type_classes();
 
     globals_->define("PI", 3.141592653589793, true);
     globals_->define("E", 2.718281828459045, true);
-    globals_->define("VERSION", "1.0.1", true);
+    globals_->define("VERSION", "2.0.0", true);
 
 #ifdef _WIN32
     globals_->define("PLATFORM", std::string("windows"), true);
@@ -138,21 +213,114 @@ Interpreter::Interpreter(std::vector<std::string> argv)
     // Keep both spellings backed by the same mutable array.
     globals_->define("ARGV", Value(arguments), true);
     globals_->define("argv", Value(arguments), true);
+
+    load_standard_modules();
 }
+
+void Interpreter::install_builtin_type_classes()
+{
+    static const char* names[] = {
+        "Object", "Nil", "Bool", "Int", "Double", "Number",
+        "String", "Array", "Map", "Function", "Class", "Instance", "Native"
+    };
+
+    for (const char* name : names)
+    {
+        auto klass = std::make_shared<Class>();
+        klass->name = name;
+        builtin_type_classes_[name] = klass;
+        globals_->define(name, Value(klass), true);
+    }
+}
+
+void Interpreter::load_standard_modules()
+{
+    // Standard modules are part of the Lucy runtime environment.
+    // Users may use `fs.read(...)`, `text.upper(...)`, etc. without importing them.
+    static const char* modules[] = {
+        "app", "crypto", "data", "flow", "fs", "http", "math",
+        "random", "repl", "result", "runtime", "set", "sqlite",
+        "system", "text", "time"
+    };
+
+    for (const char* module : modules)
+    {
+        try
+        {
+            ImportStmt statement(module);
+            import_module(statement);
+        }
+        catch (const std::exception& error)
+        {
+            // Optional facilities such as SQLite may be unavailable in a build.
+            // Keep the interpreter usable and let explicit use report the real error.
+            if (std::string(module) == "sqlite")
+                continue;
+            throw std::runtime_error(std::string("StandardLibraryError: failed to load module '") + module + "': " + error.what());
+        }
+    }
+}
+
 void Interpreter::install_builtins()
 {
     builtins_["print"] = [&](const std::vector<Value> &a)
     {for(size_t i=0;i<a.size();++i){if(i)std::cout<<' ';std::cout<<a[i].to_string();}return Value{}; };
-    builtins_["echo"] = [&](const std::vector<Value> &a)
+    builtins_["println"] = [&](const std::vector<Value> &a)
     {for(size_t i=0;i<a.size();++i){if(i)std::cout<<' ';std::cout<<a[i].to_string();}std::cout<<'\n';return Value{}; };
     builtins_["input"] = [](const std::vector<Value> &a)
     {if(a.size()>1)throw std::runtime_error("ArgumentError: input expects 0 or 1 argument(s)");if(!a.empty())std::cout<<a[0].to_string();std::string s;std::getline(std::cin,s);return Value(s); };
+    builtins_["exit"] = [](const std::vector<Value> &a) -> Value
+    { if (a.size() > 1) throw std::runtime_error("ArgumentError: exit expects 0 or 1 argument(s)"); int code = 0; if (!a.empty()) code = static_cast<int>(integer(a[0], "exit")); std::exit(code); };
     builtins_["len"] = [](const std::vector<Value> &a)
     {need(a.size(),1,"len");if(auto p=std::get_if<std::string>(&a[0].data))return Value((long long)p->size());if(auto p=std::get_if<Value::ArrayPtr>(&a[0].data))return Value((long long)(*p)->size());if(auto p=std::get_if<Value::MapPtr>(&a[0].data))return Value((long long)(*p)->size());throw std::runtime_error("TypeError: len expects string, array, or map"); };
     builtins_["str"] = [](const std::vector<Value> &a)
     {need(a.size(),1,"str");return Value(a[0].to_string()); };
     builtins_["int"] = [](const std::vector<Value> &a)
-    {need(a.size(),1,"int");if(auto p=std::get_if<long long>(&a[0].data))return Value(*p);if(auto p=std::get_if<double>(&a[0].data))return Value((long long)*p);if(auto p=std::get_if<std::string>(&a[0].data))try{return Value(std::stoll(*p));}catch(...){throw std::runtime_error("ValueError: cannot convert '"+*p+"' to int");}throw std::runtime_error("TypeError: int expects a number or numeric string"); };
+    {
+        if(a.empty() || a.size() > 2) throw std::runtime_error("ArgumentError: int expects 1 or 2 argument(s)");
+        if(auto p=std::get_if<long long>(&a[0].data)) return Value(*p);
+        if(auto p=std::get_if<double>(&a[0].data)) return Value((long long)*p);
+        if(auto p=std::get_if<std::string>(&a[0].data)) {
+            int base = 10;
+            if(a.size()==2) {
+                long long b = integer(a[1], "int");
+                if(b < 2 || b > 36) throw std::runtime_error("ValueError: int base must be between 2 and 36");
+                base = static_cast<int>(b);
+            }
+            try {
+                std::size_t pos = 0;
+                long long value = std::stoll(*p, &pos, base);
+                if(pos != p->size()) throw std::invalid_argument("trailing characters");
+                return Value(value);
+            } catch(...) {
+                throw std::runtime_error("ValueError: cannot convert '"+*p+"' to int with base "+std::to_string(base));
+            }
+        }
+        throw std::runtime_error("TypeError: int expects a number or numeric string");
+    };
+    auto format_integer_base = [](long long value, int base, long long width, const char* name) -> Value {
+        if(width < 0) throw std::runtime_error(std::string("ValueError: ")+name+" width cannot be negative");
+        bool negative = value < 0;
+        unsigned long long magnitude = negative
+            ? static_cast<unsigned long long>(-(value + 1)) + 1ULL
+            : static_cast<unsigned long long>(value);
+        const char* digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        std::string out;
+        do {
+            out.push_back(digits[magnitude % static_cast<unsigned long long>(base)]);
+            magnitude /= static_cast<unsigned long long>(base);
+        } while(magnitude != 0);
+        std::reverse(out.begin(), out.end());
+        if(width > static_cast<long long>(out.size())) out.insert(0, static_cast<std::size_t>(width - out.size()), '0');
+        if(negative) out.insert(out.begin(), '-');
+        return Value(std::move(out));
+    };
+    builtins_["bin"] = [format_integer_base](const std::vector<Value> &a) -> Value
+    {if(a.empty() || a.size()>2) throw std::runtime_error("ArgumentError: bin expects 1 or 2 argument(s)"); long long width=a.size()==2?integer(a[1],"bin"):0; return format_integer_base(integer(a[0],"bin"),2,width,"bin");};
+    builtins_["hex"] = [format_integer_base](const std::vector<Value> &a) -> Value
+    {if(a.empty() || a.size()>2) throw std::runtime_error("ArgumentError: hex expects 1 or 2 argument(s)"); long long width=a.size()==2?integer(a[1],"hex"):0; return format_integer_base(integer(a[0],"hex"),16,width,"hex");};
+    builtins_["oct"] = [format_integer_base](const std::vector<Value> &a) -> Value
+    {if(a.empty() || a.size()>2) throw std::runtime_error("ArgumentError: oct expects 1 or 2 argument(s)"); long long width=a.size()==2?integer(a[1],"oct"):0; return format_integer_base(integer(a[0],"oct"),8,width,"oct");};
     builtins_["float"] = [](const std::vector<Value> &a)
     {need(a.size(),1,"float");if(auto p=std::get_if<double>(&a[0].data))return Value(*p);if(auto p=std::get_if<long long>(&a[0].data))return Value((double)*p);if(auto p=std::get_if<std::string>(&a[0].data))try{return Value(std::stod(*p));}catch(...){throw std::runtime_error("ValueError: cannot convert '"+*p+"' to float");}throw std::runtime_error("TypeError: float expects a number or numeric string"); };
     builtins_["type"] = [](const std::vector<Value> &a)
@@ -639,6 +807,55 @@ std::string Interpreter::interpolate(const std::string &s)
 }
 Value Interpreter::member_get(const Value &v, const std::string &n)
 {
+    auto bind = [this, &v](const Value& method) -> Value {
+        if (!std::holds_alternative<Value::FunctionPtr>(method.data))
+            return method;
+        auto raw = std::get<Value::FunctionPtr>(method.data);
+        auto bound = std::make_shared<Function>();
+        *bound = *raw;
+        bound->bound_self.reset();
+        bound->bound_value = std::make_shared<Value>(v);
+        return Value(bound);
+    };
+
+    auto type_class_name = [&]() -> std::string {
+        const std::string actual = v.type_name();
+        if (actual == "string") return "String";
+        if (actual == "int") return "Int";
+        if (actual == "double") return "Double";
+        if (actual == "bool") return "Bool";
+        if (actual == "nil") return "Nil";
+        if (actual == "array") return "Array";
+        if (actual == "map") return "Map";
+        if (actual == "function") return "Function";
+        if (actual == "class") return "Class";
+        if (actual == "instance") return "Instance";
+        if (actual == "native") return "Native";
+        return {};
+    };
+
+    // User-defined methods on built-in types take precedence over native methods.
+    const std::string concrete_type = type_class_name();
+    if (!concrete_type.empty())
+    {
+        auto it = builtin_type_classes_.find(concrete_type);
+        if (it != builtin_type_classes_.end())
+        {
+            auto m = it->second->methods.find(n);
+            if (m != it->second->methods.end())
+                return bind(m->second);
+        }
+    }
+    auto object_it = builtin_type_classes_.find("Object");
+    if (object_it != builtin_type_classes_.end())
+    {
+        auto m = object_it->second->methods.find(n);
+        if (m != object_it->second->methods.end())
+            return bind(m->second);
+    }
+
+    if (auto native = std::get_if<Value::NativePtr>(&v.data))
+        return (*native)->get_member(*this, n);
     if (auto i = std::get_if<Value::InstancePtr>(&v.data))
     {
         auto f = (*i)->fields.find(n);
@@ -660,8 +877,19 @@ Value Interpreter::member_get(const Value &v, const std::string &n)
     }
     if (auto c = std::get_if<Value::ClassPtr>(&v.data))
     {
+        if (n == "new" && (*c)->is_struct)
+        {
+            auto it = (*c)->methods.find("new");
+            if (it != (*c)->methods.end()) return it->second;
+        }
         if (n == "new")
         {
+            bool builtin_type = false;
+            for (const auto& [name, builtin_class] : builtin_type_classes_)
+                if (builtin_class == *c) { builtin_type = true; break; }
+            if (builtin_type)
+                throw std::runtime_error("TypeError: built-in type '" + (*c)->name + "' is not directly constructible");
+
             auto klass = *c;
             auto f = std::make_shared<Function>();
             f->name = klass->name + ".new";
@@ -679,20 +907,20 @@ Value Interpreter::member_get(const Value &v, const std::string &n)
     if (std::holds_alternative<Value::ArrayPtr>(v.data))
     {
         auto f = [this, n, v](const std::vector<Value> &args)
-        {auto p=std::get<Value::ArrayPtr>(v.data);if(n=="push"){for(auto&x:args)p->push_back(x);return Value((long long)p->size());}if(n=="pop"){if(p->empty())return Value{};Value x=p->back();p->pop_back();return x;}if(n=="shift"){if(p->empty())return Value{};Value x=p->front();p->erase(p->begin());return x;}if(n=="unshift"){p->insert(p->begin(),args.begin(),args.end());return Value((long long)p->size());}if(n=="insert"){need(args.size(),2,n);long long index=integer(args[0],n);if(index<0)index+=(long long)p->size();if(index<0)index=0;if(index>(long long)p->size())index=p->size();p->insert(p->begin()+index,args[1]);return Value(v);}if(n=="remove_at"){need(args.size(),1,n);long long index=integer(args[0],n);if(index<0)index+=(long long)p->size();if(index<0||index>=(long long)p->size())return Value{};Value removed=p->at(index);p->erase(p->begin()+index);return removed;}if(n=="clear"){p->clear();return Value{};}if(n=="first")return p->empty()?Value{}:p->front();if(n=="last")return p->empty()?Value{}:p->back();if(n=="contains"){need(args.size(),1,n);for(auto&x:*p)if(equal(x,args[0]))return Value(true);return Value(false);}if(n=="count"){need(args.size(),1,n);long long c=0;for(auto&x:*p)if(equal(x,args[0]))++c;return Value(c);}if(n=="index"){need(args.size(),1,n);for(size_t i=0;i<p->size();++i)if(equal(p->at(i),args[0]))return Value((long long)i);return Value{};}if(n=="join"){need(args.size(),1,n);std::string r,sep=std::get<std::string>(args[0].data);for(size_t i=0;i<p->size();++i){if(i)r+=sep;r+=p->at(i).to_string();}return Value(r);}if(n=="reverse"){std::reverse(p->begin(),p->end());return Value(v);}if(n=="length"||n=="size")return Value((long long)p->size());if(n=="each"){need(args.size(),1,n);for(auto&x:*p)call(args[0],{x});return Value(v);}if(n=="map"){need(args.size(),1,n);Array r;for(auto&x:*p)r.push_back(call(args[0],{x}));return Value(std::move(r));}if(n=="filter"){need(args.size(),1,n);Array r;for(auto&x:*p)if(call(args[0],{x}).is_truthy())r.push_back(x);return Value(std::move(r));}if(n=="any"){need(args.size(),1,n);for(auto&x:*p)if(call(args[0],{x}).is_truthy())return Value(true);return Value(false);}if(n=="all"){need(args.size(),1,n);for(auto&x:*p)if(!call(args[0],{x}).is_truthy())return Value(false);return Value(true);}throw std::runtime_error("NoMethodError: array has no method '"+n+"'"); };
-        return Value(std::make_shared<Function>(Function{n, {}, nullptr, env_, nullptr, f}));
+        {auto p=std::get<Value::ArrayPtr>(v.data);if(n=="push"){for(auto&x:args)p->push_back(x);return Value((long long)p->size());}if(n=="pop"){if(p->empty())return Value{};Value x=p->back();p->pop_back();return x;}if(n=="shift"){if(p->empty())return Value{};Value x=p->front();p->erase(p->begin());return x;}if(n=="unshift"){p->insert(p->begin(),args.begin(),args.end());return Value((long long)p->size());}if(n=="insert"){need(args.size(),2,n);long long index=integer(args[0],n);if(index<0)index+=(long long)p->size();if(index<0)index=0;if(index>(long long)p->size())index=p->size();p->insert(p->begin()+index,args[1]);return Value(v);}if(n=="remove_at"){need(args.size(),1,n);long long index=integer(args[0],n);if(index<0)index+=(long long)p->size();if(index<0||index>=(long long)p->size())return Value{};Value removed=p->at(index);p->erase(p->begin()+index);return removed;}if(n=="clear"){p->clear();return Value{};}if(n=="first")return p->empty()?Value{}:p->front();if(n=="last")return p->empty()?Value{}:p->back();if(n=="contains"){need(args.size(),1,n);for(auto&x:*p)if(equal(x,args[0]))return Value(true);return Value(false);}if(n=="count"){need(args.size(),1,n);long long c=0;for(auto&x:*p)if(equal(x,args[0]))++c;return Value(c);}if(n=="index"){need(args.size(),1,n);for(size_t i=0;i<p->size();++i)if(equal(p->at(i),args[0]))return Value((long long)i);return Value{};}if(n=="join"){need(args.size(),1,n);std::string r,sep=std::get<std::string>(args[0].data);for(size_t i=0;i<p->size();++i){if(i)r+=sep;r+=p->at(i).to_string();}return Value(r);}if(n=="reverse"){std::reverse(p->begin(),p->end());return Value(v);}if(n=="length"||n=="size")return Value((long long)p->size());if(n=="slice"){if(args.size()<1||args.size()>2)throw std::runtime_error("ArgumentError: array.slice expects 1 or 2 arguments");long long start=integer(args[0],n), end=(long long)p->size();if(start<0)start+=(long long)p->size();if(start<0)start=0;if(start>(long long)p->size())start=p->size();if(args.size()==2){end=integer(args[1],n);if(end<0)end+=(long long)p->size();if(end<start)end=start;if(end>(long long)p->size())end=p->size();}Array r;for(long long i=start;i<end;++i)r.push_back(p->at((size_t)i));return Value(std::move(r));}if(n=="each"){need(args.size(),1,n);for(auto&x:*p)call(args[0],{x});return Value(v);}if(n=="map"){need(args.size(),1,n);Array r;for(auto&x:*p)r.push_back(call(args[0],{x}));return Value(std::move(r));}if(n=="filter"){need(args.size(),1,n);Array r;for(auto&x:*p)if(call(args[0],{x}).is_truthy())r.push_back(x);return Value(std::move(r));}if(n=="any"){need(args.size(),1,n);for(auto&x:*p)if(call(args[0],{x}).is_truthy())return Value(true);return Value(false);}if(n=="all"){need(args.size(),1,n);for(auto&x:*p)if(!call(args[0],{x}).is_truthy())return Value(false);return Value(true);}throw std::runtime_error("NoMethodError: array has no method '"+n+"'"); };
+        return Value(std::make_shared<Function>(Function{n, "", {}, nullptr, env_, nullptr, nullptr, f}));
     }
     if (std::holds_alternative<std::string>(v.data))
     {
         auto f = [this, n, v](const std::vector<Value> &a) -> Value
         {auto s=std::get<std::string>(v.data);if(n=="upper"||n=="upcase"){std::transform(s.begin(),s.end(),s.begin(),[](unsigned char c){return (char)std::toupper(c);});return Value(s);}if(n=="lower"||n=="downcase"){std::transform(s.begin(),s.end(),s.begin(),[](unsigned char c){return (char)std::tolower(c);});return Value(s);}if(n=="strip"||n=="trim"){auto b=s.find_first_not_of(" \t\r\n"),e=s.find_last_not_of(" \t\r\n");return Value(b==std::string::npos?"":s.substr(b,e-b+1));}if(n=="contains"||n=="starts_with"||n=="ends_with"){need(a.size(),1,n);auto q=std::get<std::string>(a[0].data);if(n=="contains")return Value(s.find(q)!=std::string::npos);if(n=="starts_with")return Value(s.rfind(q,0)==0);return Value(q.size()<=s.size()&&s.compare(s.size()-q.size(),q.size(),q)==0);}if(n=="length"||n=="size")return Value((long long)s.size());if(n=="reverse"){std::reverse(s.begin(),s.end());return Value(s);}if(n=="repeat"){need(a.size(),1,n);long long k=integer(a[0],n);if(k<0)throw std::runtime_error("ValueError: repeat count cannot be negative");std::string r;for(long long i=0;i<k;++i)r+=s;return Value(r);}if(n=="to_int"){try{return Value(std::stoll(s));}catch(...){throw std::runtime_error("ValueError: invalid integer string");}}if(n=="to_float"){try{return Value(std::stod(s));}catch(...){throw std::runtime_error("ValueError: invalid float string");}}if(n=="slice"){if(a.size()<1||a.size()>2)throw std::runtime_error("ArgumentError: slice expects 1 or 2 arguments");long long start=integer(a[0],n);if(start<0)start+=(long long)s.size();if(start<0)start=0;if(start>(long long)s.size())start=s.size();long long end=(long long)s.size();if(a.size()==2){end=integer(a[1],n);if(end<0)end+=(long long)s.size();if(end<start)end=start;if(end>(long long)s.size())end=s.size();}return Value(s.substr((size_t)start,(size_t)(end-start)));}if(n=="char_at"){need(a.size(),1,n);long long index=integer(a[0],n);if(index<0)index+=(long long)s.size();if(index<0||index>=(long long)s.size())return Value{};return Value(std::string(1,s[(size_t)index]));}if(n=="split"){need(a.size(),1,n);auto sep=std::get<std::string>(a[0].data);if(sep.empty())throw std::runtime_error("ValueError: split separator cannot be empty");Array r;size_t pos=0;while(true){auto q=s.find(sep,pos);if(q==std::string::npos){r.emplace_back(s.substr(pos));break;}r.emplace_back(s.substr(pos,q-pos));pos=q+sep.size();}return Value(std::move(r));}if(n=="replace"){need(a.size(),2,n);auto from=std::get<std::string>(a[0].data),to=std::get<std::string>(a[1].data);size_t pos=0;while((pos=s.find(from,pos))!=std::string::npos){s.replace(pos,from.size(),to);pos+=to.size();}return Value(s);}throw std::runtime_error("NoMethodError: string has no method '"+n+"'"); };
-        return Value(std::make_shared<Function>(Function{n, {}, nullptr, env_, nullptr, f}));
+        return Value(std::make_shared<Function>(Function{n, "", {}, nullptr, env_, nullptr, nullptr, f}));
     }
     if (v.is_number())
     {
         auto f = [this, n, v](const std::vector<Value> &a) -> Value
-        {double x=num(v,n);if(n=="abs")return Value(std::fabs(x));if(n=="floor")return Value(std::floor(x));if(n=="ceil")return Value(std::ceil(x));if(n=="round")return Value(std::round(x));if(n=="sqrt"){if(x<0)throw std::runtime_error("ValueError: sqrt domain error");return Value(std::sqrt(x));}if(n=="sin")return Value(std::sin(x));if(n=="cos")return Value(std::cos(x));if(n=="tan")return Value(std::tan(x));if(n=="log"){if(x<=0)throw std::runtime_error("ValueError: log domain error");return Value(std::log(x));}if(n=="to_int")return Value((long long)x);if(n=="to_string")return Value(v.to_string());if(n=="pow"){need(a.size(),1,n);return Value(std::pow(x,num(a[0],n)));}throw std::runtime_error("NoMethodError: number has no method '"+n+"'"); };
-        return Value(std::make_shared<Function>(Function{n, {}, nullptr, env_, nullptr, f}));
+        {double x=num(v,n);if(n=="abs")return Value(std::fabs(x));if(n=="floor")return Value(std::floor(x));if(n=="ceil")return Value(std::ceil(x));if(n=="round")return Value(std::round(x));if(n=="sqrt"){if(x<0)throw std::runtime_error("ValueError: sqrt domain error");return Value(std::sqrt(x));}if(n=="sin")return Value(std::sin(x));if(n=="cos")return Value(std::cos(x));if(n=="tan")return Value(std::tan(x));if(n=="log"){if(x<=0)throw std::runtime_error("ValueError: log domain error");return Value(std::log(x));}if(n=="to_int")return Value((long long)x);if(n=="to_string")return Value(v.to_string());if(n=="to_binary"||n=="to_hex"||n=="to_octal"){if(a.size()>1)throw std::runtime_error("ArgumentError: "+n+" expects 0 or 1 argument(s)");long long width=a.empty()?0:integer(a[0],n);int base=n=="to_binary"?2:(n=="to_hex"?16:8);const char* digits="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";long long iv=static_cast<long long>(x);bool negative=iv<0;unsigned long long magnitude=negative?static_cast<unsigned long long>(-(iv+1))+1ULL:static_cast<unsigned long long>(iv);std::string out;do{out.push_back(digits[magnitude%static_cast<unsigned long long>(base)]);magnitude/=static_cast<unsigned long long>(base);}while(magnitude!=0);std::reverse(out.begin(),out.end());if(width<0)throw std::runtime_error("ValueError: "+n+" width cannot be negative");if(width>(long long)out.size())out.insert(0,(size_t)(width-out.size()),'0');if(negative)out.insert(out.begin(),'-');return Value(out);}if(n=="pow"){need(a.size(),1,n);return Value(std::pow(x,num(a[0],n)));}throw std::runtime_error("NoMethodError: number has no method '"+n+"'"); };
+        return Value(std::make_shared<Function>(Function{n, "", {}, nullptr, env_, nullptr, nullptr, f}));
     }
     if (auto m = std::get_if<Value::MapPtr>(&v.data))
     {
@@ -701,7 +929,7 @@ Value Interpreter::member_get(const Value &v, const std::string &n)
         {
             auto f = [mp, n](const std::vector<Value> &a) -> Value
             {if(n=="get"){need(a.size(),1,n);auto k=std::get<std::string>(a[0].data);auto i=mp->find(k);return i==mp->end()?Value{}:i->second;}if(n=="set"){need(a.size(),2,n);mp->insert_or_assign(std::get<std::string>(a[0].data),a[1]);return a[1];}if(n=="has"){need(a.size(),1,n);return Value(mp->count(std::get<std::string>(a[0].data))!=0);}if(n=="delete"){need(a.size(),1,n);return Value(mp->erase(std::get<std::string>(a[0].data))!=0);}if(n=="keys"){Array r;for(auto&[k,x]:*mp)r.emplace_back(k);return Value(std::move(r));}if(n=="values"){Array r;for(auto&[k,x]:*mp)r.push_back(x);return Value(std::move(r));}mp->clear();return Value{}; };
-            return Value(std::make_shared<Function>(Function{n, {}, nullptr, env_, nullptr, f}));
+            return Value(std::make_shared<Function>(Function{n, "", {}, nullptr, env_, nullptr, nullptr, f}));
         }
         auto i = mp->find(n);
         if (i != mp->end())
@@ -714,6 +942,9 @@ void Interpreter::member_set(const Value &v, const std::string &n, Value x)
 {
     if (auto i = std::get_if<Value::InstancePtr>(&v.data))
     {
+        auto type_it = (*i)->field_types.find(n);
+        if (type_it != (*i)->field_types.end() && !type_it->second.empty())
+            require_type(type_it->second, x, "field '" + n + "'");
         (*i)->fields[n] = std::move(x);
         return;
     }
@@ -817,6 +1048,28 @@ Value Interpreter::evaluate(const ExprPtr &e)
         long long i = key.is_number() ? integer(key, "index") : 0;
         if (auto a = std::get_if<Value::ArrayPtr>(&o.data))
         {
+            if (auto r = std::dynamic_pointer_cast<RangeExpr>(x->index))
+            {
+                long long start = integer(evaluate(r->a), "slice");
+                long long end = integer(evaluate(r->b), "slice");
+                long long n = static_cast<long long>((*a)->size());
+                if (start < 0) start += n;
+                if (end < 0) end += n;
+                if (start < 0) start = 0;
+                if (start > n) start = n;
+                if (r->inclusive) { if (end < -1) end = -1; if (end >= n) end = n - 1; }
+                else { if (end < 0) end = 0; if (end > n) end = n; }
+                Array result;
+                if (r->inclusive)
+                {
+                    for (long long j = start; j <= end; ++j) result.push_back((*a)->at(static_cast<size_t>(j)));
+                }
+                else
+                {
+                    for (long long j = start; j < end; ++j) result.push_back((*a)->at(static_cast<size_t>(j)));
+                }
+                return Value(std::move(result));
+            }
             if (i < 0)
                 i += (long long)(*a)->size();
             if (i < 0 || i >= (long long)(*a)->size())
@@ -894,6 +1147,21 @@ Value Interpreter::evaluate(const ExprPtr &e)
     }
     if (auto x = std::dynamic_pointer_cast<Binary>(e))
     {
+        if (x->op.type == TokenType::Coalesce)
+        {
+            try
+            {
+                auto a = evaluate(x->left);
+                return std::holds_alternative<Nil>(a.data) ? evaluate(x->right) : a;
+            }
+            catch (const std::runtime_error &error)
+            {
+                const std::string message = error.what();
+                if (message.rfind("NameError: undefined variable '", 0) == 0)
+                    return evaluate(x->right);
+                throw;
+            }
+        }
         if (x->op.type == TokenType::And)
         {
             auto a = evaluate(x->left);
@@ -990,6 +1258,8 @@ Value Interpreter::call(const Value &v, const std::vector<Value> &a, const std::
     env_ = make_environment(f->closure ? f->closure : globals_);
     if (f->bound_self)
         env_->define("self", Value(f->bound_self));
+    else if (f->bound_value)
+        env_->define("self", *f->bound_value);
     try
     {
         size_t positional_index = 0;
@@ -1006,11 +1276,14 @@ Value Interpreter::call(const Value &v, const std::vector<Value> &a, const std::
             else if (supplied[i])
             {
                 ++positional_index;
-                env_->define(param.name, bound[i]);
+                if (!param.type_name.empty()) require_type(param.type_name, bound[i], "parameter '" + param.name + "'");
+                env_->define(param.name, bound[i], false, param.type_name);
             }
             else if (param.default_value)
             {
-                env_->define(param.name, evaluate(param.default_value));
+                Value dv = evaluate(param.default_value);
+                if (!param.type_name.empty()) require_type(param.type_name, dv, "parameter '" + param.name + "'");
+                env_->define(param.name, std::move(dv), false, param.type_name);
             }
             else
             {
@@ -1022,6 +1295,7 @@ Value Interpreter::call(const Value &v, const std::vector<Value> &a, const std::
     catch (const ReturnSignal &r)
     {
         env_ = old;
+        if (!f->return_type.empty()) require_type(f->return_type, r.value, "return value of function '" + f->name + "'");
         return r.value;
     }
     catch (...)
@@ -1030,7 +1304,9 @@ Value Interpreter::call(const Value &v, const std::vector<Value> &a, const std::
         throw;
     }
     env_ = old;
-    return Value{};
+    Value implicit{};
+    if (!f->return_type.empty()) require_type(f->return_type, implicit, "return value of function '" + f->name + "'");
+    return implicit;
 }
 Value Interpreter::execute(const StmtPtr &s)
 {
@@ -1044,7 +1320,9 @@ Value Interpreter::execute(const StmtPtr &s)
     if (auto x = std::dynamic_pointer_cast<VarDecl>(s))
     {
         auto target = x->global ? globals_ : env_;
-        target->define(x->name, x->value ? evaluate(x->value) : Value{}, x->constant);
+        Value value = x->value ? evaluate(x->value) : Value{};
+        if (!x->type_name.empty()) require_type(x->type_name, value, "variable '" + x->name + "'");
+        target->define(x->name, std::move(value), x->constant, x->type_name);
         return Value{};
     }
     if (auto x = std::dynamic_pointer_cast<Assign>(s))
@@ -1157,12 +1435,21 @@ Value Interpreter::execute(const StmtPtr &s)
         env_ = make_environment(old);
         try
         {
-            for (auto &item : **a)
+            for (size_t item_index = 0; item_index < a->get()->size(); ++item_index)
             {
+                auto &item = a->get()->at(item_index);
                 if (env_->local(x->name))
                     env_->assign(x->name, item);
                 else
                     env_->define(x->name, item);
+                if (!x->index_name.empty())
+                {
+                    Value index_value(static_cast<long long>(item_index));
+                    if (env_->local(x->index_name))
+                        env_->assign(x->index_name, index_value);
+                    else
+                        env_->define(x->index_name, index_value);
+                }
                 try
                 {
                     execute(x->body);
@@ -1209,32 +1496,90 @@ Value Interpreter::execute(const StmtPtr &s)
     {
         auto f = std::make_shared<Function>();
         f->name = x->name;
+        f->return_type = x->return_type;
         f->params = x->params;
         f->body = x->body;
         f->closure = env_;
         env_->define(x->name, Value(f));
         return Value{};
     }
-    if (auto x = std::dynamic_pointer_cast<ClassStmt>(s))
+    if (auto x = std::dynamic_pointer_cast<StructStmt>(s))
     {
         auto c = std::make_shared<Class>();
         c->name = x->name;
-        c->base = x->base;
-        if (!x->base.empty())
-        {
-            Value b = env_->get(x->base);
-            c->parent = std::get<Value::ClassPtr>(b.data);
-        }
+        c->is_struct = true;
         for (auto &m : x->methods)
         {
             auto f = std::make_shared<Function>();
             f->name = m->name;
+            f->return_type = m->return_type;
             f->params = m->params;
             f->body = m->body;
             f->closure = env_;
             c->methods[f->name] = Value(f);
         }
+        auto fields = x->fields;
+        c->methods["new"] = Value(std::make_shared<Function>(Function{
+            x->name + ".new", "", {}, nullptr, env_, nullptr, nullptr,
+            [this, c, fields](const std::vector<Value> &args) -> Value {
+                if (args.size() > fields.size())
+                    throw std::runtime_error("ArgumentError: struct '" + c->name + "' received too many constructor arguments");
+                auto ins = std::make_shared<Instance>();
+                ins->klass = c;
+                auto old = env_;
+                env_ = make_environment(old);
+                env_->define("self", Value(ins));
+                try {
+                    for (size_t i = 0; i < fields.size(); ++i) {
+                        Value value = fields[i].default_value ? evaluate(fields[i].default_value) : Value{};
+                        if (i < args.size()) value = args[i];
+                        if (!fields[i].type_name.empty()) require_type(fields[i].type_name, value, "field '" + fields[i].name + "'");
+                        ins->fields[fields[i].name] = value;
+                        if (!fields[i].type_name.empty()) ins->field_types[fields[i].name] = fields[i].type_name;
+                    }
+                    env_ = old;
+                } catch (...) { env_ = old; throw; }
+                return Value(ins);
+            }
+        }));
         env_->define(x->name, Value(c));
+        return Value{};
+    }
+    if (auto x = std::dynamic_pointer_cast<ClassStmt>(s))
+    {
+        std::shared_ptr<Class> c;
+        auto builtin = builtin_type_classes_.find(x->name);
+        if (builtin != builtin_type_classes_.end())
+        {
+            c = builtin->second;
+            if (!x->base.empty())
+                throw std::runtime_error("SyntaxError: built-in type extensions cannot declare a base class");
+        }
+        else
+        {
+            c = std::make_shared<Class>();
+            c->name = x->name;
+            c->base = x->base;
+            if (!x->base.empty())
+            {
+                Value b = env_->get(x->base);
+                c->parent = std::get<Value::ClassPtr>(b.data);
+            }
+        }
+
+        for (auto &m : x->methods)
+        {
+            auto f = std::make_shared<Function>();
+            f->name = m->name;
+            f->return_type = m->return_type;
+            f->params = m->params;
+            f->body = m->body;
+            f->closure = env_;
+            c->methods[f->name] = Value(f);
+        }
+
+        if (builtin == builtin_type_classes_.end())
+            env_->define(x->name, Value(c));
         return Value{};
     }
     if (auto x = std::dynamic_pointer_cast<ReturnStmt>(s))
@@ -1255,6 +1600,24 @@ Value Interpreter::execute(const StmtPtr &s)
         try
         {
             execute(x->body);
+        }
+        catch (const ReturnSignal &)
+        {
+            if (x->finally_body)
+                execute(x->finally_body);
+            throw;
+        }
+        catch (const BreakSignal &)
+        {
+            if (x->finally_body)
+                execute(x->finally_body);
+            throw;
+        }
+        catch (const ContinueSignal &)
+        {
+            if (x->finally_body)
+                execute(x->finally_body);
+            throw;
         }
         catch (const std::exception &e)
         {
@@ -1279,51 +1642,41 @@ Value Interpreter::execute(const StmtPtr &s)
 }
 void Interpreter::import_module(const ImportStmt &x)
 {
+    if (import_native_module(x))
+        return;
+
     auto path = resolve_module(x.module);
     if (std::find(import_stack_.begin(), import_stack_.end(), path) != import_stack_.end())
         throw std::runtime_error("ImportError: circular import detected");
     import_stack_.push_back(path);
+    auto old = env_;
+    auto file = current_file_;
     try
     {
         Lexer l(read_file(path));
         Parser p(l.scan());
         auto prog = p.parse();
-        auto old = env_;
-        auto file = current_file_;
         auto mod = make_environment(globals_);
         env_ = mod;
         current_file_ = path;
         run(prog);
-        // Ordinary imports expose a single module object (for example `import fs` -> `fs.read`).
-        // Nothing is leaked into the caller scope; use `from module import name` for direct imports.
-        // Keep the module environment alive so functions and classes can continue
-        // resolving names defined by the module itself. Environments are owned by the
-        // interpreter and cleared during interpreter destruction, which also breaks
-        // closure/environment cycles safely.
         if (x.selective)
         {
-            // `from module import name` exposes only the requested names.
             for (const auto &name : x.names)
-            {
                 old->define(name, mod->get(name));
-            }
         }
         else
         {
-            const std::string alias =
-                x.alias.empty() ? fs::path(path).stem().string() : x.alias;
-
+            const std::string alias = x.alias.empty() ? fs::path(path).stem().string() : x.alias;
             auto object = std::make_shared<Instance>();
             auto klass = std::make_shared<Class>();
             klass->name = alias;
             object->klass = klass;
             for (auto &[name, entry] : mod->values())
             {
-                if (std::holds_alternative<Value::FunctionPtr>(entry.value.data) &&
-                    (name.empty() || name[0] != '_'))
-                {
-                    object->fields[name] = entry.value;
-                }
+                if (!std::holds_alternative<Value::FunctionPtr>(entry.value.data) || name.empty() || name[0] == '_')
+                    continue;
+                object->fields[name] = entry.value;
             }
             old->define(alias, Value(object));
         }
@@ -1331,12 +1684,138 @@ void Interpreter::import_module(const ImportStmt &x)
         current_file_ = file;
         import_stack_.pop_back();
     }
-    catch (...)
+    catch (const std::exception &error)
     {
         import_stack_.pop_back();
-        throw;
+        env_ = old;
+        current_file_ = file;
+        throw std::runtime_error("ImportError: module '" + x.module + "': " + error.what());
     }
 }
+
+std::vector<std::string> Interpreter::extension_search_paths() const
+{
+    std::vector<std::string> paths;
+    auto add_root = [&](const fs::path &root) {
+        if (root.empty()) return;
+        paths.push_back((root / "extensions").string());
+        paths.push_back((root / "share" / "lucy" / "extensions").string());
+        paths.push_back((root / "lib" / "lucy" / "extensions").string());
+    };
+
+    if (!current_file_.empty())
+        paths.push_back((fs::path(current_file_).parent_path() / "extensions").string());
+    paths.push_back((fs::current_path() / "extensions").string());
+
+    // LUCY_PATH is the single Lucy installation/project root.
+    if (const char *env = std::getenv("LUCY_PATH"))
+        add_root(fs::path(env));
+
+    const auto exe = executable_path();
+    if (!exe.empty()) {
+        const fs::path exe_dir = exe.parent_path();
+        add_root(exe_dir);
+        add_root(exe_dir.parent_path());
+    }
+    return paths;
+}
+
+bool Interpreter::load_extension(const std::string &module)
+{
+    if (native_modules_.count(module))
+        return true;
+    if (loaded_extensions_.count(module))
+        return native_modules_.count(module) != 0;
+
+    std::vector<fs::path> candidates;
+    for (const auto &base : extension_search_paths())
+    {
+        fs::path root(base);
+#ifdef _WIN32
+        candidates.push_back(root / ("lucy_" + module + ".dll"));
+#elif __APPLE__
+        candidates.push_back(root / ("liblucy_" + module + ".dylib"));
+        candidates.push_back(root / ("lucy_" + module + ".dylib"));
+#else
+        candidates.push_back(root / ("liblucy_" + module + ".so"));
+        candidates.push_back(root / ("lucy_" + module + ".so"));
+#endif
+    }
+
+    fs::path selected;
+    for (const auto &candidate : candidates)
+        if (fs::exists(candidate)) { selected = fs::weakly_canonical(candidate); break; }
+    if (selected.empty())
+        return false;
+
+#ifdef _WIN32
+    HMODULE handle = LoadLibraryA(selected.string().c_str());
+    if (!handle)
+        throw std::runtime_error("ExtensionError: failed to load '" + selected.string() + "'");
+    auto init = reinterpret_cast<ExtensionInit>(GetProcAddress(handle, "lucy_extension_init"));
+    if (!init)
+    {
+        FreeLibrary(handle);
+        throw std::runtime_error("ExtensionError: '" + selected.string() + "' does not export lucy_extension_init");
+    }
+    extension_handles_.push_back(std::shared_ptr<void>(handle, [](void *p) { FreeLibrary(static_cast<HMODULE>(p)); }));
+#else
+    void *handle = dlopen(selected.string().c_str(), RTLD_NOW | RTLD_LOCAL);
+    if (!handle)
+        throw std::runtime_error(std::string("ExtensionError: failed to load '") + selected.string() + "': " + dlerror());
+    dlerror();
+    auto init = reinterpret_cast<ExtensionInit>(dlsym(handle, "lucy_extension_init"));
+    const char *error = dlerror();
+    if (error || !init)
+    {
+        dlclose(handle);
+        throw std::runtime_error("ExtensionError: '" + selected.string() + "' does not export lucy_extension_init");
+    }
+    extension_handles_.push_back(std::shared_ptr<void>(handle, [](void *p) { dlclose(p); }));
+#endif
+
+    loaded_extensions_[module] = selected.string();
+    ExtensionAPI api(*this, module);
+    if (!init(api))
+        throw std::runtime_error("ExtensionError: extension '" + module + "' initialization failed");
+    if (!native_modules_.count(module))
+        throw std::runtime_error("ExtensionError: extension '" + module + "' registered no module");
+    return true;
+}
+
+bool Interpreter::import_native_module(const ImportStmt &x)
+{
+    if (!native_modules_.count(x.module))
+        load_extension(x.module);
+    auto it = native_modules_.find(x.module);
+    if (it == native_modules_.end())
+        return false;
+
+    auto old = env_;
+    if (x.selective)
+    {
+        for (const auto &name : x.names)
+        {
+            auto member = it->second.find(name);
+            if (member == it->second.end())
+                throw std::runtime_error("ImportError: native module '" + x.module + "' has no member '" + name + "'");
+            old->define(name, member->second);
+        }
+    }
+    else
+    {
+        const std::string alias = x.alias.empty() ? x.module : x.alias;
+        auto object = std::make_shared<Instance>();
+        auto klass = std::make_shared<Class>();
+        klass->name = alias;
+        object->klass = klass;
+        for (const auto &[name, value] : it->second)
+            object->fields[name] = value;
+        old->define(alias, Value(object));
+    }
+    return true;
+}
+
 static fs::path executable_path()
 {
 #ifdef _WIN32
@@ -1367,37 +1846,47 @@ std::string Interpreter::resolve_module(const std::string &m) const
     if (p.extension() != ".lucy")
         p += ".lucy";
     std::vector<fs::path> c;
+
     if (!current_file_.empty())
         c.push_back(fs::path(current_file_).parent_path() / p);
-    if (const char *lp = std::getenv("LUCY_PATH"))
-    {
-        std::stringstream ss(lp);
-        std::string q;
-        char sep = ':';
-#ifdef _WIN32
-        sep = ';';
-#endif
-        while (std::getline(ss, q, sep))
-            if (!q.empty())
-                c.push_back(fs::path(q) / p);
-    }
-    c.push_back(fs::current_path() / "stdlib" / p);
-    if (const char *home = std::getenv("LUCY_STDLIB"))
-        c.push_back(fs::path(home) / p);
 
-    // Prefer a stdlib next to the executable so a Lucy directory can be moved
-    // anywhere without breaking imports. Also support the Unix install layout.
+    auto add_root = [&](const fs::path &root) {
+        if (root.empty()) return;
+        c.push_back(root / p);
+        c.push_back(root / "stdlib" / p);
+        c.push_back(root / "share" / "lucy" / "stdlib" / p);
+        c.push_back(root / "packages" / p);
+        c.push_back(root / "share" / "lucy" / "packages" / p);
+
+        const fs::path package_root = root / "packages" / fs::path(m);
+        if (fs::exists(package_root / "src" / "init.lucy"))
+            c.push_back(package_root / "src" / "init.lucy");
+    };
+
+    // LUCY_PATH is the single Lucy root. All Lucy-managed resources are
+    // resolved from this root: stdlib, packages, extensions and resources.
+    if (const char *lp = std::getenv("LUCY_PATH"))
+        add_root(fs::path(lp));
+
+    // Project-local packages.
+    const fs::path project_packages = fs::current_path() / "packages";
+    const fs::path package_root = project_packages / fs::path(m);
+    if (fs::exists(package_root / "src" / "init.lucy"))
+        c.push_back(package_root / "src" / "init.lucy");
+    c.push_back(project_packages / p);
+    c.push_back(fs::current_path() / "stdlib" / p);
+
+    // If LUCY_PATH is not set, infer the installation root from the
+    // executable. This keeps normal installations zero-configuration.
     const fs::path exe = executable_path();
-    if (!exe.empty())
-    {
+    if (!exe.empty()) {
         const fs::path exe_dir = exe.parent_path();
         c.push_back(exe_dir / "stdlib" / p);
+        c.push_back(exe_dir.parent_path() / "stdlib" / p);
         c.push_back(exe_dir.parent_path() / "share" / "lucy" / "stdlib" / p);
     }
 
-#ifdef _WIN32
-// Keep Windows free of Unix-specific filesystem fallbacks.
-#else
+#ifndef _WIN32
     c.push_back(fs::path("/usr/local/share/lucy/stdlib") / p);
 #endif
 
@@ -1406,85 +1895,58 @@ std::string Interpreter::resolve_module(const std::string &m) const
             return fs::weakly_canonical(x).string();
     throw std::runtime_error("ImportError: module '" + m + "' not found");
 }
+
 std::vector<std::pair<std::string, std::string>> Interpreter::list_modules() const
 {
-    // همه‌ی مسیرهایی که Lucy برای import جستجو می‌کنه
     std::vector<fs::path> search_paths;
+    std::set<std::string> seen;
 
-    // ۱. پوشه فایل فعلی
+    auto add_root = [&](const fs::path &root) {
+        if (root.empty()) return;
+        search_paths.push_back(root);
+        search_paths.push_back(root / "stdlib");
+        search_paths.push_back(root / "share" / "lucy" / "stdlib");
+        search_paths.push_back(root / "packages");
+        search_paths.push_back(root / "share" / "lucy" / "packages");
+    };
+
     if (!current_file_.empty())
         search_paths.push_back(fs::path(current_file_).parent_path());
-
-    // ۲. LUCY_PATH
     if (const char *lp = std::getenv("LUCY_PATH"))
-    {
-        std::stringstream ss(lp);
-        std::string q;
-        char sep = ':';
-#ifdef _WIN32
-        sep = ';';
-#endif
-        while (std::getline(ss, q, sep))
-            if (!q.empty())
-                search_paths.push_back(fs::path(q));
-    }
+        add_root(fs::path(lp));
 
-    // ۳. stdlib کنار پروژه
+    search_paths.push_back(fs::current_path() / "packages");
     search_paths.push_back(fs::current_path() / "stdlib");
 
-    // ۴. LUCY_STDLIB
-    if (const char *home = std::getenv("LUCY_STDLIB"))
-        search_paths.push_back(fs::path(home));
-
-    // ۵. کنار executable
     const fs::path exe = executable_path();
-    if (!exe.empty())
-    {
-        const fs::path exe_dir = exe.parent_path();
-        search_paths.push_back(exe_dir / "stdlib");
-        search_paths.push_back(exe_dir.parent_path() / "share" / "lucy" / "stdlib");
+    if (!exe.empty()) {
+        add_root(exe.parent_path());
+        add_root(exe.parent_path().parent_path());
     }
-
-    // ۶. مسیر نصب یونیکس
 #ifndef _WIN32
     search_paths.push_back(fs::path("/usr/local/share/lucy/stdlib"));
 #endif
 
-    // حالا همه فایل‌های .lucy رو پیدا کن
     std::vector<std::pair<std::string, std::string>> result;
-    std::set<std::string> seen; // برای جلوگیری از تکرار
-
-    for (const auto &base : search_paths)
-    {
+    for (const auto &base : search_paths) {
         if (!fs::is_directory(base))
             continue;
-
-        for (const auto &entry : fs::directory_iterator(base))
-        {
-            if (!entry.is_regular_file())
+        for (const auto &entry : fs::directory_iterator(base)) {
+            if (!entry.is_regular_file() || entry.path().extension() != ".lucy")
                 continue;
-            auto path = entry.path();
-            if (path.extension() != ".lucy")
-                continue;
-
-            std::string name = path.stem().string();
-
-            // اگه قبلاً پیدا شده (توی مسیر با اولویت بالاتر)، رد کن
+            const std::string name = entry.path().stem().string();
             if (seen.count(name))
                 continue;
             seen.insert(name);
-
-            result.emplace_back(name, path.lexically_normal().string());
+            result.emplace_back(name, entry.path().lexically_normal().string());
         }
     }
 
-    // مرتب‌سازی بر اساس اسم
     std::sort(result.begin(), result.end(),
-              [](const auto &a, const auto &b)
-              { return a.first < b.first; });
-
+              [](const auto &a, const auto &b) { return a.first < b.first; });
     return result;
 }
+
 std::string Interpreter::read_file(const std::string &p) const
 {
     std::ifstream f(p);
@@ -1507,191 +1969,109 @@ Value Interpreter::run(const std::vector<StmtPtr> &s, bool echo)
 }
 std::vector<std::string> Interpreter::completion_candidates(const std::string &input) const
 {
-    
     static const std::vector<std::string> keywords = {
-        "if", "else", "while", "do", "for", "foreach", "loop", "switch", "case", "default", "function", "def", "lambda",
-        "class", "return", "break", "continue", "end", "import", "from", "as",
-        "const", "global", "in", "and", "or", "not", "new", "self", "super",
-        "try", "catch", "finally", "throw", "true", "false", "nil",
-        "modules", "modules_info" };
+        "if", "unless", "else", "while", "repeat", "for", "foreach", "loop", "switch", "case", "default", "func", "lambda",
+        "class", "struct", "return", "break", "continue", "import", "from", "as", "const", "let", "var", "global", "in",
+        "and", "or", "not", "new", "self", "super", "try", "catch", "finally", "throw", "true", "false", "nil",
+        "modules", "modules_info", "print", "println", "input", "exit", "len", "str", "int", "float", "type", "typeof",
+        "range", "sum", "min", "max", "abs", "sqrt", "assert", "bin", "hex", "oct"
+    };
 
     static const std::vector<std::string> modules = {
-    "collections", "csv", "datetime", "dir", "encoding", "file", "http", "io",
-    "json", "math", "os", "path", "process", "random", "regex", "sqlite",
-    "string", "sys", "time", "repl", "flow", "data", "result"
+        "app", "crypto", "data", "flow", "fs", "http", "math", "random", "repl", "result", "runtime", "set", "sqlite", "system", "text", "time"
     };
     static const std::unordered_map<std::string, std::vector<std::string>> module_members = {
-        {"collections", {"first", "last", "reverse", "contains", "count", "index", "compact", "unique", "flatten", "sum", "min", "max"}},
-        {"csv", {"parse", "stringify"}},
-        {"datetime", {"now", "from_timestamp", "format"}},
-        {"dir", {"pwd", "chdir", "exists", "entries", "files", "dirs", "glob", "walk", "mkdir", "rmdir", "empty", "copy"}},
-        {"encoding", {"base64_encode", "base64_decode", "hex_encode", "hex_decode", "url_encode", "url_decode"}},
-        {"file", {"read", "write", "append", "read_lines", "write_lines", "exists", "size", "delete", "copy", "move", "touch"}},
-        {"http", {"get", "post", "put", "patch", "delete", "head", "request", "client", "headers", "timeout", "connect_timeout", "proxy", "user_agent", "follow_redirects", "insecure", "connect", "bind", "listen", "accept", "recv", "send", "close", "resolve", "reverse"}},
-        {"io", {"print", "write", "read", "ask"}},
-        {"json", {"parse", "stringify"}},
-        {"math", {"square", "cube", "clamp", "even", "odd", "abs", "sqrt", "pow", "sin", "cos", "tan", "floor", "ceil", "log", "min", "max", "factorial", "gcd", "lcm", "average"}},
-        {"os", {"cwd", "env", "setenv", "unsetenv", "system", "pid", "cpu_count", "platform", "version", "home", "temp_dir", "command_exists"}},
-        {"path", {"join", "absolute", "expand", "basename", "dirname", "extname", "stem"}},
-        {"process", {"run", "capture"}},
-        {"random", {"integer", "choice"}},
-        {"regex", {"match", "search", "find_all", "replace"}},
-        {"sqlite", {"open"}},
-        {"string", {"capitalize", "reverse", "repeat"}},
-        {"sys", {"version", "platform", "cwd", "env", "argv"}},
-        {"time", {"now", "strptime", "format", "year", "month", "day", "hour", "minute", "second", "add", "subtract", "plus", "minus", "compare", "succ"}},
-        {"repl", {"banner", "prompt", "commands", "topics", "help"}},
+        {"app", {"parser", "logger", "benchmark", "timeout", "template"}},
+        {"crypto", {"digest", "hexdigest", "hash", "base64digest", "file", "hmac"}},
+        {"data", {"pick", "omit", "merge", "values", "zip", "parse", "stringify", "pretty", "json_read", "json_write", "yaml_load", "yaml_dump", "csv_parse", "csv_stringify"}},
         {"flow", {"pipe", "tap", "branch", "repeat"}},
-        {"data", {"pick", "omit", "merge", "values", "zip"}},
+        {"fs", {"read", "write", "append", "read_lines", "write_lines", "exists", "size", "remove", "copy", "move", "touch", "chmod", "chown", "entries", "files", "dirs", "mkdir", "rmdir", "empty", "glob", "walk", "join", "absolute", "expand", "basename", "dirname", "extension", "stem", "link", "symlink", "open", "console", "read_json", "write_json"}},
+        {"http", {"request", "get", "post", "put", "patch", "delete", "head", "client", "connect", "bind", "listen", "accept", "recv", "send", "close", "resolve", "reverse"}},
+        {"math", {"square", "cube", "clamp", "factorial", "gcd", "lcm", "average", "lerp", "sign"}},
+        {"random", {"int", "float", "bool", "choice", "shuffle", "sample"}},
+        {"repl", {"banner", "version", "prompt", "commands", "topics", "help"}},
         {"result", {"ok", "err", "success", "unwrap", "message"}},
-        {"date", {"parse", "strptime", "format", "add", "subtract", "next_day", "prev_day", "succ", "shift_months", "add_months", "subtract_months", "compare"}},
-        {"digest", {"digest", "hexdigest", "base64digest", "file"}},
-        {"socket", {"new", "connect", "bind", "listen", "accept", "recv", "send", "close"}},
-        {"net_http", {"get", "put", "delete", "head", "patch", "post", "request", "start", "proxy"}},
-        {"resolv", {"getaddress", "getname"}},
-        {"fileutils", {"chmod", "chown", "ln", "link", "symlink"}},
-        {"stringscanner", {"new", "scan", "scan_until", "skip", "skip_until", "check", "check_until", "match?", "matched", "matched_size", "pre_match", "post_match"}},
-        {"set", {"new", "add", "delete", "include?", "member?", "each", "size", "length", "empty?", "clear", "map", "select", "reject", "merge", "subset?", "superset?", "intersect?", "union", "intersection", "difference", "symmetric_difference"}},
-        {"yaml", {"load", "safe_load", "dump", "load_file"}},
-        {"option_parser", {"new", "banner", "separator", "version", "program_name", "on", "parse", "parse!", "help", "summarize", "abort"}},
-        {"logger", {"new", "debug", "info", "warn", "error", "fatal", "add", "log", "level", "set_level", "debug?", "info?", "warn?", "error?", "fatal?"}},
-        {"timeout", {"timeout"}},
-        {"benchmark", {"measure", "realtime"}},
-        {"signal", {"trap", "list", "signame"}},
-        {"process", {"run", "capture", "success", "output", "ppid", "spawn", "wait", "waitpid", "kill", "uid", "gid", "euid", "egid", "groups", "clock_gettime"}}};
+        {"runtime", {"printf", "format", "catch", "rescue", "ensure", "methods", "responds", "call", "inspect", "variables", "globals", "ancestors", "superclass"}},
+        {"set", {"new", "from_values", "add", "delete", "include?", "union", "intersection", "difference", "symmetric_difference", "subset?", "superset?", "intersect?"}},
+        {"sqlite", {"open"}},
+        {"system", {"platform", "version", "argv", "cwd", "env", "setenv", "unsetenv", "home", "temp_dir", "command_exists", "pid", "ppid", "run", "capture", "success", "output", "spawn", "wait", "waitpid", "kill", "uid", "gid", "euid", "egid", "groups", "clock_gettime", "trap", "signals", "signal_name", "login", "user", "user_id", "shell_split", "shell_escape", "shell_join"}},
+        {"text", {"match", "search", "find_all", "replace_regex", "base64_encode", "base64_decode", "hex_encode", "hex_decode", "url_encode", "url_decode", "scanner", "shell_split", "shell_escape", "shell_join"}},
+        {"time", {"now", "today", "timestamp", "parse", "date", "format", "sleep"}}
+    };
 
-    static const std::vector<std::string> array_members = {
-        "push", "pop", "shift", "unshift", "insert", "remove_at", "clear", "first", "last", "contains",
-        "count", "index", "join", "reverse", "length", "size", "each", "map",
-        "filter", "any", "all"};
-
-    static const std::vector<std::string> string_members = {
-        "upper", "upcase", "lower", "downcase", "strip", "trim", "contains",
-        "starts_with", "ends_with", "length", "size", "reverse", "repeat", "to_int",
-        "to_float", "slice", "char_at", "split", "replace"};
-
-    static const std::vector<std::string> map_members = {
-        "get", "set", "has", "delete", "keys", "values", "length", "size", "clear"};
+    static const std::vector<std::string> array_members = {"push", "pop", "shift", "unshift", "insert", "remove_at", "clear", "first", "last", "contains", "count", "index", "join", "reverse", "length", "size", "each", "map", "filter", "any", "all"};
+    static const std::vector<std::string> string_members = {"upper", "upcase", "lower", "downcase", "strip", "trim", "contains", "starts_with", "ends_with", "length", "size", "reverse", "repeat", "to_int", "to_float", "slice", "char_at", "split", "replace"};
+    static const std::vector<std::string> map_members = {"get", "set", "has", "delete", "keys", "values", "length", "size", "clear"};
+    static const std::vector<std::string> number_members = {"abs", "floor", "ceil", "round", "sqrt", "sin", "cos", "tan", "log", "to_int", "to_string", "pow"};
 
     std::size_t start = input.size();
-    while (start > 0)
-    {
+    while (start > 0) {
         const char ch = input[start - 1];
-        if (!(std::isalnum(static_cast<unsigned char>(ch)) || ch == '_' || ch == '.'))
-        {
-            break;
-        }
+        if (!(std::isalnum(static_cast<unsigned char>(ch)) || ch == '_' || ch == '.' || ch == '?')) break;
         --start;
     }
-
     const std::string token = input.substr(start);
-    const std::size_t dot = token.find('.');
 
     std::vector<std::string> result;
-    if (dot != std::string::npos)
-    {
-        const std::string object_name = token.substr(0, dot);
-        const std::string member_prefix = token.substr(dot + 1);
+    auto add_matching = [&result](const std::vector<std::string>& candidates, const std::string& prefix) {
+        for (const auto& candidate : candidates)
+            if (candidate.compare(0, prefix.size(), prefix) == 0) result.push_back(candidate);
+    };
 
-        auto module = module_members.find(object_name);
-        if (module != module_members.end())
-        {
-            for (const auto &member : module->second)
-            {
-                if (member.compare(0, member_prefix.size(), member_prefix) == 0)
-                {
-                    result.push_back(member);
-                }
-            }
+    const std::size_t last_dot = token.rfind('.');
+    if (last_dot != std::string::npos) {
+        const std::string root_name = token.substr(0, last_dot);
+        const std::string member_prefix = token.substr(last_dot + 1);
+
+        auto module = module_members.find(root_name);
+        if (module != module_members.end()) {
+            add_matching(module->second, member_prefix);
             return result;
         }
 
-        try
-        {
-            Value object = env_->get(object_name);
-            const auto add_member = [&](const std::string &name)
-            {
-                if (name.compare(0, member_prefix.size(), member_prefix) == 0)
-                {
-                    result.push_back(name);
-                }
-            };
+        try {
+            std::size_t part_start = 0;
+            std::vector<std::string> parts;
+            while (part_start <= root_name.size()) {
+                const std::size_t dot = root_name.find('.', part_start);
+                if (dot == std::string::npos) { parts.push_back(root_name.substr(part_start)); break; }
+                parts.push_back(root_name.substr(part_start, dot - part_start));
+                part_start = dot + 1;
+            }
 
-            if (std::holds_alternative<Value::ArrayPtr>(object.data))
-            {
-                for (const auto &member : array_members)
-                    add_member(member);
-            }
-            else if (std::holds_alternative<std::string>(object.data))
-            {
-                for (const auto &member : string_members)
-                    add_member(member);
-            }
-            else if (std::holds_alternative<Value::MapPtr>(object.data))
-            {
-                for (const auto &member : map_members)
-                    add_member(member);
-            }
-            else if (auto instance = std::get_if<Value::InstancePtr>(&object.data))
-            {
-                for (const auto &[name, value] : (*instance)->fields)
-                    add_member(name);
+            Value object = env_->get(parts.front());
+            for (std::size_t i = 1; i < parts.size(); ++i)
+                object = const_cast<Interpreter*>(this)->member_get(object, parts[i]);
+
+            const auto add_member = [&](const std::string& name) {
+                if (name.compare(0, member_prefix.size(), member_prefix) == 0) result.push_back(name);
+            };
+            if (std::holds_alternative<Value::ArrayPtr>(object.data)) for (const auto& name : array_members) add_member(name);
+            else if (std::holds_alternative<std::string>(object.data)) for (const auto& name : string_members) add_member(name);
+            else if (std::holds_alternative<Value::MapPtr>(object.data)) for (const auto& name : map_members) add_member(name);
+            else if (object.is_number()) for (const auto& name : number_members) add_member(name);
+            else if (auto instance = std::get_if<Value::InstancePtr>(&object.data)) {
+                for (const auto& [name, value] : (*instance)->fields) add_member(name);
                 for (auto klass = (*instance)->klass; klass; klass = klass->parent)
-                {
-                    for (const auto &[name, value] : klass->methods)
-                        add_member(name);
-                }
-            }
-            else if (auto klass = std::get_if<Value::ClassPtr>(&object.data))
-            {
+                    for (const auto& [name, value] : klass->methods) add_member(name);
+            } else if (auto klass = std::get_if<Value::ClassPtr>(&object.data)) {
                 add_member("new");
                 for (auto current = *klass; current; current = current->parent)
-                {
-                    for (const auto &[name, value] : current->methods)
-                        add_member(name);
-                }
+                    for (const auto& [name, value] : current->methods) add_member(name);
             }
-        }
-        catch (...)
-        {
-            // Completion must never execute code or turn an unknown name into an error.
+        } catch (...) {
+            // Completion is advisory and must never execute code or produce an error.
         }
         return result;
     }
 
-    const std::string prefix = token;
-    auto append_matching = [&result, &prefix](const auto &values)
-    {
-        for (const auto &value : values)
-        {
-            if (value.compare(0, prefix.size(), prefix) == 0)
-            {
-                result.push_back(value);
-            }
-        }
-    };
-
-    append_matching(keywords);
-    append_matching(modules);
+    add_matching(keywords, token);
+    add_matching(modules, token);
     for (const auto &[name, function] : builtins_)
-    {
-        if (name.compare(0, prefix.size(), prefix) == 0)
-        {
-            result.push_back(name);
-        }
-    }
-
+        if (name.compare(0, token.size(), token) == 0) result.push_back(name);
     for (auto environment = env_; environment; environment = environment->parent())
-    {
         for (const auto &[name, entry] : environment->values())
-        {
-            if (name.compare(0, prefix.size(), prefix) == 0)
-            {
-                result.push_back(name);
-            }
-        }
-    }
-
+            if (name.compare(0, token.size(), token) == 0) result.push_back(name);
     return result;
 }
 
@@ -1726,12 +2106,12 @@ void Interpreter::repl()
         }
         catch (const std::exception &)
         {
-            std::cout << "Lucy 1.0.1 Interactive REPL\n\n";
+            std::cout << "Lucy 2.0.0 Interactive REPL\n\n";
         }
     }
     else
     {
-        std::cout << "Lucy 1.0.1 Interactive REPL\n\n";
+        std::cout << "Lucy 2.0.0 Interactive REPL\n\n";
     }
 
     std::string buffer;
@@ -1749,16 +2129,24 @@ void Interpreter::repl()
         std::string first;
         stream >> first;
 
-        if (first == "if" || first == "while" || first == "for" || first == "foreach" ||
-            first == "loop" || first == "switch" || first == "do" || first == "function" ||
-            first == "def" || first == "class" || first == "try")
+        // Swift-style blocks are delimited by braces. Count braces for multiline REPL input.
+        int delta = 0;
+        bool in_string = false, escaped = false;
+        char quote = '\0';
+        for (char ch : trimmed)
         {
-            ++block_depth;
+            if (in_string)
+            {
+                if (escaped) escaped = false;
+                else if (ch == '\\') escaped = true;
+                else if (ch == quote) in_string = false;
+                continue;
+            }
+            if (ch == '"' || ch == '\'') { in_string = true; quote = ch; continue; }
+            if (ch == '{') ++delta;
+            else if (ch == '}') --delta;
         }
-        else if (first == "end")
-        {
-            block_depth = std::max(0, block_depth - 1);
-        }
+        block_depth = std::max(0, block_depth + delta);
     };
 
     while (true)
@@ -1821,12 +2209,12 @@ void Interpreter::repl()
                 }
                 catch (const std::exception &)
                 {
-                    std::cout << "1.0.1\n";
+                    std::cout << "2.0.0\n";
                 }
             }
             else
             {
-                std::cout << "1.0.1\n";
+                std::cout << "2.0.0\n";
             }
             continue;
         }

@@ -1,7 +1,7 @@
-function greet(name)
+func greet(name) {
     return "Hello, " + name
-end
+}
 
-double = lambda x => x * 2
-print greet "Nima"
-print double 21
+let double = lambda x => x * 2
+print(greet("Nima"))
+print(double(21))

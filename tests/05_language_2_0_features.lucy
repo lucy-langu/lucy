@@ -1,0 +1,30 @@
+let hex: Int = 0xFF
+let bin: Int = 0b1010_1010
+println hex
+println bin
+let user = {"nickname": "Nima", 'age': 20}
+println user['nickname']
+println user["age"]
+let missing = nickname ?? "nima"
+println missing
+let f = lambda x => x * 2
+println f(21)
+let g = lambda(x, y) => x + y
+println g(2, 3)
+func empty() {}
+empty()
+if true {}
+struct Point {
+    x: Int
+    y: Int
+    func sum() -> Int {
+        return self.x + self.y
+    }
+}
+let p = Point.new(3, 4)
+println p.sum()
+p.x = 10
+println p.x
+println 1 + 2 * 3
+println true or false and false
+println 1 | 2 & 3

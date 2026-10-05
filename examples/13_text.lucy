@@ -1,5 +1,5 @@
 import text
 
-print text.upper "lucy"
-print text.matches "l+", "hello lucy"
+print "lucy".upper()
+print text.match "l+", "hello lucy"
 print text.base64_encode "Lucy"

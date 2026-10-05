@@ -1,48 +1,34 @@
-# Lucy-native data flow helpers.
-# These are intentionally value-first rather than object-first APIs.
+# Lucy value-flow helpers.
 
-class Flow
-    def pipe(value, steps)
-        _flow_current = value
-        for step in steps
-            _flow_current = step(_flow_current)
-        end
-        return _flow_current
-    end
+func pipe(value, steps) {
+    current = value
+    for step in steps {
+        current = step(current)
+    }
+    return current
+}
 
-    def tap(value, action)
-        action(value)
+func tap(value, action) {
+    action(value)
+    return value
+}
+
+func branch(value, predicate, yes, no = nil) {
+    if predicate(value) {
+        return yes(value)
+    }
+    if no == nil {
         return value
-    end
+    }
+    return no(value)
+}
 
-    def branch(value, predicate, yes, no = nil)
-        if predicate(value)
-            if no == nil
-                return yes(value)
-            end
-            return yes(value)
-        end
-        if no == nil
-            return value
-        end
-        return no(value)
-    end
-
-    def repeat(value, count, step)
-        _flow_current = value
-        i = 0
-        while i < count
-            _flow_current = step(_flow_current)
-            i += 1
-        end
-        return _flow_current
-    end
-end
-
-flow = Flow.new()
-
-# Flat public flow API.
-def pipe(value, steps); return Flow.new().pipe(value, steps); end
-def tap(value, action); return Flow.new().tap(value, action); end
-def branch(value, predicate, yes, no = nil); return Flow.new().branch(value, predicate, yes, no); end
-def repeat(value, count, step); return Flow.new().repeat(value, count, step); end
+func repeat(value, count, step) {
+    current = value
+    i = 0
+    while i < count {
+        current = step(current)
+        i += 1
+    }
+    return current
+}

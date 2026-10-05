@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "lucy/parser.hpp"
 #include <sstream>
 #include <stdexcept>
@@ -15,6 +16,7 @@ static bool is_name_token(TokenType type)
     case TokenType::Lambda:
     case TokenType::Default:
     case TokenType::Case:
+    case TokenType::Do:
         return true;
     default:
         return false;
@@ -100,7 +102,7 @@ StmtPtr Parser::statement()
     if (check(TokenType::Identifier) && peek().lexeme == "help")
     {
         advance();
-        if (check(TokenType::Newline) || check(TokenType::Semicolon) || check(TokenType::End) || check(TokenType::EndOfFile))
+        if (check(TokenType::Newline) || check(TokenType::Semicolon) || check(TokenType::EndOfFile))
         {
             return std::make_shared<ExprStmt>(std::make_shared<Variable>("help"));
         }
@@ -124,6 +126,8 @@ StmtPtr Parser::statement()
     }
     if (match({TokenType::If}))
         return if_statement();
+    if (match({TokenType::Unless}))
+        return unless_statement();
     if (match({TokenType::While}))
         return while_statement();
     if (match({TokenType::Do}))
@@ -136,17 +140,19 @@ StmtPtr Parser::statement()
         return loop_statement();
     if (match({TokenType::Switch}))
         return switch_statement();
-    if (match({TokenType::Function, TokenType::Def}))
+    if (match({TokenType::Function, TokenType::Def, TokenType::Func}))
         return function_statement();
     if (match({TokenType::Class}))
         return class_statement();
+    if (match({TokenType::Struct}))
+        return struct_statement();
     if (match({TokenType::Try}))
         return try_statement();
     if (match({TokenType::Throw}))
         return std::make_shared<ThrowStmt>(expression());
     if (match({TokenType::Return}))
     {
-        if (check(TokenType::Newline) || check(TokenType::Semicolon) || check(TokenType::End) || check(TokenType::EndOfFile))
+        if (check(TokenType::Newline) || check(TokenType::Semicolon) || check(TokenType::EndOfFile))
             return std::make_shared<ReturnStmt>(nullptr);
         return std::make_shared<ReturnStmt>(expression());
     }
@@ -168,17 +174,27 @@ StmtPtr Parser::statement()
         return std::make_shared<BreakStmt>();
     if (match({TokenType::Continue}))
         return std::make_shared<ContinueStmt>();
-    bool c = false, g = false;
-    if (match({TokenType::Const}))
-        c = true;
+    bool c = false, g = false, declared = false;
+    if (match({TokenType::Const, TokenType::Let}))
+    { c = true; declared = true; }
     else if (match({TokenType::Global}))
-        g = true;
-    if (c || g)
+    { g = true; declared = true; }
+    else if (match({TokenType::Var}))
+    { c = false; declared = true; }
+    if (declared)
     {
         auto n = consume(TokenType::Identifier, "expected variable name").lexeme;
+        // Optional Swift-style type annotation: let name: Type = value
+        std::string type_name;
+        if (match({TokenType::Colon}))
+        {
+            if (!is_name_token(peek().type))
+                throw std::runtime_error("SyntaxError: expected type name after ':'");
+            type_name = advance().lexeme;
+        }
         if (!match({TokenType::Equal}))
-            return std::make_shared<VarDecl>(n, nullptr, c, g);
-        return std::make_shared<VarDecl>(n, expression(), c, g);
+            return std::make_shared<VarDecl>(n, nullptr, c, g, type_name);
+        return std::make_shared<VarDecl>(n, expression(), c, g, type_name);
     }
 
     if (check(TokenType::Identifier) || check(TokenType::Self) || check(TokenType::LeftBracket))
@@ -222,110 +238,172 @@ bool Parser::assignment(TokenType t) const
     }
 }
 
+StmtPtr Parser::braced_block()
+{
+    skip_newlines();
+    consume(TokenType::LeftBrace, "expected '{' to start block");
+    skip_newlines();
+    std::vector<StmtPtr> out;
+    while (!check(TokenType::RightBrace) && !check(TokenType::EndOfFile))
+    {
+        out.push_back(statement());
+        skip_newlines();
+    }
+    consume(TokenType::RightBrace, "expected '}' to close block");
+    return std::make_shared<Block>(std::move(out));
+}
+
 StmtPtr Parser::if_statement()
 {
     auto c = expression();
     skip_newlines();
-    auto t = block_until({TokenType::Else, TokenType::End});
+    auto t = braced_block();
     std::vector<std::pair<ExprPtr, StmtPtr>> ei;
     StmtPtr eb = nullptr;
+    skip_newlines();
     while (match({TokenType::Else}))
     {
+        skip_newlines();
         if (match({TokenType::If}))
         {
             auto ec = expression();
             skip_newlines();
-            ei.push_back({ec, block_until({TokenType::Else, TokenType::End})});
+            ei.push_back({ec, braced_block()});
         }
         else
         {
-            skip_newlines();
-            eb = block_until({TokenType::End});
+            eb = braced_block();
             break;
         }
+        skip_newlines();
     }
-    consume(TokenType::End, "expected 'end' to close if");
     return std::make_shared<IfStmt>(c, t, std::move(ei), eb);
 }
+
+StmtPtr Parser::unless_statement()
+{
+    // A compact negative conditional: unless condition { ... }
+    auto c = expression();
+    skip_newlines();
+    auto t = braced_block();
+    std::vector<std::pair<ExprPtr, StmtPtr>> ei;
+    StmtPtr eb = nullptr;
+    skip_newlines();
+    if (match({TokenType::Else}))
+    {
+        skip_newlines();
+        if (match({TokenType::If}))
+        {
+            auto ec = expression();
+            skip_newlines();
+            ei.push_back({ec, braced_block()});
+        }
+        else
+            eb = braced_block();
+    }
+    Token op{TokenType::Not, "!", 1, 1};
+    return std::make_shared<IfStmt>(std::make_shared<Unary>(op, c), t, std::move(ei), eb);
+}
+
 StmtPtr Parser::while_statement()
 {
     auto c = expression();
     skip_newlines();
-    auto b = block_until({TokenType::End});
-    consume(TokenType::End, "expected 'end' to close while");
+    auto b = braced_block();
     return std::make_shared<WhileStmt>(c, b);
 }
+
 StmtPtr Parser::do_while_statement()
 {
+    // Swift-style: repeat { ... } while condition
+    auto b = braced_block();
     skip_newlines();
-    auto b = block_until({TokenType::While});
-    consume(TokenType::While, "expected 'while' after do block");
+    consume(TokenType::While, "expected 'while' after repeat block");
     auto c = expression();
     return std::make_shared<DoWhileStmt>(b, c);
 }
+
 StmtPtr Parser::switch_statement()
 {
     auto v = expression();
     skip_newlines();
+    consume(TokenType::LeftBrace, "expected '{' after switch expression");
+    skip_newlines();
     std::vector<std::pair<ExprPtr, StmtPtr>> cases;
     StmtPtr def = nullptr;
-    while (!check(TokenType::End) && !check(TokenType::EndOfFile))
+    while (!check(TokenType::RightBrace) && !check(TokenType::EndOfFile))
     {
         if (match({TokenType::Case}))
         {
             auto cv = expression();
             skip_newlines();
-            cases.push_back({cv, block_until({TokenType::Case, TokenType::Default, TokenType::End})});
+            consume(TokenType::Colon, "expected ':' after case value");
+            skip_newlines();
+            std::vector<StmtPtr> body;
+            while (!check(TokenType::Case) && !check(TokenType::Default) && !check(TokenType::RightBrace) && !check(TokenType::EndOfFile))
+            {
+                body.push_back(statement());
+                skip_newlines();
+            }
+            cases.push_back({cv, std::make_shared<Block>(std::move(body))});
         }
         else if (match({TokenType::Default}))
         {
             skip_newlines();
-            def = block_until({TokenType::End});
-            break;
+            consume(TokenType::Colon, "expected ':' after default");
+            skip_newlines();
+            std::vector<StmtPtr> body;
+            while (!check(TokenType::Case) && !check(TokenType::Default) && !check(TokenType::RightBrace) && !check(TokenType::EndOfFile))
+            {
+                body.push_back(statement());
+                skip_newlines();
+            }
+            def = std::make_shared<Block>(std::move(body));
         }
         else
-            throw std::runtime_error("SyntaxError: expected 'case', 'default', or 'end' in switch");
+            throw std::runtime_error("SyntaxError: expected 'case' or 'default' in switch");
         skip_newlines();
     }
-    consume(TokenType::End, "expected 'end' to close switch");
+    consume(TokenType::RightBrace, "expected '}' to close switch");
     return std::make_shared<SwitchStmt>(v, std::move(cases), def);
 }
+
 StmtPtr Parser::for_statement()
 {
     auto n = consume(TokenType::Identifier, "expected loop variable after 'for'").lexeme;
+    std::string index_name;
+    if (match({TokenType::Comma}))
+        index_name = consume(TokenType::Identifier, "expected index variable after ','").lexeme;
     consume(TokenType::In, "expected 'in' after for variable");
     auto it = expression();
     skip_newlines();
-    auto b = block_until({TokenType::End});
-    consume(TokenType::End, "expected 'end' to close for");
-    return std::make_shared<ForStmt>(n, it, b);
+    auto b = braced_block();
+    return std::make_shared<ForStmt>(n, it, b, index_name);
 }
+
 StmtPtr Parser::foreach_statement()
 {
     auto n = consume(TokenType::Identifier, "expected loop variable after 'foreach'").lexeme;
+    std::string index_name;
+    if (match({TokenType::Comma}))
+        index_name = consume(TokenType::Identifier, "expected index variable after ','").lexeme;
     consume(TokenType::In, "expected 'in' after foreach variable");
     auto it = expression();
     skip_newlines();
-    auto b = block_until({TokenType::End});
-    consume(TokenType::End, "expected 'end' to close foreach");
-    return std::make_shared<ForStmt>(n, it, b);
+    auto b = braced_block();
+    return std::make_shared<ForStmt>(n, it, b, index_name);
 }
+
 StmtPtr Parser::loop_statement()
 {
-    skip_newlines();
-    auto b = block_until({TokenType::End});
-    consume(TokenType::End, "expected 'end' to close loop");
+    auto b = braced_block();
     return std::make_shared<LoopStmt>(b);
 }
 
 StmtPtr Parser::function_statement()
 {
     if (!is_name_token(peek().type))
-    {
-        throw std::runtime_error("SyntaxError: expected function name; found '" + peek().lexeme +
-                                 "' at line " + std::to_string(peek().line) +
-                                 ", column " + std::to_string(peek().column));
-    }
+        throw std::runtime_error("SyntaxError: expected function name; found '" + peek().lexeme + "'");
     auto n = advance().lexeme;
     std::vector<Parameter> params;
     bool default_seen = false;
@@ -336,6 +414,13 @@ StmtPtr Parser::function_statement()
         if (!is_name_token(peek().type))
             throw std::runtime_error("SyntaxError: expected parameter name; found '" + peek().lexeme + "'");
         name = advance().lexeme;
+        std::string type_name;
+        if (match({TokenType::Colon}))
+        {
+            if (!is_name_token(peek().type) && !check(TokenType::Identifier))
+                throw std::runtime_error("SyntaxError: expected parameter type after ':'");
+            type_name = advance().lexeme;
+        }
         ExprPtr def = nullptr;
         if (match({TokenType::Equal}))
         {
@@ -346,38 +431,34 @@ StmtPtr Parser::function_statement()
         }
         else if (default_seen && !variadic)
             throw std::runtime_error("SyntaxError: required parameter '" + name + "' cannot follow a parameter with a default value");
-        return Parameter(name, def, variadic);
+        return Parameter(name, def, variadic, type_name);
     };
-    if (match({TokenType::LeftParen}))
-    {
-        skip_group_newlines();
-        if (!check(TokenType::RightParen))
-        {
-            do
-            {
-                skip_group_newlines();
-                params.push_back(parse_param());
-                if (params.back().variadic && check(TokenType::Comma))
-                    throw std::runtime_error("SyntaxError: variadic parameter must be last");
-                skip_group_newlines();
-            } while (match({TokenType::Comma}));
-        }
-        skip_group_newlines();
-        consume(TokenType::RightParen, "expected ')' after parameters");
-    }
-    else if (!check(TokenType::Newline) && !check(TokenType::Semicolon))
+    consume(TokenType::LeftParen, "expected '(' after function name");
+    skip_group_newlines();
+    if (!check(TokenType::RightParen))
     {
         do
         {
+            skip_group_newlines();
             params.push_back(parse_param());
             if (params.back().variadic && check(TokenType::Comma))
                 throw std::runtime_error("SyntaxError: variadic parameter must be last");
+            skip_group_newlines();
         } while (match({TokenType::Comma}));
     }
+    skip_group_newlines();
+    consume(TokenType::RightParen, "expected ')' after parameters");
+    std::string return_type;
+    if (match({TokenType::Minus}))
+    {
+        consume(TokenType::Greater, "expected '>' in return type annotation");
+        if (!is_name_token(peek().type))
+            throw std::runtime_error("SyntaxError: expected return type after '->'");
+        return_type = advance().lexeme;
+    }
     skip_newlines();
-    auto b = block_until({TokenType::End});
-    consume(TokenType::End, "expected 'end' to close function");
-    return std::make_shared<FunctionStmt>(n, std::move(params), b);
+    auto b = braced_block();
+    return std::make_shared<FunctionStmt>(n, std::move(params), b, return_type);
 }
 
 StmtPtr Parser::class_statement()
@@ -387,25 +468,66 @@ StmtPtr Parser::class_statement()
     if (match({TokenType::Less}))
         base = consume(TokenType::Identifier, "expected base class name after '<'").lexeme;
     skip_newlines();
+    consume(TokenType::LeftBrace, "expected '{' after class name");
+    skip_newlines();
     std::vector<std::shared_ptr<FunctionStmt>> m;
-    while (!check(TokenType::End) && !check(TokenType::EndOfFile))
+    while (!check(TokenType::RightBrace) && !check(TokenType::EndOfFile))
     {
-        if (!match({TokenType::Function, TokenType::Def}))
-            throw std::runtime_error("SyntaxError: class body may only contain methods at line " + std::to_string(peek().line));
+        if (!match({TokenType::Function, TokenType::Def, TokenType::Func}))
+            throw std::runtime_error("SyntaxError: class body may only contain methods");
         m.push_back(std::dynamic_pointer_cast<FunctionStmt>(function_statement()));
         skip_newlines();
     }
-    consume(TokenType::End, "expected 'end' to close class");
+    consume(TokenType::RightBrace, "expected '}' to close class");
     return std::make_shared<ClassStmt>(n, base, std::move(m));
 }
+
+StmtPtr Parser::struct_statement()
+{
+    auto n = consume(TokenType::Identifier, "expected struct name").lexeme;
+    skip_newlines();
+    consume(TokenType::LeftBrace, "expected '{' after struct name");
+    skip_newlines();
+    std::vector<StructField> fields;
+    std::vector<std::shared_ptr<FunctionStmt>> methods;
+    while (!check(TokenType::RightBrace) && !check(TokenType::EndOfFile))
+    {
+        if (match({TokenType::Function, TokenType::Def, TokenType::Func}))
+        {
+            methods.push_back(std::dynamic_pointer_cast<FunctionStmt>(function_statement()));
+            skip_newlines();
+            continue;
+        }
+        auto field_name = consume(TokenType::Identifier, "expected struct field name").lexeme;
+        std::string type_name;
+        if (match({TokenType::Colon}))
+        {
+            if (!is_name_token(peek().type) && !check(TokenType::Identifier))
+                throw std::runtime_error("SyntaxError: expected struct field type after ':'");
+            type_name = advance().lexeme;
+        }
+        ExprPtr default_value = nullptr;
+        if (match({TokenType::Equal}))
+            default_value = expression();
+        fields.emplace_back(field_name, type_name, default_value);
+        if (!match({TokenType::Comma}))
+            skip_newlines();
+        else
+            skip_newlines();
+    }
+    consume(TokenType::RightBrace, "expected '}' to close struct");
+    return std::make_shared<StructStmt>(n, std::move(fields), std::move(methods));
+}
+
 StmtPtr Parser::try_statement()
 {
+    auto b = braced_block();
     skip_newlines();
-    auto b = block_until({TokenType::Catch, TokenType::Finally, TokenType::End});
     std::string type, name;
     StmtPtr cb = nullptr, fb = nullptr;
     if (match({TokenType::Catch}))
     {
+        // catch Error as error { ... }
         if (check(TokenType::Identifier))
         {
             type = advance().lexeme;
@@ -416,14 +538,14 @@ StmtPtr Parser::try_statement()
             }
         }
         skip_newlines();
-        cb = block_until({TokenType::Finally, TokenType::End});
+        cb = braced_block();
+        skip_newlines();
     }
     if (match({TokenType::Finally}))
     {
         skip_newlines();
-        fb = block_until({TokenType::End});
+        fb = braced_block();
     }
-    consume(TokenType::End, "expected 'end' to close try");
     return std::make_shared<TryStmt>(b, type, name, cb, fb);
 }
 StmtPtr Parser::import_statement()
@@ -440,12 +562,22 @@ StmtPtr Parser::import_statement()
 ExprPtr Parser::expression() { return ternary(); }
 ExprPtr Parser::ternary()
 {
-    auto e = logical_or();
+    auto e = coalesce();
     if (match({TokenType::Question}))
     {
         auto a = expression();
         consume(TokenType::Colon, "expected ':' in ternary expression");
         return std::make_shared<Ternary>(e, a, expression());
+    }
+    return e;
+}
+ExprPtr Parser::coalesce()
+{
+    auto e = logical_or();
+    if (match({TokenType::Coalesce}))
+    {
+        auto o = previous();
+        e = std::make_shared<Binary>(e, o, coalesce());
     }
     return e;
 }
@@ -689,7 +821,20 @@ ExprPtr Parser::primary()
     if (match({TokenType::Nil}))
         return std::make_shared<Literal>(Value{});
     if (match({TokenType::Integer}))
-        return std::make_shared<Literal>(std::stoll(previous().lexeme));
+    {
+        std::string n = previous().lexeme;
+        n.erase(std::remove(n.begin(), n.end(), '_'), n.end());
+        int base = 10; size_t start = 0;
+        if (n.size() > 2 && n[0] == '0' && (n[1] == 'x' || n[1] == 'X')) { base = 16; start = 2; }
+        else if (n.size() > 2 && n[0] == '0' && (n[1] == 'b' || n[1] == 'B')) { base = 2; start = 2; }
+        long long value = 0;
+        for (size_t i = start; i < n.size(); ++i) {
+            char c = n[i]; int d = (c >= '0' && c <= '9') ? c - '0' : (c >= 'a' && c <= 'f') ? c - 'a' + 10 : c - 'A' + 10;
+            if (d >= base) throw std::runtime_error("SyntaxError: invalid digit in integer literal '" + n + "'");
+            value = value * base + d;
+        }
+        return std::make_shared<Literal>(value);
+    }
     if (match({TokenType::Number}))
         return std::make_shared<Literal>(std::stod(previous().lexeme));
     if (match({TokenType::String}))
@@ -729,9 +874,10 @@ ExprPtr Parser::primary()
             {
                 skip_group_newlines();
                 std::string k;
-                if (!is_name_token(peek().type))
-                    throw std::runtime_error("SyntaxError: expected map key");
-                k = advance().lexeme;
+                if (check(TokenType::String) || check(TokenType::Identifier) || is_name_token(peek().type))
+                    k = advance().lexeme;
+                else
+                    throw std::runtime_error("SyntaxError: expected map key string or identifier");
                 if (match({TokenType::Colon}))
                     a.push_back({k, expression()});
                 else

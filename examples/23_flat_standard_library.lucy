@@ -1,4 +1,4 @@
-# Lucy 1.0.1 flat standard-library API
+# Lucy 1.1.1 flat standard-library API
 import fs
 import data
 import text
@@ -6,11 +6,11 @@ import system
 import math
 import random
 
-fs.write "flat-api.txt", "Lucy 1.0.1\n"
+fs.write "flat-api.txt", "Lucy 1.1.1\n"
 content = fs.read "flat-api.txt"
 value = data.parse "{\"name\":\"Lucy\"}"
-print text.upper value.get("name")
-print math.sqrt 81
+print value.get("name").upper()
+print sqrt 81
 print random.int 1, 10
 print system.platform()
 fs.remove "flat-api.txt"

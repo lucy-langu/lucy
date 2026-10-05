@@ -1,0 +1,31 @@
+# Built-in types can be extended with ordinary class syntax.
+class String {
+    func shout() -> String {
+        return self.upper() + "!"
+    }
+}
+
+class Int {
+    func twice() -> Int {
+        return self * 2
+    }
+}
+
+class Array {
+    func first_or(value) {
+        if self.length() == 0 {
+            return value
+        }
+        return self.first()
+    }
+}
+
+println "hello".shout()
+println 21.twice()
+let values = [1, 2, 3]
+println values.first_or 99
+
+# Standard modules are available without a user-written import statement.
+println math.square 5
+println text.hex_encode "A"
+println fs.basename "/tmp/test.txt"

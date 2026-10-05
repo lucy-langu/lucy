@@ -1,0 +1,536 @@
+# Lucy 2.0.0 Standard Library API Inventory
+
+This page is the source-derived signature inventory for the shipped `stdlib/*.lucy` files. It complements `STANDARD_LIBRARY.md`: the main reference explains behavior and usage, while this page makes it easy to verify that a shipped class or function has not been omitted from the documentation set.
+
+The inventory is generated from the current source tree and should be regenerated whenever a standard-library source file changes.
+
+### Complete inventory: `app`
+
+- `class OptionParser`
+- `OptionParser.initialize()`
+- `OptionParser.new()`
+- `OptionParser.banner(text)`
+- `OptionParser.separator(text = "")`
+- `OptionParser.version(text)`
+- `OptionParser.program_name(text)`
+- `OptionParser.on(name, description = "", default = nil)`
+- `OptionParser.parse(arguments = ARGV)`
+- `OptionParser.help()`
+- `OptionParser.summarize()`
+- `OptionParser.abort(message)`
+- `class Logger`
+- `Logger.initialize(output = nil, level = 0)`
+- `Logger.new(output = nil, level = 0)`
+- `Logger.level()`
+- `Logger.set_level(value)`
+- `Logger.level_set(value)`
+- `Logger.add(level, message)`
+- `Logger.log(level, message)`
+- `Logger.debug(message)`
+- `Logger.info(message)`
+- `Logger.warn(message)`
+- `Logger.error(message)`
+- `Logger.fatal(message)`
+- `Logger.debug?()`
+- `Logger.info?()`
+- `Logger.warn?()`
+- `Logger.error?()`
+- `Logger.fatal?()`
+- `class Benchmark`
+- `Benchmark.realtime(command)`
+- `Benchmark.measure(command)`
+- `class Timeout`
+- `Timeout.timeout(seconds, callback)`
+- `class ERB`
+- `ERB.initialize(template)`
+- `ERB.src()`
+- `ERB.result(values = {})`
+- `ERB.run(values = {})`
+- `parser()`
+- `logger(output = nil, level = 0)`
+- `benchmark()`
+- `timeout()`
+- `template(source)`
+
+### Complete inventory: `crypto`
+
+- `class Digest`
+- `Digest.digest(text)`
+- `Digest.hexdigest(text)`
+- `Digest.base64digest(text)`
+- `Digest.file(path)`
+- `class HMAC`
+- `HMAC.digest(key, data)`
+- `HMAC.hexdigest(key, data)`
+- `class SSLContext`
+- `SSLContext.initialize(options = {})`
+- `class SSLSocket`
+- `SSLSocket.initialize(socket = nil, context = nil)`
+- `SSLSocket.connect(host, port)`
+- `SSLSocket.close()`
+- `class Certificate`
+- `Certificate.initialize(data = "")`
+- `class RSA`
+- `RSA.initialize(pem = "")`
+- `class Cipher`
+- `Cipher.initialize(name = "")`
+- `class X509`
+- `X509.certificate(data = "")`
+- `class PKey`
+- `PKey.rsa(pem = "")`
+- `class OpenSSL`
+- `OpenSSL.hmac()`
+- `OpenSSL.ssl_context(options = {})`
+- `OpenSSL.ssl_socket(socket = nil, context = nil)`
+- `OpenSSL.certificate(data = "")`
+- `OpenSSL.rsa(pem = "")`
+- `OpenSSL.x509()`
+- `OpenSSL.pkey()`
+- `OpenSSL.cipher(name = "")`
+- `digest(text)`
+- `hexdigest(text)`
+- `hash(text)`
+- `base64digest(text)`
+- `file(path)`
+- `hmac(key, data)`
+
+### Complete inventory: `data`
+
+- `pick(source, keys)`
+- `omit(source, keys)`
+- `merge(left, right)`
+- `values(source, keys)`
+- `zip(keys, values)`
+- `class JSON`
+- `JSON.parse(text)`
+- `JSON.stringify(value)`
+- `JSON.pretty(value)`
+- `JSON.load(path)`
+- `JSON.dump(path, value)`
+- `parse(text)`
+- `stringify(value)`
+- `pretty(value)`
+- `json_read(path)`
+- `json_write(path, value)`
+- `class YAML`
+- `YAML.load(text)`
+- `YAML.dump(value)`
+- `YAML.load_file(path)`
+- `yaml_load(text)`
+- `yaml_dump(value)`
+- `class CSV`
+- `CSV.parse(text, delimiter = ",")`
+- `CSV.stringify(rows, delimiter = ",")`
+- `CSV.load(path, delimiter = ",")`
+- `CSV.dump(path, rows, delimiter = ",")`
+- `csv_parse(text, delimiter = ",")`
+- `csv_stringify(rows, delimiter = ",")`
+
+### Complete inventory: `flow`
+
+- `pipe(value, steps)`
+- `tap(value, action)`
+- `branch(value, predicate, yes, no = nil)`
+- `repeat(value, count, step)`
+
+### Complete inventory: `fs`
+
+- `read(path)`
+- `write(path, content)`
+- `append(path, content)`
+- `read_lines(path)`
+- `write_lines(path, lines)`
+- `exists(path)`
+- `size(path)`
+- `remove(path)`
+- `copy(source, destination)`
+- `move(source, destination)`
+- `touch(path)`
+- `chmod(path, mode)`
+- `chown(path, uid, gid)`
+- `entries(path = ".")`
+- `files(path = ".")`
+- `dirs(path = ".")`
+- `mkdir(path, parents = false)`
+- `rmdir(path)`
+- `empty(path = ".")`
+- `glob(pattern)`
+- `walk(path = ".")`
+- `join(parts)`
+- `absolute(path)`
+- `expand(path)`
+- `basename(path)`
+- `dirname(path)`
+- `extension(path)`
+- `stem(path)`
+- `link(source, destination)`
+- `symlink(source, destination)`
+- `open(path, mode = "r")`
+- `console(prompt = "")`
+- `read_json(path)`
+- `write_json(path, value)`
+- `class IO`
+- `IO.initialize(path = nil, mode = "r")`
+- `IO.print(values)`
+- `IO.write(text)`
+- `IO.read(prompt = "")`
+- `IO.ask(prompt)`
+- `IO.seek(offset, whence = 0)`
+- `IO.pos()`
+- `IO.rewind()`
+- `IO.eof()`
+- `IO.fileno()`
+- `IO.close()`
+- `IO.pipe()`
+- `IO.popen(command)`
+
+### Complete inventory: `http`
+
+- `class HTTPRequest`
+- `HTTPRequest.initialize(method, url, body = "", headers = nil, options = nil)`
+- `HTTPRequest.execute()`
+- `class HTTP`
+- `HTTP.initialize(url = "", proxy = nil)`
+- `HTTP.headers(value)`
+- `HTTP.timeout(seconds)`
+- `HTTP.connect_timeout(seconds)`
+- `HTTP.proxy(proxy_url)`
+- `HTTP.user_agent(value)`
+- `HTTP.follow_redirects(value)`
+- `HTTP.insecure(value = true)`
+- `HTTP.get(path = "")`
+- `HTTP.post(path = "", body = "")`
+- `HTTP.put(path = "", body = "")`
+- `HTTP.patch(path = "", body = "")`
+- `HTTP.delete(path = "")`
+- `HTTP.head(path = "")`
+- `HTTP.request(method, path = "", body = "", headers = nil)`
+- `request(method, url, body = "", headers = nil, options = nil)`
+- `get(url, headers = nil, options = nil)`
+- `post(url, body = "", headers = nil, options = nil)`
+- `put(url, body = "", headers = nil, options = nil)`
+- `patch(url, body = "", headers = nil, options = nil)`
+- `delete(url, headers = nil, options = nil)`
+- `head(url, headers = nil, options = nil)`
+- `client(url = "", proxy = nil)`
+- `class Socket`
+- `Socket.initialize()`
+- `Socket.connect(host, port)`
+- `Socket.bind(host, port)`
+- `Socket.listen(backlog = 16)`
+- `Socket.accept()`
+- `Socket.recv(size = 4096)`
+- `Socket.send(data)`
+- `Socket.close()`
+- `class SocketAPI`
+- `SocketAPI.new()`
+- `class Resolv`
+- `Resolv.getaddress(host)`
+- `Resolv.getname(address)`
+- `connect(host, port)`
+- `bind(host, port)`
+- `listen(socket, backlog = 16)`
+- `accept(socket)`
+- `recv(socket, size = 4096)`
+- `send(socket, data)`
+- `close(socket)`
+- `resolve(host)`
+- `reverse(address)`
+
+### Complete inventory: `math`
+
+- `class Math`
+- `Math.square(x)`
+- `Math.cube(x)`
+- `Math.clamp(x, low, high)`
+- `Math.even(x)`
+- `Math.odd(x)`
+- `Math.factorial(n)`
+- `Math.gcd(a, b)`
+- `Math.lcm(a, b)`
+- `Math.average(values)`
+- `Math.lerp(a, b, t)`
+- `Math.sign(x)`
+- `square(x)`
+- `cube(x)`
+- `clamp(x, low, high)`
+- `factorial(n)`
+- `gcd(a, b)`
+- `lcm(a, b)`
+- `average(values)`
+- `lerp(a, b, t)`
+- `sign(x)`
+
+### Complete inventory: `random`
+
+- `int(low, high)`
+- `float()`
+- `bool()`
+- `choice(items)`
+- `shuffle(items)`
+- `sample(items, count)`
+
+### Complete inventory: `repl`
+
+- `banner()`
+- `version()`
+- `prompt(depth = 0)`
+- `commands()`
+- `topics()`
+- `help(topic = nil)`
+
+### Complete inventory: `result`
+
+- `ok(value)`
+- `err(message)`
+- `success(result)`
+- `unwrap(result, fallback = nil)`
+- `message(result)`
+
+### Complete inventory: `runtime`
+
+- `class Kernel`
+- `Kernel.printf(format_string, values = [])`
+- `Kernel.p(value)`
+- `Kernel.pp(value)`
+- `Kernel.format(format_string, values = [])`
+- `Kernel.sprintf(format_string, values = [])`
+- `Kernel.catch(callback)`
+- `Kernel.rescue(callback, handler)`
+- `Kernel.ensure(callback, cleanup)`
+- `Kernel.system(command)`
+- `Kernel.spawn(command)`
+- `Kernel.trap(signal_number, callback)`
+- `Kernel.global_variables()`
+- `Kernel.local_variables()`
+- `Kernel.methods(value)`
+- `Kernel.respond_to?(value, name)`
+- `Kernel.send(value, name, args = [])`
+- `Kernel.inspect(value)`
+- `Kernel.to_a(value)`
+- `Kernel.to_h(value)`
+- `Kernel.to_sym(value)`
+- `Kernel.ancestors(value)`
+- `Kernel.superclass(value)`
+- `Kernel.singleton_class(value)`
+- `Kernel.proc(callback)`
+- `Kernel.lambda(callback)`
+- `class Collections`
+- `Collections.first(items)`
+- `Collections.last(items)`
+- `Collections.reverse(items)`
+- `Collections.contains(items, value)`
+- `Collections.count(items, value)`
+- `Collections.index(items, value)`
+- `Collections.compact(items)`
+- `Collections.unique(items)`
+- `Collections.flatten(items)`
+- `Collections.sum(items)`
+- `Collections.min(items)`
+- `Collections.max(items)`
+- `printf(format_string, values = [])`
+- `format(format_string, values = [])`
+- `catch(callback)`
+- `rescue(callback, handler)`
+- `ensure(callback, cleanup)`
+- `methods(value)`
+- `responds(value, name)`
+- `call(value, name, args = [])`
+- `inspect(value)`
+- `variables()`
+- `globals()`
+- `ancestors(value)`
+- `superclass(value)`
+
+### Complete inventory: `set`
+
+- `class Set`
+- `Set.initialize(values = [])`
+- `Set.new(values = [])`
+- `Set.add(value)`
+- `Set.delete(value)`
+- `Set.include?(value)`
+- `Set.member?(value)`
+- `Set.each(callback)`
+- `Set.size()`
+- `Set.length()`
+- `Set.empty?()`
+- `Set.clear()`
+- `Set.map(callback)`
+- `Set.select(callback)`
+- `Set.reject(callback)`
+- `Set.merge(other)`
+- `Set.subset(other)`
+- `Set.superset(other)`
+- `Set.intersect(other)`
+- `Set.union(other)`
+- `Set.intersection(other)`
+- `Set.difference(other)`
+- `Set.subset?(other)`
+- `Set.superset?(other)`
+- `Set.intersect?(other)`
+- `Set.symmetric_difference(other)`
+- `new(values = [])`
+- `from_values(values)`
+- `add(target, value)`
+- `delete(target, value)`
+- `include?(target, value)`
+- `union(left, right)`
+- `intersection(left, right)`
+- `difference(left, right)`
+- `symmetric_difference(left, right)`
+- `subset?(left, right)`
+- `superset?(left, right)`
+- `intersect?(left, right)`
+
+### Complete inventory: `sqlite`
+
+- `class Database`
+- `Database.initialize(path)`
+- `Database.execute(sql, params = [])`
+- `Database.query(sql, params = [])`
+- `Database.prepare(sql)`
+- `Database.begin()`
+- `Database.commit()`
+- `Database.rollback()`
+- `Database.changes()`
+- `Database.last_insert_id()`
+- `Database.close()`
+- `class Statement`
+- `Statement.initialize(handle, sql)`
+- `Statement.bind(params = [])`
+- `Statement.execute()`
+- `Statement.query()`
+- `Statement.close()`
+- `open(path)`
+
+### Complete inventory: `system`
+
+- `platform()`
+- `version()`
+- `argv()`
+- `cwd()`
+- `env(name)`
+- `setenv(name, value)`
+- `unsetenv(name)`
+- `home()`
+- `temp_dir()`
+- `command_exists(command)`
+- `pid()`
+- `ppid()`
+- `run(command)`
+- `capture(command)`
+- `success(command)`
+- `output(command)`
+- `spawn(command)`
+- `wait(pid)`
+- `waitpid(pid)`
+- `kill(signal_number, pid)`
+- `uid()`
+- `gid()`
+- `euid()`
+- `egid()`
+- `groups()`
+- `clock_gettime(clock = "monotonic")`
+- `trap(signal_number, callback)`
+- `signals()`
+- `signal_name(signal_number)`
+- `login()`
+- `user(name)`
+- `user_id(uid_value)`
+- `shell_split(text)`
+- `shell_escape(text)`
+- `shell_join(items)`
+
+### Complete inventory: `text`
+
+- `match(pattern, text)`
+- `search(pattern, text)`
+- `find_all(pattern, text)`
+- `replace_regex(pattern, replacement, text)`
+- `base64_encode(text)`
+- `base64_decode(text)`
+- `hex_encode(text)`
+- `hex_decode(text)`
+- `url_encode(text)`
+- `url_decode(text)`
+- `scanner(text)`
+- `shell_split(text)`
+- `shell_escape(text)`
+- `shell_join(items)`
+- `class StringScanner`
+- `StringScanner.initialize(text)`
+- `StringScanner.scan(pattern)`
+- `StringScanner.scan_until(pattern)`
+- `StringScanner.skip(pattern)`
+- `StringScanner.skip_until(pattern)`
+- `StringScanner.check(pattern)`
+- `StringScanner.check_until(pattern)`
+- `StringScanner.match?()`
+- `StringScanner.matched()`
+- `StringScanner.matched_size()`
+- `StringScanner.pre_match()`
+- `StringScanner.post_match()`
+
+### Complete inventory: `time`
+
+- `class Time`
+- `Time.initialize(timestamp = nil)`
+- `Time.now()`
+- `Time.today()`
+- `Time.strptime(text, format)`
+- `Time.format(format_string)`
+- `Time.parts()`
+- `Time.year()`
+- `Time.month()`
+- `Time.day()`
+- `Time.hour()`
+- `Time.minute()`
+- `Time.second()`
+- `Time.add(milliseconds)`
+- `Time.subtract(milliseconds)`
+- `Time.plus(milliseconds)`
+- `Time.minus(milliseconds)`
+- `Time.compare(other)`
+- `Time.succ()`
+- `Time.add_ms(milliseconds)`
+- `Time.subtract_ms(milliseconds)`
+- `class Date`
+- `Date.initialize(timestamp = nil)`
+- `Date.parse(text)`
+- `Date.strptime(text, format)`
+- `Date.format(format_string = "%Y-%m-%d")`
+- `Date.add(days)`
+- `Date.subtract(days)`
+- `Date.next_day()`
+- `Date.prev_day()`
+- `Date.succ()`
+- `Date.shift_months(months)`
+- `Date.add_months(months)`
+- `Date.subtract_months(months)`
+- `Date.compare(other)`
+- `class DateTime`
+- `DateTime.initialize(timestamp)`
+- `DateTime.timestamp()`
+- `DateTime.format(pattern)`
+- `DateTime.parts()`
+- `DateTime.year()`
+- `DateTime.month()`
+- `DateTime.day()`
+- `DateTime.hour()`
+- `DateTime.minute()`
+- `DateTime.second()`
+- `DateTime.weekday()`
+- `DateTime.iso()`
+- `class DateTimeModule`
+- `DateTimeModule.now()`
+- `DateTimeModule.from_timestamp(milliseconds)`
+- `DateTimeModule.format(milliseconds, pattern)`
+- `now()`
+- `today()`
+- `timestamp()`
+- `parse(text)`
+- `date(text)`
+- `format(value, pattern = "%Y-%m-%d %H:%M:%S")`
+- `_time_sleep(milliseconds)`
+- `sleep(milliseconds)`

@@ -1,43 +1,72 @@
-# Lightweight SQLite database API.
-class Database
-    def initialize(path)
+# Lucy SQLite library.
+# Connection-oriented API with prepared statements and transactions.
+
+class Database {
+    func initialize(path) {
+        self.handle = __sqlite_open(path)
         self.path = path
-    end
+    }
 
-    def execute(sql)
-        return __sqlite_execute(self.path, sql)
-    end
+    func execute(sql, params = []) {
+        return __sqlite_execute(self.handle, sql, params)
+    }
 
-    def query(sql)
-        return __sqlite_query(self.path, sql)
-    end
+    func query(sql, params = []) {
+        return __sqlite_query(self.handle, sql, params)
+    }
 
-    def create_table(name, columns)
-        return self.execute("CREATE TABLE " + name + " (" + columns + ")")
-    end
+    func prepare(sql) {
+        return Statement.new(self.handle, sql)
+    }
 
-    def insert(table, columns, values)
-        return self.execute("INSERT INTO " + table + " (" + columns + ") VALUES (" + values + ")")
-    end
+    func begin() {
+        return __sqlite_begin(self.handle)
+    }
 
-    def rows(sql)
-        return self.query(sql)
-    end
-end
+    func commit() {
+        return __sqlite_commit(self.handle)
+    }
 
-class SQLite
-    def open(path)
-        return Database.new(path)
-    end
-end
+    func rollback() {
+        return __sqlite_rollback(self.handle)
+    }
 
-sqlite = SQLite.new()
+    func changes() {
+        return __sqlite_changes(self.handle)
+    }
 
-# Flat public SQLite API.
-def open(path); return Database.new(path); end
-def execute(db, sql); return db.execute(sql); end
-def query(db, sql); return db.query(sql); end
-def create_table(db, name, columns); return db.create_table(name, columns); end
-def insert(db, table, columns, values); return db.insert(table, columns, values); end
-def rows(db, sql); return db.rows(sql); end
+    func last_insert_id() {
+        return __sqlite_last_insert_id(self.handle)
+    }
 
+    func close() {
+        return __sqlite_close(self.handle)
+    }
+}
+
+class Statement {
+    func initialize(handle, sql) {
+        self.handle = __sqlite_prepare(handle, sql)
+    }
+
+    func bind(params = []) {
+        __sqlite_bind(self.handle, params)
+        return self
+    }
+
+    func execute() {
+        return __sqlite_statement_execute(self.handle)
+    }
+
+    func query() {
+        return __sqlite_statement_query(self.handle)
+    }
+
+    func close() {
+        return __sqlite_statement_close(self.handle)
+    }
+}
+
+func open(path) {
+    return Database.new(path)
+}

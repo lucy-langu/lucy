@@ -1,228 +1,238 @@
 # Lucy application toolkit. CLI configuration, logging, benchmarking, timeout helpers, and templates.
 
 # Simple command-line option parser.
-class OptionParser
-    def initialize()
+class OptionParser {
+    func initialize() {
         self.options = {}
         self.banner_text = "Usage:"
         self.program = ""
-    end
+    }
 
-    def new()
+    func new() {
         return OptionParser.new()
-    end
+    }
 
-    def banner(text)
+    func banner(text) {
         self.banner_text = text
         return self
-    end
+    }
 
-    def separator(text = "")
+    func separator(text = "") {
         self.separator_text = text
         return self
-    end
+    }
 
-    def version(text)
+    func version(text) {
         self.version_text = text
         return self
-    end
+    }
 
-    def program_name(text)
+    func program_name(text) {
         self.program = text
         return self
-    end
+    }
 
-    def on(name, description = "", default = nil)
+    func on(name, description = "", default = nil) {
         self.options.set(name, {description: description, default: default})
         return self
-    end
+    }
 
-    def parse(arguments = ARGV)
+    func parse(arguments = ARGV) {
         result = {}
-        for key in self.options.keys()
+        for key in self.options.keys() {
             result.set(key, self.options.get(key).get("default"))
-        end
+        }
         i = 0
-        while i < arguments.length()
+        while i < arguments.length() {
             item = arguments[i]
-            if item.starts_with("--")
+            if item.starts_with("--") {
                 key = item.slice(2)
-                if self.options.has(key)
+                if self.options.has(key) {
                     spec = self.options.get(key)
-                    if spec.get("default") == true or spec.get("default") == false
+                    if spec.get("default") == true or spec.get("default") == false {
                         result.set(key, true)
-                    else if i + 1 < arguments.length()
+                    } else if i + 1 < arguments.length() {
                         i += 1
                         result.set(key, arguments[i])
-                    end
-                end
-            end
+                    }
+                }
+            }
             i += 1
-        end
+        }
         return result
-    end
+    }
 
-    def parse!(arguments = ARGV)
+    func parse!(arguments = ARGV) {
         return self.parse(arguments)
-    end
+    }
 
-    def help()
+    func help() {
         text = self.banner_text + "\n"
-        for key in self.options.keys()
+        for key in self.options.keys() {
             text += "  --" + key + "  " + self.options.get(key).get("description") + "\n"
-        end
+        }
         return text
-    end
+    }
 
-    def summarize()
+    func summarize() {
         return self.help()
-    end
+    }
 
-    def abort(message)
+    func abort(message) {
         throw "OptionParserError: " + message
-    end
-end
+    }
+}
 
 option_parser = OptionParser.new()
 
-# Small structured logger with Ruby-inspired levels.
-class Logger
-    def initialize(output = nil, level = 0)
+# Small structured logger with structured levels.
+class Logger {
+    func initialize(output = nil, level = 0) {
         self.output = output
         self.level_value = level
-    end
+    }
 
-    def new(output = nil, level = 0)
+    func new(output = nil, level = 0) {
         return Logger.new(output, level)
-    end
+    }
 
-    def level()
+    func level() {
         return self.level_value
-    end
+    }
 
-    def set_level(value)
+    func set_level(value) {
         self.level_value = value
         return value
-    end
+    }
 
-    def level_set(value)
+    func level_set(value) {
         return self.set_level(value)
-    end
+    }
 
-    def add(level, message)
-        if level < self.level_value
+    func add(level, message) {
+        if level < self.level_value {
             return false
-        end
+        }
         line = str(message)
-        if self.output != nil
+        if self.output != nil {
             return self.output.write(line + "\n")
-        end
+        }
         return print(line)
-    end
+    }
 
-    def log(level, message)
+    func log(level, message) {
         return self.add(level, message)
-    end
+    }
 
-    def debug(message)
+    func debug(message) {
         return self.add(0, "DEBUG: " + message)
-    end
+    }
 
-    def info(message)
+    func info(message) {
         return self.add(1, "INFO: " + message)
-    end
+    }
 
-    def warn(message)
+    func warn(message) {
         return self.add(2, "WARN: " + message)
-    end
+    }
 
-    def error(message)
+    func error(message) {
         return self.add(3, "ERROR: " + message)
-    end
+    }
 
-    def fatal(message)
+    func fatal(message) {
         return self.add(4, "FATAL: " + message)
-    end
+    }
 
-    def debug?()
+    func debug?() {
         return self.level_value <= 0
-    end
+    }
 
-    def info?()
+    func info?() {
         return self.level_value <= 1
-    end
+    }
 
-    def warn?()
+    func warn?() {
         return self.level_value <= 2
-    end
+    }
 
-    def error?()
+    func error?() {
         return self.level_value <= 3
-    end
+    }
 
-    def fatal?()
+    func fatal?() {
         return self.level_value <= 4
-    end
-end
+    }
+}
 
 logger = Logger.new()
 
 # Benchmark helpers.
-class Benchmark
-    def realtime(command)
+class Benchmark {
+    func realtime(command) {
         return __benchmark_realtime(command)
-    end
+    }
 
-    def measure(command)
+    func measure(command) {
         return self.realtime(command)
-    end
-end
+    }
+}
 
 benchmark = Benchmark.new()
 
 # Timeout facade. Cooperative timeout requires a callable runtime scheduler.
-class Timeout
-    def timeout(seconds, callback)
+class Timeout {
+    func timeout(seconds, callback) {
         start = millis()
         result = callback()
-        if millis() - start > seconds * 1000
+        if millis() - start > seconds * 1000 {
             throw "TimeoutError: operation exceeded timeout"
-        end
+        }
         return result
-    end
-end
+    }
+}
 
 timeout = Timeout.new()
 
 # Lightweight ERB-style template engine using {{ expression }} placeholders.
-class ERB
-    def initialize(template)
+class ERB {
+    func initialize(template) {
         self.template = template
-    end
+    }
 
-    def src()
+    func src() {
         return self.template
-    end
+    }
 
-    def result(values = {})
+    func result(values = {}) {
         output = self.template
-        for key in values.keys()
+        for key in values.keys() {
             output = output.replace("{{" + key + "}}", str(values.get(key)))
-        end
+        }
         return output
-    end
+    }
 
-    def run(values = {})
+    func run(values = {}) {
         return self.result(values)
-    end
-end
+    }
+}
 
 erb = ERB.new("")
 
 # Flat public application API.
-def parser(); return OptionParser.new(); end
-def logger(output = nil, level = 0); return Logger.new(output, level); end
-def benchmark(); return Benchmark.new(); end
-def timeout(); return Timeout.new(); end
-def template(source); return ERB.new(source); end
+func parser() {
+    return OptionParser.new()
+}
+func logger(output = nil, level = 0) {
+    return Logger.new(output, level)
+}
+func benchmark() {
+    return Benchmark.new()
+}
+func timeout() {
+    return Timeout.new()
+}
+func template(source) {
+    return ERB.new(source)
+}
 

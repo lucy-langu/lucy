@@ -1,368 +1,143 @@
-# Lucy system library. Host environment, processes, signals, accounts, timing, and command execution are grouped here.
+# Lucy system library.
+# One flat public API for the host environment, processes, signals, and accounts.
 
-# Operating-system helpers.
-class OS
-    def cwd()
-        return __dir_pwd()
-    end
-
-    def env(name)
-        return __os_env(name)
-    end
-
-    def setenv(name, value)
-        return __os_setenv(name, value)
-    end
-
-    def unsetenv(name)
-        return __os_unsetenv(name)
-    end
-
-    def system(command)
-        return __os_system(command)
-    end
-
-    def pid()
-        return __os_pid()
-    end
-
-    def cpu_count()
-        return __os_cpu_count()
-    end
-
-    def platform()
-        return PLATFORM
-    end
-
-    def version()
-        return VERSION
-    end
-
-    def home()
-        return __os_home()
-    end
-
-    def temp_dir()
-        return __os_temp_dir()
-    end
-
-    def command_exists(command)
-        return __os_command_exists(command)
-    end
-
-    def which(command)
-        return self.command_exists(command)
-    end
-end
-
-os = OS.new()
-
-# Runtime and process information.
-class System
-    def version()
-        return VERSION
-    end
-
-    def platform()
-        return PLATFORM
-    end
-
-    def cwd()
-        return __dir_pwd()
-    end
-
-    def env(name)
-        return __os_env(name)
-    end
-
-    def argv()
-        return ARGV
-    end
-end
-
-sys = System.new()
-
-# Process information and execution.
-class Process
-    def run(command)
-        return __process_run(command)
-    end
-
-    def capture(command)
-        return __process_capture(command)
-    end
-
-    def success(command)
-        return self.run(command).get("success")
-    end
-
-    def output(command)
-        return self.run(command).get("stdout")
-    end
-
-    def ppid()
-        return __process_ppid()
-    end
-
-    def spawn(command)
-        return __process_spawn(command)
-    end
-
-    def wait(pid)
-        return __process_wait(pid)
-    end
-
-    def waitpid(pid)
-        return __process_waitpid(pid)
-    end
-
-    def kill(signal, pid)
-        return __process_kill(signal, pid)
-    end
-
-    def uid()
-        return __process_uid()
-    end
-
-    def gid()
-        return __process_gid()
-    end
-
-    def euid()
-        return __process_euid()
-    end
-
-    def egid()
-        return __process_egid()
-    end
-
-    def groups()
-        return __process_groups()
-    end
-
-    def clock_gettime(clock = "monotonic")
-        return __process_clock_gettime(clock)
-    end
-end
-
-process = Process.new()
-
-# Process signal information. trap requires a native callback bridge.
-class Signal
-    def trap(signal, callback)
-        return __signal_trap(signal, callback)
-    end
-
-    def list()
-        return __signal_list()
-    end
-
-    def signame(signal)
-        return __signal_signame(signal)
-    end
-end
-
-signal = Signal.new()
-
-# User and account information.
-class Etc
-    def getlogin()
-        return __etc_getlogin()
-    end
-
-    def getpwnam(name)
-        return __etc_getpwnam(name)
-    end
-
-    def getpwuid(uid)
-        return __etc_getpwuid(uid)
-    end
-end
-
-etc = Etc.new()
-
-# Shell argument quoting and splitting.
-class Shellwords
-    def split(text)
-        return __shellwords_split(text)
-    end
-
-    def shellsplit(text)
-        return self.split(text)
-    end
-
-    def escape(text)
-        return __shellwords_escape(text)
-    end
-
-    def shellescape(text)
-        return self.escape(text)
-    end
-
-    def join(items)
-        return __shellwords_join(items)
-    end
-
-    def shelljoin(items)
-        return self.join(items)
-    end
-end
-
-shellwords = Shellwords.new()
-
-# Timeout facade. Cooperative timeout requires a callable runtime scheduler.
-class Timeout
-    def timeout(seconds, callback)
-        start = millis()
-        result = callback()
-        if millis() - start > seconds * 1000
-            throw "TimeoutError: operation exceeded timeout"
-        end
-        return result
-    end
-end
-
-timeout = Timeout.new()
-
-# Benchmark helpers.
-class Benchmark
-    def realtime(command)
-        return __benchmark_realtime(command)
-    end
-
-    def measure(command)
-        return self.realtime(command)
-    end
-end
-
-benchmark = Benchmark.new()
-
-# Unified system-level helpers.
-def platform()
+func platform() {
     return PLATFORM
-end
+}
 
-def version()
+func version() {
     return VERSION
-end
+}
 
-def argv()
+func argv() {
     return ARGV
-end
+}
 
-def cwd()
+func cwd() {
     return __dir_pwd()
-end
+}
 
-def env(name)
+func env(name) {
     return __os_env(name)
-end
+}
 
-def setenv(name, value)
+func setenv(name, value) {
     return __os_setenv(name, value)
-end
+}
 
-def pid()
+func unsetenv(name) {
+    return __os_unsetenv(name)
+}
+
+func home() {
+    return __os_home()
+}
+
+func temp_dir() {
+    return __os_temp_dir()
+}
+
+func command_exists(command) {
+    return __os_command_exists(command)
+}
+
+
+func pid() {
     return __os_pid()
-end
+}
 
-# Flat public system API. Process, signal and account operations are not nested namespaces.
-def run(command)
+func ppid() {
+    return __process_ppid()
+}
+
+func run(command) {
     return __process_run(command)
-end
+}
 
-def capture(command)
+func capture(command) {
     return __process_capture(command)
-end
+}
 
-def success(command)
+func success(command) {
     return run(command).get("success")
-end
+}
 
-def output(command)
+func output(command) {
     return run(command).get("stdout")
-end
+}
 
-def spawn(command)
+func spawn(command) {
     return __process_spawn(command)
-end
+}
 
-def wait(pid)
+func wait(pid) {
     return __process_wait(pid)
-end
+}
 
-def waitpid(pid)
+func waitpid(pid) {
     return __process_waitpid(pid)
-end
+}
 
-def kill(signal_number, pid)
+func kill(signal_number, pid) {
     return __process_kill(signal_number, pid)
-end
+}
 
-def uid()
+func uid() {
     return __process_uid()
-end
+}
 
-def gid()
+func gid() {
     return __process_gid()
-end
+}
 
-def euid()
+func euid() {
     return __process_euid()
-end
+}
 
-def egid()
+func egid() {
     return __process_egid()
-end
+}
 
-def groups()
+func groups() {
     return __process_groups()
-end
+}
 
-def clock_gettime(clock = "monotonic")
+func clock_gettime(clock = "monotonic") {
     return __process_clock_gettime(clock)
-end
+}
 
-def trap(signal_number, callback)
+func trap(signal_number, callback) {
     return __signal_trap(signal_number, callback)
-end
+}
 
-def signals()
+func signals() {
     return __signal_list()
-end
+}
 
-def signal_name(signal_number)
+func signal_name(signal_number) {
     return __signal_signame(signal_number)
-end
+}
 
-def login()
+func login() {
     return __etc_getlogin()
-end
+}
 
-def user(name)
+func user(name) {
     return __etc_getpwnam(name)
-end
+}
 
-def user_id(uid)
-    return __etc_getpwuid(uid)
-end
+func user_id(uid_value) {
+    return __etc_getpwuid(uid_value)
+}
 
-def shell_split(text)
+func shell_split(text) {
     return __shellwords_split(text)
-end
+}
 
-def shell_escape(text)
+func shell_escape(text) {
     return __shellwords_escape(text)
-end
+}
 
-def shell_join(items)
+func shell_join(items) {
     return __shellwords_join(items)
-end
-
-
-# Flat host-environment helpers.
-def ppid(); return __process_ppid(); end
-def home(); return __os_home(); end
-def temp_dir(); return __os_temp_dir(); end
-def command_exists(command); return __os_command_exists(command); end
-def which(command); return __os_command_exists(command); end
+}

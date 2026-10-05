@@ -1,0 +1,18 @@
+assert bin(255) == "11111111"
+assert hex(255) == "FF"
+assert oct(255) == "377"
+assert bin(5, 8) == "00000101"
+assert hex(15, 4) == "000F"
+assert oct(9, 4) == "0011"
+assert bin(-5) == "-101"
+assert int("11111111", 2) == 255
+assert int("FF", 16) == 255
+assert int("377", 8) == 255
+assert int("Z", 36) == 35
+assert 255.to_binary() == "11111111"
+assert 5.to_binary(8) == "00000101"
+assert 255.to_hex() == "FF"
+assert 15.to_hex(4) == "000F"
+assert 255.to_octal() == "377"
+assert 9.to_octal(4) == "0011"
+println "numeric base conversion: ok"

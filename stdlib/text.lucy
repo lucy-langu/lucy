@@ -1,253 +1,117 @@
-# Lucy text library. Text transformation, matching, encoding, token scanning, and shell-safe text live together.
+# Lucy text library.
+# Basic string transformations are native string methods.
+# This module exposes regex, encoding, scanning, and shell-word operations.
 
-# String utilities built on Lucy's native string methods.
-class StringTools
-    def capitalize(text)
-        if text.length() == 0
-            return text
-        end
-        return text[0].upper() + text.slice(1)
-    end
+func match(pattern, text) {
+    return __regex_match(pattern, text)
+}
 
-    def upper(text)
-        return text.upper()
-    end
+func search(pattern, text) {
+    return __regex_search(pattern, text)
+}
 
-    def lower(text)
-        return text.lower()
-    end
+func find_all(pattern, text) {
+    return __regex_find_all(pattern, text)
+}
 
-    def trim(text)
-        return text.strip()
-    end
+func replace_regex(pattern, replacement, text) {
+    return __regex_replace(pattern, replacement, text)
+}
 
-    def reverse(text)
-        return text.reverse()
-    end
+func base64_encode(text) {
+    return __encoding_base64_encode(text)
+}
 
-    def repeat(text, count)
-        return text.repeat(count)
-    end
+func base64_decode(text) {
+    return __encoding_base64_decode(text)
+}
 
-    def split(text, separator)
-        return text.split(separator)
-    end
+func hex_encode(text) {
+    return __encoding_hex_encode(text)
+}
 
-    def replace(text, old_value, new_value)
-        return text.replace(old_value, new_value)
-    end
+func hex_decode(text) {
+    return __encoding_hex_decode(text)
+}
 
-    def contains(text, value)
-        return text.contains(value)
-    end
+func url_encode(text) {
+    return __encoding_url_encode(text)
+}
 
-    def starts_with(text, value)
-        return text.starts_with(value)
-    end
+func url_decode(text) {
+    return __encoding_url_decode(text)
+}
 
-    def ends_with(text, value)
-        return text.ends_with(value)
-    end
+func scanner(text) {
+    return StringScanner.new(text)
+}
 
-    def length(text)
-        return text.length()
-    end
+func shell_split(text) {
+    return __shellwords_split(text)
+}
 
-    def to_int(text)
-        return text.to_int()
-    end
+func shell_escape(text) {
+    return __shellwords_escape(text)
+}
 
-    def to_float(text)
-        return text.to_float()
-    end
+func shell_join(items) {
+    return __shellwords_join(items)
+}
 
-    def lines(text)
-        return text.split("\n")
-    end
-
-    def words(text)
-        trimmed = text.strip()
-        if trimmed == ""
-            return []
-        end
-        return trimmed.split(" ")
-    end
-end
-
-string = StringTools.new()
-
-# Regular expression helpers.
-class Regex
-    def match(pattern, text)
-        return __regex_match(pattern, text)
-    end
-
-    def search(pattern, text)
-        return __regex_search(pattern, text)
-    end
-
-    def find_all(pattern, text)
-        return __regex_find_all(pattern, text)
-    end
-
-    def replace(pattern, replacement, text)
-        return __regex_replace(pattern, replacement, text)
-    end
-
-    def contains(pattern, text)
-        return self.search(pattern, text)
-    end
-end
-
-regex = Regex.new()
-
-# Text encoding helpers.
-class Encoding
-    def base64_encode(text)
-        return __encoding_base64_encode(text)
-    end
-
-    def base64_decode(text)
-        return __encoding_base64_decode(text)
-    end
-
-    def hex_encode(text)
-        return __encoding_hex_encode(text)
-    end
-
-    def hex_decode(text)
-        return __encoding_hex_decode(text)
-    end
-
-    def url_encode(text)
-        return __encoding_url_encode(text)
-    end
-
-    def url_decode(text)
-        return __encoding_url_decode(text)
-    end
-end
-
-encoding = Encoding.new()
-
-# Incremental regular-expression scanner.
-class StringScanner
-    def initialize(text)
+class StringScanner {
+    func initialize(text) {
         self.native = __stringscanner_new(text)
-    end
+    }
 
-    def scan(pattern)
+    func scan(pattern) {
         return __stringscanner_scan(self.native, pattern)
-    end
+    }
 
-    def scan_until(pattern)
+    func scan_until(pattern) {
         return __stringscanner_scan_until(self.native, pattern)
-    end
+    }
 
-    def skip(pattern)
+    func skip(pattern) {
         return __stringscanner_skip(self.native, pattern)
-    end
+    }
 
-    def skip_until(pattern)
+    func skip_until(pattern) {
         value = self.scan_until(pattern)
-        if value == nil
+        if value == nil {
             return nil
-        end
+        }
         return value.length()
-    end
+    }
 
-    def check(pattern)
+    func check(pattern) {
         return __stringscanner_check(self.native, pattern)
-    end
+    }
 
-    def check_until(pattern)
+    func check_until(pattern) {
         return __stringscanner_check_until(self.native, pattern)
-    end
+    }
 
-    def match?()
+    func match?() {
         return self.native.get("matched") != nil
-    end
+    }
 
-    def matched()
+    func matched() {
         return self.native.get("matched")
-    end
+    }
 
-    def matched_size()
+    func matched_size() {
         value = self.native.get("matched")
-        if value == nil
+        if value == nil {
             return 0
-        end
+        }
         return value.length()
-    end
+    }
 
-    def pre_match()
+    func pre_match() {
         return self.native.get("pre_match")
-    end
+    }
 
-    def post_match()
+    func post_match() {
         return self.native.get("post_match")
-    end
-end
-
-stringscanner = StringScanner.new("")
-
-# Shell argument quoting and splitting.
-class Shellwords
-    def split(text)
-        return __shellwords_split(text)
-    end
-
-    def shellsplit(text)
-        return self.split(text)
-    end
-
-    def escape(text)
-        return __shellwords_escape(text)
-    end
-
-    def shellescape(text)
-        return self.escape(text)
-    end
-
-    def join(items)
-        return __shellwords_join(items)
-    end
-
-    def shelljoin(items)
-        return self.join(items)
-    end
-end
-
-shellwords = Shellwords.new()
-
-# Flat public text API.
-def capitalize(value); if value.length() == 0; return value; end; return value[0].upper() + value.slice(1); end
-def upper(value); return value.upper(); end
-def lower(value); return value.lower(); end
-def trim(value); return value.strip(); end
-def reverse(value); return value.reverse(); end
-def repeat(value, count); return value.repeat(count); end
-def split(value, separator); return value.split(separator); end
-def join(values, separator = ""); return values.join(separator); end
-def replace(value, old_value, new_value); return value.replace(old_value, new_value); end
-def contains(value, needle); return value.contains(needle); end
-def starts_with(value, needle); return value.starts_with(needle); end
-def ends_with(value, needle); return value.ends_with(needle); end
-def length(value); return value.length(); end
-def to_int(value); return value.to_int(); end
-def to_float(value); return value.to_float(); end
-def match(pattern, value); return __regex_match(pattern, value); end
-def search(pattern, value); return __regex_search(pattern, value); end
-def matches(pattern, value); return __regex_find_all(pattern, value); end
-def replace_regex(pattern, replacement, value); return __regex_replace(pattern, replacement, value); end
-def base64_encode(value); return __encoding_base64_encode(value); end
-def base64_decode(value); return __encoding_base64_decode(value); end
-def hex_encode(value); return __encoding_hex_encode(value); end
-def hex_decode(value); return __encoding_hex_decode(value); end
-def url_encode(value); return __encoding_url_encode(value); end
-def url_decode(value); return __encoding_url_decode(value); end
-def shell_split(value); return __shellwords_split(value); end
-def shell_escape(value); return __shellwords_escape(value); end
-def shell_join(value); return __shellwords_join(value); end
-def scan(value, pattern); scanner = StringScanner.new(value); return scanner.scan(pattern); end
-
+    }
+}

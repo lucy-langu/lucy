@@ -1,39 +1,28 @@
-# Lucy-native explicit result values.
-# A result is a small map instead of a Ruby-style exception-heavy wrapper.
+# Lucy explicit result values.
+# Result values are maps so they remain inspectable and serializable.
 
-class Result
-    def ok(value)
-        return {ok: true, value: value, error: nil}
-    end
+func ok(value) {
+    return {ok: true, value: value, error: nil}
+}
 
-    def err(message)
-        return {ok: false, value: nil, error: str(message)}
-    end
+func err(message) {
+    return {ok: false, value: nil, error: str(message)}
+}
 
-    def success(result)
-        return result.has("ok") and result.get("ok")
-    end
+func success(result) {
+    return result.has("ok") and result.get("ok")
+}
 
-    def unwrap(result, fallback = nil)
-        if self.success(result)
-            return result.get("value")
-        end
-        return fallback
-    end
+func unwrap(result, fallback = nil) {
+    if success(result) {
+        return result.get("value")
+    }
+    return fallback
+}
 
-    def message(result)
-        if result.has("error")
-            return result.get("error")
-        end
-        return nil
-    end
-end
-
-result = Result.new()
-
-# Flat public result API.
-def ok(value); return Result.new().ok(value); end
-def err(message); return Result.new().err(message); end
-def success(value); return Result.new().success(value); end
-def unwrap(value, fallback = nil); return Result.new().unwrap(value, fallback); end
-def message(value); return Result.new().message(value); end
+func message(result) {
+    if result.has("error") {
+        return result.get("error")
+    }
+    return nil
+}

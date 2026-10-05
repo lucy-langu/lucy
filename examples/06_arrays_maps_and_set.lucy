@@ -1,6 +1,6 @@
 import set
 
 users = [{name: "Ada", role: "dev"}, {name: "Grace", role: "admin"}]
-roles = Set.new(["dev", "admin"])
+roles = set.new(["dev", "admin"])
 print users[0].get("name")
 print roles.include? "admin"

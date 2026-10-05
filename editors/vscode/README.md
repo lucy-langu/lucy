@@ -22,4 +22,4 @@ Search for **"Lucy Language"** in the Extensions panel.
 
 ### From VSIX
 ```bash
-code --install-extension lucy-language-1.0.0.vsix
+code --install-extension lucy-language-1.1.1.vsix

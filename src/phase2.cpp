@@ -822,66 +822,91 @@ Value http_request(const std::vector<Value>& args, const std::string& method) {
 }
 
 #ifdef LUCY_HAS_SQLITE
-Value sqlite_query(const std::string& database_path, const std::string& sql) {
+struct SQLiteConnection : NativeObject {
     sqlite3* db = nullptr;
-    if (sqlite3_open(database_path.c_str(), &db) != SQLITE_OK) {
-        std::string message = db ? sqlite3_errmsg(db) : "cannot open database";
-        if (db) sqlite3_close(db);
-        throw std::runtime_error("SQLiteError: " + message);
-    }
+    explicit SQLiteConnection(sqlite3* handle) : db(handle) {}
+    ~SQLiteConnection() override { if (db) sqlite3_close(db); }
+};
 
-    sqlite3_stmt* statement = nullptr;
-    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &statement, nullptr) != SQLITE_OK) {
-        std::string message = sqlite3_errmsg(db);
-        sqlite3_close(db);
-        throw std::runtime_error("SQLiteError: " + message);
-    }
+struct SQLiteStatement : NativeObject {
+    std::shared_ptr<SQLiteConnection> connection;
+    sqlite3_stmt* stmt = nullptr;
+    SQLiteStatement(std::shared_ptr<SQLiteConnection> c, sqlite3_stmt* s)
+        : connection(std::move(c)), stmt(s) {}
+    ~SQLiteStatement() override { if (stmt) sqlite3_finalize(stmt); }
+};
 
-    Array rows;
-    const int column_count = sqlite3_column_count(statement);
+std::shared_ptr<SQLiteConnection> sqlite_connection(const Value& value, const std::string& name) {
+    auto native = std::get_if<Value::NativePtr>(&value.data);
+    if (!native || !*native) throw std::runtime_error("TypeError: " + name + " expects a SQLite database");
+    auto connection = std::dynamic_pointer_cast<SQLiteConnection>(*native);
+    if (!connection || !connection->db) throw std::runtime_error("SQLiteError: database is closed");
+    return connection;
+}
 
-    while (true) {
-        const int result = sqlite3_step(statement);
-        if (result == SQLITE_DONE) break;
-        if (result != SQLITE_ROW) {
-            std::string message = sqlite3_errmsg(db);
-            sqlite3_finalize(statement);
-            sqlite3_close(db);
-            throw std::runtime_error("SQLiteError: " + message);
-        }
+std::shared_ptr<SQLiteStatement> sqlite_statement(const Value& value, const std::string& name) {
+    auto native = std::get_if<Value::NativePtr>(&value.data);
+    if (!native || !*native) throw std::runtime_error("TypeError: " + name + " expects a SQLite statement");
+    auto statement = std::dynamic_pointer_cast<SQLiteStatement>(*native);
+    if (!statement || !statement->stmt) throw std::runtime_error("SQLiteError: statement is closed");
+    return statement;
+}
 
-        Map row;
-        for (int i = 0; i < column_count; ++i) {
-            const char* name = sqlite3_column_name(statement, i);
-            switch (sqlite3_column_type(statement, i)) {
-                case SQLITE_INTEGER:
-                    row[name] = static_cast<long long>(sqlite3_column_int64(statement, i));
-                    break;
-                case SQLITE_FLOAT:
-                    row[name] = sqlite3_column_double(statement, i);
-                    break;
-                case SQLITE_TEXT:
-                    row[name] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(statement, i)));
-                    break;
-                case SQLITE_NULL:
-                    row[name] = Value{};
-                    break;
-                case SQLITE_BLOB: {
-                    const auto* data = static_cast<const unsigned char*>(sqlite3_column_blob(statement, i));
-                    const int size = sqlite3_column_bytes(statement, i);
-                    row[name] = hex_encode(std::string(reinterpret_cast<const char*>(data), size));
-                    break;
-                }
+void sqlite_bind_value(sqlite3_stmt* stmt, int index, const Value& value, const std::string& name) {
+    int rc = SQLITE_ERROR;
+    if (std::holds_alternative<Nil>(value.data)) rc = sqlite3_bind_null(stmt, index);
+    else if (auto p = std::get_if<long long>(&value.data)) rc = sqlite3_bind_int64(stmt, index, *p);
+    else if (auto p = std::get_if<double>(&value.data)) rc = sqlite3_bind_double(stmt, index, *p);
+    else if (auto p = std::get_if<bool>(&value.data)) rc = sqlite3_bind_int(stmt, index, *p ? 1 : 0);
+    else if (auto p = std::get_if<std::string>(&value.data)) rc = sqlite3_bind_text(stmt, index, p->c_str(), static_cast<int>(p->size()), SQLITE_TRANSIENT);
+    else throw std::runtime_error("TypeError: " + name + " supports nil, bool, int, double, and string parameters");
+    if (rc != SQLITE_OK) throw std::runtime_error(std::string("SQLiteError: ") + sqlite3_errmsg(sqlite3_db_handle(stmt)));
+}
+
+void sqlite_bind_array(sqlite3_stmt* stmt, const Value& value, const std::string& name) {
+    if (std::holds_alternative<Nil>(value.data)) return;
+    auto array = std::get_if<Value::ArrayPtr>(&value.data);
+    if (!array) throw std::runtime_error("TypeError: " + name + " expects an array of parameters");
+    sqlite3_clear_bindings(stmt);
+    for (size_t i = 0; i < (*array)->size(); ++i)
+        sqlite_bind_value(stmt, static_cast<int>(i + 1), (*array)->at(i), name);
+}
+
+Value sqlite_row(sqlite3_stmt* stmt, int columns) {
+    Map row;
+    for (int i = 0; i < columns; ++i) {
+        const char* name = sqlite3_column_name(stmt, i);
+        switch (sqlite3_column_type(stmt, i)) {
+            case SQLITE_INTEGER: row[name] = static_cast<long long>(sqlite3_column_int64(stmt, i)); break;
+            case SQLITE_FLOAT: row[name] = sqlite3_column_double(stmt, i); break;
+            case SQLITE_TEXT: row[name] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, i))); break;
+            case SQLITE_NULL: row[name] = Value{}; break;
+            case SQLITE_BLOB: {
+                const auto* data = static_cast<const unsigned char*>(sqlite3_column_blob(stmt, i));
+                const int size = sqlite3_column_bytes(stmt, i);
+                row[name] = hex_encode(std::string(reinterpret_cast<const char*>(data), size));
+                break;
             }
         }
-        rows.emplace_back(std::move(row));
     }
+    return Value(std::move(row));
+}
 
-    sqlite3_finalize(statement);
-    sqlite3_close(db);
+Value sqlite_statement_query(const std::shared_ptr<SQLiteStatement>& statement) {
+    sqlite3_reset(statement->stmt);
+    Array rows;
+    const int columns = sqlite3_column_count(statement->stmt);
+    while (true) {
+        int rc = sqlite3_step(statement->stmt);
+        if (rc == SQLITE_DONE) break;
+        if (rc != SQLITE_ROW) throw std::runtime_error(std::string("SQLiteError: ") + sqlite3_errmsg(statement->connection->db));
+        rows.push_back(sqlite_row(statement->stmt, columns));
+    }
+    sqlite3_reset(statement->stmt);
     return Value(std::move(rows));
 }
 #endif
+
 
 } // namespace
 
@@ -1100,42 +1125,103 @@ void install_phase2_builtins(BuiltinMap& builtins) {
 
     // SQLite --------------------------------------------------------
 #ifdef LUCY_HAS_SQLITE
-    builtins["__sqlite_execute"] = [](const std::vector<Value>& args) {
-        require_count(args, 2, "sqlite.execute");
-        const std::string database_path = string_arg(args[0], "sqlite.execute");
-        const std::string sql = string_arg(args[1], "sqlite.execute");
-
-        sqlite3* db = nullptr;
-        if (sqlite3_open(database_path.c_str(), &db) != SQLITE_OK) {
-            std::string message = db ? sqlite3_errmsg(db) : "cannot open database";
-            if (db) sqlite3_close(db);
+    builtins["__sqlite_open"] = [](const std::vector<Value>& args) -> Value {
+        require_count(args, 1, "sqlite.open");
+        sqlite3* raw = nullptr;
+        const auto path = string_arg(args[0], "sqlite.open");
+        if (sqlite3_open(path.c_str(), &raw) != SQLITE_OK) {
+            std::string message = raw ? sqlite3_errmsg(raw) : "cannot open database";
+            if (raw) sqlite3_close(raw);
             throw std::runtime_error("SQLiteError: " + message);
         }
-
-        char* error = nullptr;
-        if (sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &error) != SQLITE_OK) {
-            std::string message = error ? error : sqlite3_errmsg(db);
-            sqlite3_free(error);
-            sqlite3_close(db);
-            throw std::runtime_error("SQLiteError: " + message);
+        sqlite3_extended_result_codes(raw, 1);
+        return Value(std::static_pointer_cast<NativeObject>(std::make_shared<SQLiteConnection>(raw)));
+    };
+    builtins["__sqlite_close"] = [](const std::vector<Value>& args) -> Value {
+        require_count(args, 1, "sqlite.close");
+        auto connection = sqlite_connection(args[0], "sqlite.close");
+        if (sqlite3_close(connection->db) != SQLITE_OK) throw std::runtime_error(std::string("SQLiteError: ") + sqlite3_errmsg(connection->db));
+        connection->db = nullptr;
+        return Value(true);
+    };
+    builtins["__sqlite_prepare"] = [](const std::vector<Value>& args) -> Value {
+        require_count(args, 2, "sqlite.prepare");
+        auto connection = sqlite_connection(args[0], "sqlite.prepare");
+        sqlite3_stmt* raw = nullptr;
+        if (sqlite3_prepare_v2(connection->db, string_arg(args[1], "sqlite.prepare").c_str(), -1, &raw, nullptr) != SQLITE_OK)
+            throw std::runtime_error(std::string("SQLiteError: ") + sqlite3_errmsg(connection->db));
+        return Value(std::static_pointer_cast<NativeObject>(std::make_shared<SQLiteStatement>(connection, raw)));
+    };
+    builtins["__sqlite_bind"] = [](const std::vector<Value>& args) -> Value {
+        require_count(args, 2, "sqlite.bind");
+        auto statement = sqlite_statement(args[0], "sqlite.bind");
+        sqlite_bind_array(statement->stmt, args[1], "sqlite.bind");
+        return args[0];
+    };
+    builtins["__sqlite_execute"] = [](const std::vector<Value>& args) -> Value {
+        require_range(args, 2, 3, "sqlite.execute");
+        auto connection = sqlite_connection(args[0], "sqlite.execute");
+        sqlite3_stmt* raw = nullptr;
+        if (sqlite3_prepare_v2(connection->db, string_arg(args[1], "sqlite.execute").c_str(), -1, &raw, nullptr) != SQLITE_OK)
+            throw std::runtime_error(std::string("SQLiteError: ") + sqlite3_errmsg(connection->db));
+        std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)> statement(raw, sqlite3_finalize);
+        if (args.size() == 3) sqlite_bind_array(statement.get(), args[2], "sqlite.execute");
+        int rc = sqlite3_step(statement.get());
+        if (rc != SQLITE_DONE) throw std::runtime_error(std::string("SQLiteError: ") + sqlite3_errmsg(connection->db));
+        Map result;
+        result["changes"] = static_cast<long long>(sqlite3_changes64(connection->db));
+        result["last_insert_id"] = static_cast<long long>(sqlite3_last_insert_rowid(connection->db));
+        return Value(std::move(result));
+    };
+    builtins["__sqlite_query"] = [](const std::vector<Value>& args) -> Value {
+        require_range(args, 2, 3, "sqlite.query");
+        auto connection = sqlite_connection(args[0], "sqlite.query");
+        sqlite3_stmt* raw = nullptr;
+        if (sqlite3_prepare_v2(connection->db, string_arg(args[1], "sqlite.query").c_str(), -1, &raw, nullptr) != SQLITE_OK)
+            throw std::runtime_error(std::string("SQLiteError: ") + sqlite3_errmsg(connection->db));
+        std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)> statement(raw, sqlite3_finalize);
+        if (args.size() == 3) sqlite_bind_array(statement.get(), args[2], "sqlite.query");
+        Array rows;
+        const int columns = sqlite3_column_count(statement.get());
+        while (true) {
+            int rc = sqlite3_step(statement.get());
+            if (rc == SQLITE_DONE) break;
+            if (rc != SQLITE_ROW) throw std::runtime_error(std::string("SQLiteError: ") + sqlite3_errmsg(connection->db));
+            rows.push_back(sqlite_row(statement.get(), columns));
         }
-
-        const long long changes = sqlite3_changes64(db);
-        sqlite3_close(db);
-        return Value(changes);
+        return Value(std::move(rows));
     };
-
-    builtins["__sqlite_query"] = [](const std::vector<Value>& args) {
-        require_count(args, 2, "sqlite.query");
-        return sqlite_query(string_arg(args[0], "sqlite.query"), string_arg(args[1], "sqlite.query"));
+    builtins["__sqlite_statement_execute"] = [](const std::vector<Value>& args) -> Value {
+        require_count(args, 1, "sqlite.statement.execute");
+        auto statement = sqlite_statement(args[0], "sqlite.statement.execute");
+        sqlite3_reset(statement->stmt);
+        int rc = sqlite3_step(statement->stmt);
+        if (rc != SQLITE_DONE) throw std::runtime_error(std::string("SQLiteError: ") + sqlite3_errmsg(statement->connection->db));
+        Map result;
+        result["changes"] = static_cast<long long>(sqlite3_changes64(statement->connection->db));
+        result["last_insert_id"] = static_cast<long long>(sqlite3_last_insert_rowid(statement->connection->db));
+        sqlite3_reset(statement->stmt);
+        return Value(std::move(result));
     };
+    builtins["__sqlite_statement_query"] = [](const std::vector<Value>& args) -> Value {
+        require_count(args, 1, "sqlite.statement.query");
+        return sqlite_statement_query(sqlite_statement(args[0], "sqlite.statement.query"));
+    };
+    builtins["__sqlite_statement_close"] = [](const std::vector<Value>& args) -> Value {
+        require_count(args, 1, "sqlite.statement.close");
+        auto statement = sqlite_statement(args[0], "sqlite.statement.close");
+        sqlite3_finalize(statement->stmt);
+        statement->stmt = nullptr;
+        return Value(true);
+    };
+    builtins["__sqlite_begin"] = [](const std::vector<Value>& args) -> Value { require_count(args,1,"sqlite.begin"); auto c=sqlite_connection(args[0],"sqlite.begin"); if(sqlite3_exec(c->db,"BEGIN",nullptr,nullptr,nullptr)!=SQLITE_OK) throw std::runtime_error(std::string("SQLiteError: ")+sqlite3_errmsg(c->db)); return Value(true); };
+    builtins["__sqlite_commit"] = [](const std::vector<Value>& args) -> Value { require_count(args,1,"sqlite.commit"); auto c=sqlite_connection(args[0],"sqlite.commit"); if(sqlite3_exec(c->db,"COMMIT",nullptr,nullptr,nullptr)!=SQLITE_OK) throw std::runtime_error(std::string("SQLiteError: ")+sqlite3_errmsg(c->db)); return Value(true); };
+    builtins["__sqlite_rollback"] = [](const std::vector<Value>& args) -> Value { require_count(args,1,"sqlite.rollback"); auto c=sqlite_connection(args[0],"sqlite.rollback"); if(sqlite3_exec(c->db,"ROLLBACK",nullptr,nullptr,nullptr)!=SQLITE_OK) throw std::runtime_error(std::string("SQLiteError: ")+sqlite3_errmsg(c->db)); return Value(true); };
+    builtins["__sqlite_changes"] = [](const std::vector<Value>& args) -> Value { require_count(args,1,"sqlite.changes"); auto c=sqlite_connection(args[0],"sqlite.changes"); return Value((long long)sqlite3_changes64(c->db)); };
+    builtins["__sqlite_last_insert_id"] = [](const std::vector<Value>& args) -> Value { require_count(args,1,"sqlite.last_insert_id"); auto c=sqlite_connection(args[0],"sqlite.last_insert_id"); return Value((long long)sqlite3_last_insert_rowid(c->db)); };
 #else
-    builtins["__sqlite_execute"] = [](const std::vector<Value>&) -> Value {
-        throw std::runtime_error("SQLiteError: Lucy was built without SQLite support");
-    };
-    builtins["__sqlite_query"] = [](const std::vector<Value>&) -> Value {
-        throw std::runtime_error("SQLiteError: Lucy was built without SQLite support");
-    };
+    for (const char* name : {"__sqlite_open","__sqlite_close","__sqlite_prepare","__sqlite_bind","__sqlite_execute","__sqlite_query","__sqlite_statement_execute","__sqlite_statement_query","__sqlite_statement_close","__sqlite_begin","__sqlite_commit","__sqlite_rollback","__sqlite_changes","__sqlite_last_insert_id"})
+        builtins[name] = [](const std::vector<Value>&) -> Value { throw std::runtime_error("SQLiteError: Lucy was built without SQLite support"); };
 #endif
 }
 

@@ -1,0 +1,19 @@
+# Import every bundled public module. This is a load/parse regression test,
+# not a substitute for module-specific behavior tests.
+import app
+import crypto
+import data
+import flow
+import fs
+import http
+import math
+import random
+import repl
+import result
+import runtime
+import set
+import sqlite
+import system
+import text
+import time
+println "stdlib imports ok"

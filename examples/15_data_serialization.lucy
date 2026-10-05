@@ -1,6 +1,6 @@
 import data
 
-value = {name: "Lucy", features: ["lambda", "switch", "repl"]}
-json_text = data.encode value, "json"
+let value = {name: "Lucy", features: ["lambda", "switch", "repl"]}
+let json_text = data.stringify value
 print json_text
-print data.decode json_text, "json"
+print data.parse json_text
