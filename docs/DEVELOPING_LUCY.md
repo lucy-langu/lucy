@@ -1,136 +1,340 @@
-# Developing Lucy 2.0.0
+# Lucy 2.0.0 — Developing, Extending, Testing, and Releasing Lucy
 
-## 1. Repository structure
+This is the maintainer/developer reference. It combines the implementation architecture, native extension API, build process, tests, migration/versioning policy, limits, and contribution workflow.
 
-The repository is intentionally split by responsibility:
+## 1. Source architecture
+
+The runtime pipeline is:
 
 ```text
-include/lucy/    public and runtime headers
-src/             C++ implementation
-stdlib/          Pure-Lucy standard library
-tests/           regression programs and REPL tests
-examples/        user-facing examples
-docs/            documentation
-extensions/      native extension examples/resources
-editors/         editor integrations
-assets/          project assets
+source
+  -> lexer
+  -> tokens
+  -> parser
+  -> AST
+  -> interpreter/runtime
+       |-- environments and values
+       |-- builtins and object dispatch
+       |-- standard-library loading
+       |-- modules/packages
+       |-- REPL
+       `-- native extensions
 ```
 
-## 2. Build before editing behavior
+### Important source files
 
-Use an out-of-tree build:
+| Path | Responsibility |
+|---|---|
+| `src/lexer.cpp` | lexical analysis and literal validation |
+| `src/parser.cpp` | recursive-descent parsing and AST construction |
+| `src/runtime.cpp` | interpreter, environments, calls, dispatch, builtins, modules, REPL integration |
+| `src/value.cpp` | runtime value representation/operations |
+| `src/phase2.cpp` | native/library support |
+| `src/stdlib_native.cpp` | native standard-library facilities |
+| `src/repl.cpp` | cross-platform line editor and completion |
+| `src/extension.cpp` | shared-library extension loading |
+| `src/main.cpp` | CLI entry point |
+| `include/lucy/*.hpp` | public/runtime C++ interfaces |
+| `stdlib/*.lucy` | user-facing Pure-Lucy standard library |
+| `tests/*.lucy` | language/runtime regression programs |
+| `tests/repl_completion_test.cpp` | runtime completion regression test |
 
-```sh
-cmake -S . -B build
+## 2. Build requirements
+
+Lucy is a C++17/CMake project.
+
+Basic build:
+
+```text
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+```
+
+Optional SQLite:
+
+```text
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DLUCY_ENABLE_SQLITE=ON
+cmake --build build
+```
+
+On Windows with MinGW:
+
+```text
+cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+```
+
+Use a fresh build directory when switching generators or moving the source tree. CMake caches absolute paths and should not be reused across incompatible environments.
+
+## 3. Language implementation workflow
+
+A language feature normally crosses several layers:
+
+1. **Lexer:** token spelling and literal validation.
+2. **Parser:** grammar/AST construction.
+3. **AST/runtime:** execution semantics.
+4. **Tests:** positive and negative behavior.
+5. **Documentation:** syntax, semantics, examples, and limitations.
+6. **REPL completion/help:** discoverability if the feature is user-facing.
+
+Do not add documentation for a syntax form before the parser/runtime can execute it.
+
+## 4. Runtime value model
+
+`Value` is a tagged C++ variant containing:
+
+```text
+Nil
+bool
+long long
+ double
+string
+ArrayPtr
+MapPtr
+FunctionPtr
+ClassPtr
+InstancePtr
+NativePtr
+```
+
+Arrays and maps use C++ heap-backed containers. Functions/classes/instances use shared ownership. The public language does not expose a garbage-collector API.
+
+## 5. Environments and closures
+
+`Environment` stores named entries with:
+
+- `Value`;
+- constant flag;
+- optional declared type name;
+- parent environment.
+
+Closures capture an environment chain. Assignments walk that chain according to runtime binding rules.
+
+## 6. Built-in type extension
+
+The runtime creates builtin class objects for:
+
+```text
+Object Nil Bool Int Double Number String Array Map
+Function Class Instance Native
+```
+
+A Lucy declaration such as:
+
+```lucy
+class String {
+    func shout() {
+        return self.upper() + "!"
+    }
+}
+```
+
+extends the existing builtin class instead of replacing the primitive representation.
+
+This is intentionally public language behavior; application code should not depend on an internal `runtime.extend_type(...)` API.
+
+## 7. Standard-library loading
+
+At interpreter startup, the runtime attempts to load the shipped standard modules:
+
+```text
+app crypto data flow fs http math random repl result runtime set sqlite system text time
+```
+
+SQLite is optional. Other standard-library failures are fatal because a normal Lucy installation is expected to contain the shipped library.
+
+## 8. Module/package resolution
+
+The runtime searches project/install locations and `LUCY_PATH` for libraries/extensions. User packages conventionally expose `src/init.lucy`.
+
+`LUCY_PATH` is a Lucy installation/project root rather than an arbitrary list syntax. Extension search roots are derived from it and the executable/project layout.
+
+`lucy.toml` is not currently parsed/enforced by the runtime. Do not implement documentation that implies a package registry or dependency resolver exists.
+
+## 9. REPL architecture
+
+`src/repl.cpp` provides:
+
+- platform-specific terminal mode;
+- line editing;
+- history;
+- cursor movement;
+- multiline input support through runtime brace-depth tracking;
+- runtime-driven completion.
+
+Completion deliberately resolves the live environment and member structure instead of maintaining a second list of every standard-library function. This is a critical maintainability rule.
+
+When adding a new public module function, completion should discover it automatically if it is represented as a public module member.
+
+## 10. Native extension API
+
+The public extension header is `include/lucy/extension.hpp`.
+
+The exported entry point is:
+
+```cpp
+extern "C" bool lucy_extension_init(lucy::ExtensionAPI& api);
+```
+
+The current API version is `1`.
+
+An extension can register a module and expose functions/constants/native objects through `ExtensionAPI`.
+
+### Example shape
+
+```cpp
+#include "lucy/extension.hpp"
+
+extern "C" bool lucy_extension_init(lucy::ExtensionAPI& api) {
+    api.module("example")
+        .function("answer", [](const std::vector<lucy::Value>&) {
+            return lucy::Value(42);
+        });
+    return true;
+}
+```
+
+The exact builder methods are defined by the installed `extension.hpp`; the header is authoritative if this example ever diverges.
+
+### ABI policy
+
+API versioning exists, but Lucy 2.0.0 does not promise that arbitrary extensions compiled against one runtime build remain binary-compatible forever. Rebuild extensions when the runtime/API changes.
+
+### Platform names
+
+- Windows: `lucy_<module>.dll`
+- Linux: `liblucy_<module>.so` or `lucy_<module>.so`
+- macOS: `liblucy_<module>.dylib` or `lucy_<module>.dylib`
+
+## 11. Optional SQLite
+
+CMake option:
+
+```text
+LUCY_ENABLE_SQLITE=ON|OFF
+```
+
+The default build can omit SQLite. The runtime then reports a clear `SQLiteError` rather than making the entire interpreter unbuildable.
+
+## 12. Testing strategy
+
+Run the complete suite after source changes:
+
+```text
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DLUCY_ENABLE_SQLITE=OFF
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-Keep the build tree outside source directories when possible.
+Language tests are intentionally small Lucy programs. Native behavior that cannot be expressed safely in Lucy can use a C++ test.
 
-## 3. Regression tests
+### Regression-test rule
 
-Lucy uses small `.lucy` programs for language behavior. Each feature should have a focused test. Recent 2.0 regression areas include:
+For every bug fix, prefer a test that fails on the old behavior and passes on the fixed behavior.
 
-- language 1.1.1 compatibility coverage;
-- SQLite optional behavior;
-- typed values and integer literals;
+For syntax features, test at least:
+
+- valid minimal form;
+- valid nested form;
+- multiline form where relevant;
+- invalid form and its error category;
+- interaction with existing precedence/scope rules.
+
+For runtime features, test:
+
+- normal path;
+- boundary values;
 - type errors;
-- 2.0 language features;
-- struct field contracts;
+- error propagation;
+- interaction with modules/closures where relevant.
+
+## 13. Current test coverage areas
+
+The repository includes coverage for:
+
+- legacy 1.1.1 behavior;
+- 2.0 syntax;
+- type errors;
+- structs;
 - language regressions;
-- malformed hex/binary/decimal separators;
-- standard-library availability;
-- built-in type extensions;
-- array ranges and indexed loops;
-- numeric base conversions.
+- hexadecimal/binary validation;
+- standard-library imports;
+- builtin type extension and automatic standard modules;
+- ranges and indexed `for`;
+- numeric base conversions;
+- lexical rules;
+- semantics;
+- REPL completion.
 
-The source tree currently contains the numeric conversion regression test as `tests/18_numeric_base_conversions.lucy`.
+The numbered filenames are historical test organization, not a public test API.
 
-## 4. Adding a language feature
+## 14. Versioning
 
-A typical language feature crosses several layers:
+Lucy uses semantic versioning intent:
 
-1. Token definition if new syntax is required.
-2. Lexer recognition.
-3. Parser/AST representation.
-4. Runtime evaluation.
-5. Completion/help support if the feature is user-visible.
-6. Regression tests.
-7. Documentation.
+- patch: compatible fixes/documentation/regressions;
+- minor: backward-compatible features;
+- major: syntax/semantic/API breaks.
 
-Do not stop after the parser accepts syntax. A feature is incomplete until runtime semantics, diagnostics, tests, and docs agree.
+The 2.0 line is a major syntax/semantic generation. New documentation should not mix 1.x syntax into 2.0 examples.
 
-## 5. Adding a standard-library feature
+Deprecations should be documented before removal where practical. A release must update the language reference, standard-library reference, changelog, tests, and migration notes when a user-visible feature changes.
 
-Prefer Pure Lucy when possible:
+## 15. Migration policy: 1.x to 2.0
 
-```text
-stdlib/<module>.lucy
-```
+The major migration themes are:
 
-If a platform/external-library primitive is necessary, add the narrowest native bridge and keep the public wrapper readable.
+- `end`-terminated blocks -> brace-delimited blocks;
+- older output conventions -> `print` / `println`;
+- older filesystem/OS namespace layouts -> `fs` / `system`;
+- expression lambdas -> `lambda ... => ...`;
+- runtime-enforced type contracts;
+- automatic loading of shipped standard modules;
+- quoted map keys;
+- ranges and modern collection operations;
+- built-in type extension;
+- package/native-extension support.
 
-Document:
+Old examples should be migrated semantically rather than mechanically. `HISTORY_AND_MIGRATION.md` remains useful as historical background, but the 2.0 language/reference documents are the current authority.
 
-- function signature;
-- accepted values;
-- return value;
-- errors;
-- platform limitations;
-- one realistic example.
+## 16. Release checklist
 
-## 6. API consistency
+Before publishing a Lucy release:
 
-Before adding a new API, search the whole runtime and standard library for equivalent behavior. If an operation already exists under several names, choose one public spelling and document compatibility aliases together.
+- [ ] Update version constants and visible version strings.
+- [ ] Run a clean configure/build from an empty build directory.
+- [ ] Run the full CTest suite.
+- [ ] Verify standard-library files are packaged.
+- [ ] Verify docs are packaged.
+- [ ] Verify the CLI `--version` output.
+- [ ] Verify REPL startup and completion.
+- [ ] Verify Windows, Linux, and macOS-specific code paths where available.
+- [ ] Verify optional SQLite behavior for both enabled and disabled builds.
+- [ ] Update changelog and migration information.
+- [ ] Build release archives/installers without stale build caches.
 
-For example, numeric integer formatting now has one conceptual family:
+## 17. Documentation maintenance rule
 
-```lucy
-bin(value, width)
-hex(value, width)
-oct(value, width)
+Documentation is organized around user tasks rather than implementation file count. The intended stable set is:
 
-value.to_binary(width)
-value.to_hex(width)
-value.to_octal(width)
-```
+- `README.md`
+- `GETTING_STARTED.md`
+- `LANGUAGE_REFERENCE.md`
+- `STANDARD_LIBRARY.md`
+- `REPL_AND_TOOLING.md`
+- `DEVELOPING_LUCY.md`
+- `CHANGELOG.md`
 
-The numeric `hex` family must not be confused with `text.hex_encode`, which performs data/text encoding.
+Small topic documents should only exist when they serve a genuinely independent audience or protocol. Otherwise, merge them into the appropriate canonical document so the same API is not described in multiple conflicting places.
 
-## 7. Documentation synchronization
+## 18. Architecture decision rule
 
-Every user-visible change should update the appropriate current documentation page. Removed behavior belongs in `HISTORY_AND_MIGRATION.md`, not in current examples.
+When adding functionality, choose the smallest correct layer:
 
-Documentation should be treated as a release artifact alongside the code. Version-aware docs and explicit migration guidance reduce ambiguity when behavior changes. citeturn0search0turn0search3
+- language syntax -> lexer/parser/runtime;
+- reusable pure language behavior -> `stdlib/*.lucy`;
+- OS/external-library primitive -> native runtime/extension;
+- user-facing discoverability -> standard-library docs + REPL help/completion;
+- regression -> test suite.
 
-## 8. Testing documentation examples
-
-Examples should be chosen so they can become regression tests. If an example claims:
-
-```lucy
-println 255.to_hex()
-```
-
-the corresponding runtime test should verify the actual result.
-
-## 9. C++ style
-
-Keep implementation readable and split by responsibility. Avoid growing `main.cpp` into a second runtime implementation. Public extension contracts belong in headers under `include/lucy/`.
-
-Comments should explain why a non-obvious implementation exists. Do not write comments that merely repeat the code.
-
-## 10. Release checklist
-
-Before a Lucy release:
-
-- build from a clean tree;
-- run the complete test suite;
-- verify optional SQLite behavior in both configurations when possible;
-- check REPL completion;
-- check standard-library resolution from a different working directory;
-- verify installation layout;
-- regenerate/update docs;
-- check examples against current syntax;
-- update changelog/history;
-- verify that removed APIs are not presented as current.
+Avoid native wrappers for behavior that can be implemented cleanly in Lucy. Avoid hidden runtime APIs when a public Lucy feature can express the same operation.

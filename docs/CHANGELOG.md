@@ -59,3 +59,26 @@
 - Old deep standard-library namespace examples are not current API.
 
 Historical details and migration guidance are in `HISTORY_AND_MIGRATION.md`.
+
+
+## 2.0.0 semantic clarification and documentation update
+
+- Resolved `repeat`/`do` as aliases for the post-test loop grammar.
+- Documented exact `*args` variadic syntax and restrictions.
+- Documented first-match/no-fallthrough `switch` semantics.
+- Documented `global`, lexical environments, shadowing, and closure capture.
+- Added complete keyword, operator, type, truthiness, exception, CLI, REPL, extension, testing, limits, migration, and tooling references.
+- Added exponent numeric literals (`1e10`, `1.5e-3`).
+- Added `\0`, `\xNN`, and `\uXXXX` string escapes.
+- Added explicit backslash-newline line continuation.
+- Added lexical and semantic regression tests.
+
+
+## Documentation and REPL consolidation
+
+- Consolidated the fragmented 2.0 documentation into deep canonical references for getting started, language semantics, the complete standard library, REPL/tooling, and development/extension work.
+- Removed duplicated topic files whose contents had become stale or too small to be useful as independent references.
+- Reworked REPL completion to use the live runtime environment and actual module/object members instead of a separately maintained standard-library member list.
+- Improved Tab completion so unique candidates complete immediately, multiple candidates complete their common prefix, and repeated Tab presses cycle through candidates.
+- Expanded REPL help topics to cover the language and every shipped standard-library module.
+- Added regression coverage for module, builtin-type, chained-member, and numeric-method completion.

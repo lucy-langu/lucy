@@ -1,210 +1,314 @@
-# Lucy 2.0.0 Language Reference
+# Lucy 2.0.0 — Complete Language Reference
 
-## 1. Source structure
+This is the canonical language reference for Lucy 2.0.0. It describes behavior implemented by the lexer, parser, runtime, shipped library, and regression tests. Unsupported features are explicitly marked instead of being presented as future syntax.
 
-Lucy is case-sensitive. Blocks use `{` and `}`. `end` is not required to close a block in the 2.0 language surface.
+## 1. Source files and lexical rules
+
+Lucy is case-sensitive. Blocks use `{` and `}`. Normal 2.0 source does not use `end`.
+
+### 1.1 Comments
+
+`#` begins a line comment. The lexer also recognizes the supported multiline-comment form `=begin` / `=end`.
+
+### 1.2 Statement termination
+
+A newline can terminate a statement where the parser accepts a statement boundary. `;` can also separate statements:
 
 ```lucy
-if ready {
-    println "ready"
-}
+let a = 1; let b = 2
 ```
 
-Statements may be separated by newlines. `;` can separate multiple statements on one line where the parser accepts a statement boundary:
+Semicolons are not mandatory after every statement.
+
+A backslash immediately followed by a newline explicitly continues the logical line:
 
 ```lucy
-let a = 1; let b = 2; println a + b
+let total = first + \
+    second
 ```
 
-Newlines inside parenthesized, bracketed, and braced expressions may be ignored by the parser. This makes multiline calls and collection literals practical.
+### 1.3 Identifiers
 
-Comments use `#` for line comments. ## 2. Names and declarations
+Identifiers are ASCII-based. The first character is an ASCII letter or `_`; subsequent characters can contain letters, digits, and `_`. `?` and `!` are supported as trailing identifier characters for method/function names.
+
+Unicode identifiers are not a separate supported lexer feature.
+
+### 1.4 Strings
+
+Both quote styles create `String` values:
+
+```lucy
+"hello"
+'hello'
+```
+
+Supported escapes:
+
+| Escape | Result |
+|---|---|
+| `\\` | backslash |
+| `\"` | double quote |
+| `\'` | single quote |
+| `\0` | NUL |
+| `\b` | backspace |
+| `\n` | newline |
+| `\r` | carriage return |
+| `\t` | tab |
+| `\xNN` | byte from two hexadecimal digits |
+| `\uXXXX` | Unicode code point encoded as UTF-8 |
+| backslash + newline | line continuation |
+
+Unknown escapes are errors. Heredocs, raw-string delimiters, and arbitrary multiline-string syntax are not separate 2.0.0 string forms.
+
+### 1.5 Interpolation
+
+String interpolation resolves simple names and dotted member paths:
 
 ```lucy
 let name = "Lucy"
-var count = 0
-const version = 2
+println "Hello, $name"
+println "Platform: $system.platform"
 ```
 
-A `global` declaration creates or accesses a global binding where the runtime permits it:
+Arbitrary `${expression}` interpolation is not supported. There is no separate interpolation escape syntax for `$`; construct a literal dollar sign when necessary.
+
+### 1.6 Numeric literals
+
+Supported forms include:
 
 ```lucy
-global total = 0
+42
+1_000_000
+3.14
+1.5e2
+2e-3
+0xFF
+0b1010_1010
 ```
 
-Declarations may include runtime-enforced type contracts:
+Hexadecimal and binary literals validate digit/separator placement. Legacy leading-zero octal literals, numeric suffixes, and `Infinity`/`NaN` literal spellings are not special literal syntax.
+
+## 2. Keywords and reserved words
+
+The parser/lexer keyword surface includes:
+
+```text
+if unless else while repeat do for foreach loop
+switch case default
+func lambda class struct
+return break continue
+import from as
+const let var global
+in and or not
+try catch finally throw
+true false nil
+self super
+```
+
+`new` is accepted by the parser as a name token used by construction syntax; it is not a separate lexer keyword in the normal identifier model.
+
+`repeat` and `do` select the same post-test-loop production.
+
+`super` is reserved, but 2.0.0 does not implement a standalone `super()` / `super.method(...)` expression production. Do not document or rely on such syntax.
+
+## 3. Values and runtime types
+
+The runtime value categories are:
+
+| Runtime type | Description |
+|---|---|
+| `nil` | absence of a value |
+| `bool` | `true` / `false` |
+| `int` | signed integer represented by the runtime's `long long` storage |
+| `double` | IEEE-style host double precision |
+| `string` | UTF-8-capable byte string representation |
+| `array` | ordered mutable sequence |
+| `map` | mutable string-keyed map |
+| `function` | Lucy or native callable |
+| `class` | class object |
+| `instance` | class instance |
+| `native` | native extension object |
+
+Public type names available for annotations include:
+
+```text
+Nil Bool Int Double Number String Array Map
+Function Class Instance Native Any
+```
+
+`Number` accepts `Int` and `Double`. `Any` accepts all values.
+
+Generic types, union types, nullable syntax such as `Int?`, and static compile-time type checking are not implemented.
+
+## 4. Declarations and scope
+
+### 4.1 Bindings
+
+```lucy
+let name = "Lucy"
+var counter = 0
+const answer = 42
+global shared = 10
+```
+
+`let` and `var` are mutable. `const` is immutable after initialization. A declaration without an initializer receives `nil`.
+
+### 4.2 Type annotations
 
 ```lucy
 let count: Int = 10
-var title: String = "Lucy"
+var label: String = "hello"
 ```
 
-## 3. Values
+The runtime checks the assigned value against the declared type immediately. Function parameter and return contracts are also checked at runtime.
 
-The core value model includes nil, booleans, integers, floating-point numbers, strings, arrays, maps, functions, classes, instances, native values, and the runtime's collection/object forms.
+### 4.3 Scope
 
-### Nil and booleans
-
-```lucy
-let missing = nil
-let enabled = true
-let disabled = false
-```
-
-### Numbers
+Blocks and functions create lexical child environments. Closures capture the defining environment by reference.
 
 ```lucy
-let decimal = 42
-let grouped = 1_000_000
-let hex_value = 0xFF
-let binary_value = 0b1010_1010
-let ratio = 3.14
-```
-
-Hexadecimal and binary integer literals are converted to Lucy integer values. `_` is permitted as a digit separator in valid positions. Malformed prefixes and separators are rejected lexically.
-
-### Strings
-
-```lucy
-let a = "hello"
-let b = 'world'
-let name = "Nima"
-let message = "Hello $name"
-```
-
-Interpolation uses `$identifier` inside strings.
-
-### Arrays
-
-```lucy
-let items = [1, 2, 3]
-```
-
-Arrays are mutable runtime values. They support numeric indexing, negative indexes, ranges, and the collection methods documented in **PROGRAMMING_GUIDE.md** and **STANDARD_LIBRARY.md**.
-
-### Maps
-
-```lucy
-let user = {
-    name: "Lucy",
-    "display-name": "Lucy 2",
-    'version': 2
+let value = 1
+if true {
+    let value = 2
+    println value
 }
+println value
 ```
 
-Bare identifier keys and quoted string keys are supported. Quoted keys are the correct form when the key contains punctuation or should be treated explicitly as a string.
+Same-scope redeclaration replaces the existing binding. Shadowing in a child scope is allowed. There is no temporal-dead-zone model and no separate compile-time hoisting phase.
 
-## 4. Numeric base conversion
+An unknown name raises `NameError`.
 
-Lucy 2.0 provides direct integer-to-base conversion:
+### 4.4 `global`
 
-```lucy
-println bin(255)       # 11111111
-println hex(255)       # FF
-println oct(255)       # 377
+`global name = value` writes to the root environment. It is useful when a function or nested block must intentionally update a root binding. Ordinary reads do not require a `global` declaration.
+
+## 5. Truthiness
+
+Falsy values are:
+
+- `nil`
+- `false`
+- numeric `0` and `0.0`
+- `""`
+- `[]`
+- `{}`
+
+All other values are truthy.
+
+This rule is used by `if`, `while`, `repeat`/`do`, `unless`, logical operators, and other runtime condition checks.
+
+## 6. Operators
+
+The parser precedence, from highest binding to lowest, is:
+
+| Level | Operators | Associativity |
+|---:|---|---|
+| 1 | calls `f(...)`, indexing `a[...]`, member `.`, postfix `++ --` | left-to-right chaining |
+| 2 | prefix `! not`, unary `+ - ~`, prefix `++ --` | right-to-left |
+| 3 | `**` | right-to-left |
+| 4 | `* / %` | left-to-right |
+| 5 | `+ -` | left-to-right |
+| 6 | `.. ...` | range production |
+| 7 | `<< >>` | left-to-right |
+| 8 | `< <= > >= <=> in` | left-to-right |
+| 9 | `== != === !==` | left-to-right |
+| 10 | `&` | left-to-right |
+| 11 | `^` | left-to-right |
+| 12 | `|` | left-to-right |
+| 13 | `and &&` | left-to-right |
+| 14 | `or ||` | left-to-right |
+| 15 | `??` | right-recursive |
+| 16 | `? :` | ternary |
+
+Assignment operators are statement-level assignment forms rather than ordinary expression operators:
+
+```text
+= += -= *= /= %= **= &= |= ^= <<= >>=
 ```
 
-Optional width pads with leading zeroes:
+### 6.1 Arithmetic
+
+`+ - * / % **` operate on numeric values; `+` also supports string/sequence behavior where implemented by the runtime.
+
+Division by zero produces `ZeroDivisionError` where the runtime detects it.
+
+### 6.2 Comparison and equality
+
+`< <= > >=` compare supported comparable values.
+
+`<=>` returns `-1`, `0`, or `1` for supported comparable values.
+
+`==` is Lucy's ordinary equality operation. Numeric integers and doubles compare numerically. For complex values, the runtime's implemented equality behavior applies; it is not a promise of universal deep structural equality.
+
+`===` requires matching runtime type names and equality.
+
+`!=` and `!==` are the corresponding negations.
+
+### 6.3 `in`
+
+- Array: tests membership using `==`.
+- Map: tests a key using the runtime's string-key representation.
+- String: tests substring membership.
+- Other right-hand values: `TypeError`.
+
+### 6.4 Logical operators
+
+`and`/`&&` and `or`/`||` short-circuit. `not`/`!` perform logical negation.
+
+### 6.5 Null coalescing
 
 ```lucy
-println bin(5, 8)      # 00000101
-println hex(15, 4)     # 000F
-println oct(9, 4)      # 0011
+let name = nickname ?? "Lucy"
 ```
 
-Negative values preserve the sign:
+The left side is evaluated first. If it is `nil`, the right side is evaluated. A specific missing-name `NameError` on the left is also treated as an absent value for `??`; unrelated errors propagate.
+
+### 6.6 Bitwise operators
+
+`& | ^ ~ << >>` require integer-compatible operands. Floating-point bitwise operations raise `TypeError`.
+
+### 6.7 Increment/decrement
+
+Prefix forms return the new value; postfix forms return the old value while mutating the target:
 
 ```lucy
-println bin(-5)        # -101
+++count
+count++
+--count
+count--
 ```
 
-Number values also provide:
+### 6.8 Ranges
+
+`a..b` is inclusive. `a...b` excludes the end.
+
+Ranges can be used for array slicing and iteration. `range(start, stop, step)` is a separate builtin that uses an exclusive stop.
+
+## 7. Indexing and collections
+
+Arrays use zero-based indexes. Negative indexes count backward from the end. Range indexing creates a new array.
 
 ```lucy
-println 255.to_binary()
-println 255.to_hex()
-println 255.to_octal()
-println 5.to_binary(8)
-```
-
-## 5. Operators
-
-### Arithmetic
-
-`+`, `-`, `*`, `/`, `%`, `**`
-
-### Comparison
-
-`==`, `!=`, `===`, `!==`, `>`, `>=`, `<`, `<=`, `<=>`
-
-### Logical
-
-`and`, `or`, `not`, `&&`, `||`, `!`
-
-### Bitwise
-
-`&`, `|`, `^`, `~`, `<<`, `>>`
-
-### Assignment
-
-`=`, `+=`, `-=`, `*=`, `/=`, `%=`, `**=`, `&=`, `|=`, `^=`, `<<=`, `>>=`
-
-### Increment and decrement
-
-`++`, `--`
-
-### Membership and conditional
-
-`in`, `? :`, `??`
-
-### Ranges
-
-`..` creates an inclusive range and `...` creates an exclusive-end range:
-
-```lucy
-let inclusive = 1..5
-let exclusive = 1...5
-```
-
-The same operators can be used for array slicing:
-
-```lucy
-let values = [0, 1, 2, 3, 4]
-println values[1..3]
+let values = [10, 20, 30, 40]
+println values[0]
+println values[-1]
+println values[1..2]
 println values[1...3]
 ```
 
-## 6. Precedence
-
-From tighter to looser evaluation, the expression parser separates unary operations, power, multiplication/division/modulo, addition/subtraction, shifts, comparisons, equality, bitwise operators, logical operators, coalescing, ternary expressions, and assignment. Parentheses should be used whenever precedence would make a non-trivial expression difficult to read.
-
-Example:
+Maps use string keys:
 
 ```lucy
-let result = (ready && enabled) ? value : fallback
-let name = nickname ?? "anonymous"
+let config = {"host": "localhost", "port": 8080}
+println config["host"]
 ```
 
-## 7. Function calls
-
-Both forms are valid when unambiguous:
-
-```lucy
-println("hello")
-println "hello"
-```
-
-Multiline calls are supported:
-
-```lucy
-let value = some_function(
-    first,
-    second,
-    third
-)
-```
+Strings can be indexed/sliced according to the runtime's string representation; string methods are documented in the standard-library reference.
 
 ## 8. Functions
+
+### 8.1 Declaration
 
 ```lucy
 func add(a: Int, b: Int) -> Int {
@@ -212,175 +316,154 @@ func add(a: Int, b: Int) -> Int {
 }
 ```
 
-Parameters can have defaults:
+Functions are first-class values and may be stored in variables, passed to callbacks, returned, or captured by closures.
+
+### 8.2 Calls
+
+Normal calls:
 
 ```lucy
-func greet(name: String = "Lucy") -> String {
-    return "Hello $name"
+add(2, 3)
+```
+
+Command-style calls are supported where the parser can unambiguously treat the next expression as an argument:
+
+```lucy
+println "hello"
+items.push 10
+```
+
+Use parentheses when the expression would otherwise be ambiguous.
+
+### 8.3 Named arguments
+
+```lucy
+func connect(host, port = 80) {
+    return "$host:$port"
+}
+
+connect(host: "localhost", port: 8080)
+```
+
+Once a named argument appears, later arguments must also be named.
+
+### 8.4 Defaults
+
+Default expressions are evaluated at call time. They are not frozen at function declaration time.
+
+### 8.5 Variadic parameters
+
+```lucy
+func collect(first, *rest) {
+    return rest
 }
 ```
 
-Variadic parameters are supported by the function parser where the current implementation permits them. A variadic parameter cannot also have a default value.
+The variadic parameter must be last, cannot have a default, and receives an Array of remaining positional arguments.
 
-Return contracts are enforced at runtime:
+### 8.6 Return
+
+`return value` exits the current function. Bare `return` returns `nil`.
+
+### 8.7 Closures and recursion
+
+Closures capture lexical environments by reference:
 
 ```lucy
-func bad() -> Int {
-    return "not an integer"
+func make_adder() {
+    let offset = 10
+    return lambda value => value + offset
 }
 ```
 
-The call raises `TypeError` rather than silently returning a value of the wrong type.
+Recursion is supported. Lucy does not promise tail-call optimization; deep recursion is limited by the host/runtime call stack.
 
 ## 9. Lambdas
 
-Lucy 2.0 implements expression lambdas:
+Lucy 2.0.0 has expression-bodied lambdas:
 
 ```lucy
 let double = lambda x => x * 2
-let add = lambda(x, y) => x + y
+let add = lambda(a, b) => a + b
 ```
 
-The current grammar treats the expression after `=>` as the lambda result. Block-bodied lambda syntax should not be documented as a current feature.
+They are closures and first-class functions.
 
-## 10. Conditions
+Block-bodied or statement-bodied lambda syntax is not a separate supported form in 2.0.0.
+
+## 10. Control flow
+
+### 10.1 `if` / `else`
 
 ```lucy
 if score >= 90 {
-    println "excellent"
-} else if score >= 60 {
-    println "pass"
+    println "A"
 } else {
-    println "retry"
+    println "below A"
 }
 ```
 
-`unless` provides the inverse condition form:
+### 10.2 `unless`
+
+`unless condition { ... }` is the inverse conditional. An `else` branch is supported where the parser accepts the ordinary conditional structure.
+
+### 10.3 `while`
 
 ```lucy
-unless ready {
-    println "waiting"
+while condition {
+    # body
 }
 ```
 
-## 11. Loops
+### 10.4 Post-test loop
 
-### while
+`repeat` and `do` are aliases for the same post-test loop:
 
 ```lucy
-while count < 10 {
-    count += 1
-}
+repeat {
+    work()
+} while condition
 ```
 
-### do-while
+The body executes once before the condition is tested.
 
-The parser accepts the `do` form for a post-test loop:
+### 10.5 `loop`
 
-```lucy
-do {
-    count += 1
-} while count < 10
-```
+`loop { ... }` is an unconditional loop. Lucy has a runtime loop-iteration guard to prevent accidental infinite execution from consuming the process indefinitely.
 
-### repeat
-
-`repeat` is the language token used by the current implementation for the do-while-style form in the documented syntax surface where applicable. Prefer the syntax accepted by the current parser/tests when writing portable examples.
-
-### for
+### 10.6 `for` / `foreach`
 
 ```lucy
-for value in [10, 20, 30] {
+for value in values {
     println value
 }
-```
 
-An index variable may be requested:
-
-```lucy
-for value, index in [10, 20, 30] {
-    println "$index = $value"
-}
-```
-
-### foreach
-
-`foreach` is an explicit collection-loop spelling with the same indexed form:
-
-```lucy
-foreach value, index in ["a", "b"] {
+for value, index in values {
     println "$index: $value"
 }
 ```
 
-### loop
+`foreach` is the parser's alias form. The iterable must be an Array or range in the current runtime. Maps and strings are not general `for` iterables.
+
+### 10.7 `switch`
 
 ```lucy
-loop {
-    println "running"
-    break
+switch value {
+    case 1: println "one"
+    case 2: println "two"
+    default: println "other"
 }
 ```
 
-`break` exits the nearest loop. `continue` skips to the next iteration.
+The first matching case executes and the switch exits. There is no implicit fallthrough model. `break` is not required to stop the selected case.
 
-## 12. switch
+### 10.8 `break` and `continue`
 
-```lucy
-switch status {
-case 200:
-    println "ok"
-case 404:
-    println "missing"
-default:
-    println "other"
-}
-```
+`break` exits the current supported loop/switch context. `continue` advances the current loop. Labeled breaks/continues are not implemented.
 
-The implementation selects the first matching case. Keep case bodies explicit and use `break` where the current switch semantics require early exit.
+## 11. Classes and objects
 
-## 13. Nil coalescing
-
-`??` returns the left value when present and non-nil; otherwise it evaluates the fallback:
-
-```lucy
-let nickname = nil
-let name = nickname ?? "nima"
-```
-
-A missing variable on the left is treated as absent only for the coalescing operation:
-
-```lucy
-let name = nickname ?? "nima"
-```
-
-A normal reference to `nickname` still raises `NameError`.
-
-## 14. Exceptions
-
-```lucy
-try {
-    throw "invalid state"
-} catch error {
-    println error
-} finally {
-    println "cleanup"
-}
-```
-
-`throw` raises a runtime exception. `catch` handles an exception and `finally` runs cleanup logic.
-
-## 15. Imports and modules
-
-```lucy
-import mymodule
-from mymodule import helper
-import mymodule as m
-```
-
-The shipped standard modules are loaded automatically in 2.0. User modules and packages still use the import system.
-
-## 16. Classes
+### 11.1 Class declaration
 
 ```lucy
 class User {
@@ -388,53 +471,37 @@ class User {
         self.name = name
     }
 
-    func label() -> String {
-        return self.name
+    func greet() {
+        return "Hello, $self.name"
     }
 }
-
-let user = User.new("Nima")
-println user.label()
 ```
 
-Inheritance uses `<`:
+`initialize` is the constructor convention. `User.new(...)` creates an instance and invokes the first available `initialize` method along the inheritance chain.
+
+### 11.2 Inheritance
 
 ```lucy
-class Dog < Animal {
-    func speak() -> String {
-        return "dog"
+class Admin < User {
+    func admin?() {
+        return true
     }
 }
 ```
 
-`self` refers to the receiver. `super` participates in inherited behavior where supported by the runtime.
+Lucy supports single inheritance.
 
-## 17. Structs
+### 11.3 Unsupported OOP features
 
-```lucy
-struct Point {
-    x: Int
-    y: Int
+2.0.0 does not provide separate visibility modifiers, static/class method declarations, method overloading as a language feature, multiple inheritance, mixins, interfaces, abstract classes, or a standalone `super` expression syntax.
 
-    func sum() -> Int {
-        return self.x + self.y
-    }
-}
+### 11.4 Built-in type extension
 
-let p = Point.new(3, 4)
-println p.sum()
-p.x = 10
-```
-
-Struct fields can have runtime type contracts. Struct construction and field access use the same object model exposed by the runtime.
-
-## 18. Extending built-in types
-
-A built-in type can be reopened with a normal class declaration:
+Built-in types are exposed as classes and can be extended:
 
 ```lucy
 class String {
-    func shout() -> String {
+    func shout() {
         return self.upper() + "!"
     }
 }
@@ -442,36 +509,182 @@ class String {
 println "hello".shout()
 ```
 
-This is the public language mechanism. Application code should not use an internal `runtime.extend_type(...)` API; that is not the current public model.
+The runtime installs built-in type classes for `Object`, `Nil`, `Bool`, `Int`, `Double`, `Number`, `String`, `Array`, `Map`, `Function`, `Class`, `Instance`, and `Native`.
 
-## 19. Shell expressions
+## 12. Structs
 
-Backticks execute a host command and capture its output:
+Structs are class-like runtime objects carrying struct metadata:
 
 ```lucy
-let output = `pwd`
+struct Point {
+    x: Int
+    y: Int
+}
+```
+
+They are not a separate C++-style value representation. Construction uses `.new(...)`.
+
+## 13. Modules and imports
+
+### 13.1 Automatic standard modules
+
+The interpreter automatically loads the shipped modules:
+
+```text
+app crypto data flow fs http math random repl result runtime set sqlite system text time
+```
+
+SQLite may be unavailable when Lucy was built without SQLite support; other standard-library load failures are reported as standard-library errors.
+
+### 13.2 Import forms
+
+```lucy
+import tools
+import tools as t
+from tools import helper, other
+```
+
+A normal module import binds a module object. A selective import binds named members directly.
+
+### 13.3 User modules
+
+A module is a Lucy source file. Its public bindings become members of the module object. Names beginning with `_` are kept private; public functions, classes, constants, and helper objects can be exposed through normal module-member access.
+
+### 13.4 Circular imports
+
+Circular module dependencies are detected and raise `ImportError`.
+
+### 13.5 Packages
+
+A package can contain `src/init.lucy`. The current runtime resolves package/source paths through the project/install search path. `lucy.toml` is not currently parsed as an enforced package manifest by the runtime.
+
+## 14. Exceptions
+
+Runtime errors are reported as textual categories, for example:
+
+```text
+SyntaxError
+NameError
+TypeError
+ArgumentError
+IndexError
+ValueError
+IOError
+ImportError
+RuntimeError
+OperatorError
+ZeroDivisionError
+LoopError
+SQLiteError
+HTTPError
+ProcessError
+ExtensionError
+AssertionError
+```
+
+The language supports:
+
+```lucy
+try {
+    risky()
+} catch TypeError as error {
+    println error
+} finally {
+    cleanup()
+}
+```
+
+Catch matching uses the runtime's textual error category. The caught value is currently a string containing the error message.
+
+There is no public custom exception-class API, structured stack-trace object, or dedicated re-raise syntax in 2.0.0. Multiple `catch` branches can be represented by category matching supported by the parser/runtime, but there is no promise of a conventional object-oriented exception hierarchy.
+
+## 15. Shell and process interaction
+
+Backticks provide command expressions:
+
+```lucy
+let output = `echo Lucy`
 println output
 ```
 
-Shell expressions are host-dependent. Use the `system` standard module when you need explicit process and command APIs.
+For richer process control use the `system` standard-library module. Exact stdout/stderr and process semantics are documented there.
 
-## 20. Program termination
+## 16. Built-in functions
 
-```lucy
-exit()
-exit(0)
-exit(1)
+The normal global builtins and their current call shapes are:
+
+| Function | Signature | Purpose |
+|---|---|---|
+| `print` | `print(value, ...)` | write values separated by spaces, no newline |
+| `println` | `println(value, ...)` | write values separated by spaces and add newline |
+| `input` | `input(prompt = nil)` | read one line |
+| `exit` | `exit(code = 0)` | terminate the process |
+| `len` | `len(value)` | string/array/map length |
+| `str` | `str(value)` | string representation |
+| `int` | `int(value, base = 10)` | integer conversion |
+| `float` | `float(value)` | floating-point conversion |
+| `type` | `type(value)` | runtime type name |
+| `typeof` | `typeof(value)` | alias of `type` |
+| `range` | `range(stop)` / `range(start, stop, step)` | integer array with exclusive stop |
+| `sum` | `sum(array)` | numeric sum |
+| `min` | `min(value, ...)` | minimum numeric argument |
+| `max` | `max(value, ...)` | maximum numeric argument |
+| `abs` | `abs(value)` | absolute value |
+| `sqrt` | `sqrt(value)` | square root |
+| `sin` / `cos` / `tan` | `(value)` | trigonometric functions |
+| `exp` | `exp(value)` | exponential |
+| `floor` / `ceil` | `(value)` | floor/ceiling |
+| `log` / `log10` | `(value)` | natural/base-10 logarithm |
+| `pow` | `pow(base, exponent)` | exponentiation |
+| `assert` | `assert(condition, message = nil)` | raises `AssertionError` when false |
+| `bin` / `hex` / `oct` | `(integer, width = 0)` | base conversion with optional zero padding |
+
+Compatibility/runtime globals also exist:
+
+```text
+read_file write_file exists cwd getenv sleep millis modules_info
 ```
 
-`exit` terminates the current process with an integer status. In scripts, uncaught runtime failures also result in a non-zero process status.
+Prefer `fs`, `system`, or `time` module APIs in new code when an equivalent exists. `modules_info()` is useful for inspecting resolved module paths.
 
-## 21. Empty blocks
+Some `__*` names are runtime implementation helpers and are not public application APIs. There is no ordinary global `bool()` conversion builtin in the current runtime.
 
-Empty blocks are valid:
+## 17. Reflection and runtime utilities
 
-```lucy
-func noop() {}
-if true {}
-```
+The `runtime` module provides Lucy-level helpers for reflection and invocation, including `methods`, `responds`, `call`, `inspect`, `variables`, `globals`, `ancestors`, and `superclass`. See the standard-library reference for exact signatures.
 
-This is useful when generating code or intentionally leaving a hook without a body.
+## 18. Memory, concurrency, and execution model
+
+Lucy 2.0.0 is a C++17 interpreter. Runtime values use C++ containers and smart pointers. There is no public language-level garbage collector API.
+
+The language does not define a built-in async/await model, generators/yield, scheduler, thread abstraction, or thread-safety guarantee. Native extensions may use host facilities, but they must not assume the interpreter is generally thread-safe.
+
+## 19. Limits
+
+- Integer storage follows the C++ `long long` runtime representation.
+- Floating-point values use the host `double` representation.
+- Loop execution has a runtime guard to prevent unbounded accidental loops.
+- Recursion is ultimately limited by the host call stack.
+- Collection and string sizes are limited by available process memory and host container limits rather than a Lucy language-level maximum.
+
+## 20. What Lucy 2.0.0 does not implement
+
+The following should not be written as 2.0 code without a corresponding language/runtime change:
+
+- `${expression}` interpolation.
+- Heredocs/raw-string syntax.
+- Unicode identifiers.
+- Generic/union/nullable type syntax.
+- Static compile-time type checking.
+- Block-bodied lambdas.
+- Multiple inheritance/mixins/interfaces.
+- Standalone `super` expressions.
+- Public custom exception classes and structured stack traces.
+- Async/await, generators, or a language-level scheduler.
+- A package-manager command such as `lucy pkg install`.
+- An LSP server or built-in debugger.
+- A formal language-level thread API.
+
+## 21. Grammar reference
+
+The parser is implemented as a recursive-descent grammar in `src/parser.cpp`. The precedence table above is the authoritative semantic ordering. `GRAMMAR.md` is intentionally an EBNF-style explanatory grammar, not a claim of mechanically generated parser grammar.

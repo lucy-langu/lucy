@@ -1,5 +1,5 @@
-# Lucy's REPL control and help library.
-# This file is Lucy code so the REPL help surface can be edited without rebuilding Lucy.
+# Lucy's interactive REPL help surface.
+# This is Lucy code on purpose: help text can evolve without changing the C++ runtime.
 
 func banner() {
     return "Lucy " + VERSION + " Interactive REPL\nType :help for help, :quit or Ctrl-D to exit."
@@ -17,101 +17,197 @@ func prompt(depth = 0) {
 }
 
 func commands() {
-    return [":help - Show REPL help", ":clear - Clear the terminal and current input buffer", ":history - Show recent command history", ":version - Show the Lucy version", ":quit - Exit the REPL", ":exit - Exit the REPL"]
+    return [
+        ":help - Show REPL help",
+        ":clear - Clear the terminal and current input buffer",
+        ":history - Show recent command history",
+        ":version - Show the Lucy version",
+        ":quit - Exit the REPL",
+        ":exit - Exit the REPL"
+    ]
 }
+
 func topics() {
-    return ["print", "println", "input", "exit", "len", "str", "int", "float", "type", "range", "sum", "min", "max", "assert", "array", "string", "map", "lambda", "struct", "switch", "do-while", "import", "class", "exceptions", "modules", "ARGV", "semicolon", "shell"]
+    return [
+        "print", "println", "input", "exit", "len", "str", "int", "float", "type", "range",
+        "sum", "min", "max", "abs", "sqrt", "bin", "hex", "oct", "assert",
+        "array", "string", "map", "number", "lambda", "function", "class", "struct",
+        "if", "unless", "while", "repeat", "for", "switch", "exceptions", "import",
+        "modules", "fs", "http", "data", "text", "math", "random", "time", "system",
+        "app", "crypto", "result", "runtime", "set", "sqlite", "ARGV", "shell",
+        "semicolon", "completion", "history"
+    ]
 }
 
 func help(topic = nil) {
     if topic == nil {
-        print "Lucy help"
-        print ""
-        print "REPL commands:"
-        print "  :help       Show this help"
-        print "  :clear      Clear the terminal and current input buffer"
-        print "  :history    Show command history"
-        print "  :version    Show the Lucy version"
-        print "  :quit       Exit the REPL"
-        print "  :exit       Exit the REPL"
-        print ""
-        print "Language help:"
-        print "  help print              Print values"
-        print "  help \"lambda\"         Anonymous functions and closures"
-        print "  help \"switch\"         First-match branching"
-        print "  help \"do-while\"        Post-test loop"
-        print "  help \"semicolon\"      Multiple statements on one line"
-        print "  help \"modules\"        Module imports and public APIs"
-        print "  help \"exceptions\"     try/catch/finally/throw"
-        print "  help ARGV              Command-line arguments"
-        print "  help \"shell\"          Backtick command expressions"
-        print ""
-        print "Editing:"
-        print "  Up/Down     Navigate history"
-        print "  Left/Right  Move the cursor"
-        print "  Home/End    Move to line boundaries"
-        print "  Tab         Complete names and members"
+        println "Lucy 2.0.0 help"
+        println ""
+        println "REPL commands:"
+        for command in commands() {
+            println "  " + command
+        }
+        println ""
+        println "Language:"
+        println "  help \"array\"        Array methods and collection operations"
+        println "  help \"string\"       String methods and text operations"
+        println "  help \"map\"          Map methods"
+        println "  help \"function\"      Functions, defaults, named args, variadics"
+        println "  help \"lambda\"       Expression lambdas and closures"
+        println "  help \"class\"        Classes, initialize, inheritance, self"
+        println "  help \"struct\"       Struct declarations and .new construction"
+        println "  help \"exceptions\"   try/catch/finally and error categories"
+        println "  help \"import\"       import/from/as syntax"
+        println ""
+        println "Standard library:"
+        println "  help \"fs\"           Filesystem and I/O"
+        println "  help \"http\"         HTTP, sockets, DNS"
+        println "  help \"data\"         JSON, YAML, CSV"
+        println "  help \"text\"         Regex and encoding helpers"
+        println "  help \"math\"         Mathematical helpers"
+        println "  help \"random\"       Random values and sampling"
+        println "  help \"time\"         Time, Date, DateTime"
+        println "  help \"system\"       Environment and process APIs"
+        println "  help \"runtime\"      Reflection and invocation"
+        println "  help \"result\"       Explicit success/error values"
+        println "  help \"set\"          Set algebra"
+        println "  help \"sqlite\"       SQLite database API"
+        println "  help \"app\"          CLI/parser/logging helpers"
+        println "  help \"crypto\"       Digest/HMAC/OpenSSL helpers"
+        println ""
+        println "Editor:"
+        println "  Tab         Complete keywords, globals, variables, modules, and members"
+        println "  Up/Down     Navigate history"
+        println "  Left/Right  Move the cursor"
+        println "  Home/End    Move to line boundaries"
+        println "  Ctrl-A/E    Move to beginning/end"
+        println "  Ctrl-K/U    Delete to end/beginning"
+        println "  Ctrl-D      Exit when the input buffer is empty"
+        println ""
+        println "Tip: use repl.topics() and repl.commands() to inspect the same help data programmatically."
         return nil
     }
 
     if topic == "print" {
-        print "print(value, ...) -> writes values separated by spaces without adding a newline"
-        print "println(value, ...) -> writes values separated by spaces and adds a newline"
+        println "print(value, ...) -> writes values separated by spaces without adding a newline"
     } else if topic == "println" {
-        print "println(value, ...) -> writes values separated by spaces and adds a newline"
+        println "println(value, ...) -> writes values separated by spaces and adds a newline"
     } else if topic == "input" {
-        print "input([prompt]) -> reads one line from standard input"
+        println "input([prompt]) -> reads one line from standard input"
     } else if topic == "exit" {
-        print "exit([code]) -> terminates the current Lucy process with an optional integer exit code"
+        println "exit([code]) -> terminates the current Lucy process with an optional integer exit code"
     } else if topic == "len" {
-        print "len(value) -> returns the length of a string, array, or map"
+        println "len(value) -> length of a string, array, or map"
     } else if topic == "str" {
-        print "str(value) -> converts a value to its string representation"
+        println "str(value) -> converts a value to its string representation"
     } else if topic == "int" {
-        print "int(value) -> converts a number or numeric string to an integer"
+        println "int(value[, base]) -> converts a number or numeric string to an integer"
     } else if topic == "float" {
-        print "float(value) -> converts a number or numeric string to a double"
+        println "float(value) -> converts a number or numeric string to a double"
     } else if topic == "type" {
-        print "type(value) -> returns the runtime type name"
+        println "type(value) -> returns the runtime type name; typeof is an alias"
     } else if topic == "range" {
-        print "range(stop) or range(start, stop[, step]) -> creates an integer array"
+        println "range(stop) or range(start, stop[, step]) -> creates an integer array with an exclusive stop"
     } else if topic == "sum" {
-        print "sum(array) -> sums numeric array elements"
+        println "sum(array) -> sums numeric array elements"
     } else if topic == "min" {
-        print "min(value, ...) -> returns the smallest numeric argument"
+        println "min(value, ...) -> smallest numeric argument"
     } else if topic == "max" {
-        print "max(value, ...) -> returns the largest numeric argument"
+        println "max(value, ...) -> largest numeric argument"
+    } else if topic == "abs" {
+        println "abs(value) -> absolute numeric value"
+    } else if topic == "sqrt" {
+        println "sqrt(value) -> square root; negative input raises ValueError"
+    } else if topic == "bin" {
+        println "bin(integer[, width]) -> binary string"
+    } else if topic == "hex" {
+        println "hex(integer[, width]) -> hexadecimal string"
+    } else if topic == "oct" {
+        println "oct(integer[, width]) -> octal string"
     } else if topic == "assert" {
-        print "assert(condition[, message]) -> raises AssertionError when false"
+        println "assert(condition[, message]) -> raises AssertionError when condition is false"
     } else if topic == "array" {
-        print "Array methods: push, pop, shift, unshift, insert, remove_at, clear, first, last, contains, count, index, join, reverse, length, size, each, map, filter, any, all"
+        println "Array methods: push pop shift unshift insert remove_at clear first last contains count index join reverse length size slice each map filter any all"
+        println "Example: values.map(lambda x => x * 2)"
     } else if topic == "string" {
-        print "String methods: upper, upcase, lower, downcase, strip, trim, contains, starts_with, ends_with, length, size, reverse, repeat, to_int, to_float, slice, char_at, split, replace"
+        println "String methods: upper upcase lower downcase strip trim contains starts_with ends_with length size reverse repeat to_int to_float slice char_at split replace"
+        println "Example: \" Lucy \".strip().upper()"
     } else if topic == "map" {
-        print "Map methods: get, set, has, delete, keys, values, length, size, clear"
+        println "Map methods: get set has delete keys values length size clear"
+        println "Example: config.get(\"port\")"
+    } else if topic == "number" {
+        println "Number methods: abs floor ceil round sqrt sin cos tan log to_int to_string to_binary to_hex to_octal pow"
+        println "Example: 255.to_hex(4)"
+    } else if topic == "function" {
+        println "func name(required, optional = value, *rest) -> Type { ... }"
+        println "Calls support positional and named arguments; positional arguments cannot follow named arguments."
     } else if topic == "lambda" {
-        print "lambda x => expression or lambda(x, y) => expression -> creates an anonymous function with lexical capture"
-    } else if topic == "switch" {
-        print "switch value { case expression: ... default: ... } -> executes the first matching case"
-    } else if topic == "do-while" {
-        print "repeat { ... } while condition (or do { ... } while condition) -> executes the body at least once"
-    } else if topic == "import" {
-        print "import module; from module import name; import module as alias"
+        println "lambda x => expression or lambda(x, y) => expression; lambdas are closures with lexical capture"
     } else if topic == "class" {
-        print "class Name [< Base] { func method(...) { ... } } -> defines a class and its methods"
+        println "class Name [< Base] { func initialize(...) { ... } func method(...) { ... } }"
+        println "Construction uses Name.new(...). Single inheritance is supported."
     } else if topic == "struct" {
-        print "struct Point { x: Int; y: Int } -> defines aggregate fields with typed storage and Point.new(...) construction"
+        println "struct Point { x: Int; y: Int } -> class-like struct object with Point.new(...) construction"
+    } else if topic == "if" {
+        println "if condition { ... } else { ... } -> conditional execution"
+    } else if topic == "unless" {
+        println "unless condition { ... } -> inverse conditional"
+    } else if topic == "while" {
+        println "while condition { ... } -> pre-test loop"
+    } else if topic == "repeat" {
+        println "repeat { ... } while condition -> post-test loop; do is an alias"
+    } else if topic == "for" {
+        println "for value in array_or_range { ... }; for value, index in ... also binds a zero-based index"
+    } else if topic == "switch" {
+        println "switch value { case expression: ... default: ... } -> first matching case executes and exits"
     } else if topic == "exceptions" {
-        print "try { ... } catch Type as name { ... } finally { ... }"
+        println "try { ... } catch Type as error { ... } finally { ... }; errors are categorized textual runtime errors"
+    } else if topic == "import" {
+        println "import module; import module as alias; from module import name, other"
     } else if topic == "modules" {
-        print "Modules are Lucy files. `import fs` creates the `fs` module object, so public calls are one level: `fs.read(path)`. Use `from fs import read` when direct access is preferred."
+        println "Shipped modules are loaded automatically: app crypto data flow fs http math random repl result runtime set sqlite system text time"
+        println "User modules still use import/from/as."
+    } else if topic == "fs" {
+        println "fs.read/write/append/read_lines/write_lines, filesystem management, paths, directories, glob/walk, and IO objects"
+        println "Example: fs.write(\"notes.txt\", \"Lucy\")"
+    } else if topic == "http" {
+        println "HTTP helpers: get post put patch delete head request client; Socket and Resolv are also available"
+    } else if topic == "data" {
+        println "JSON, YAML, CSV and data helpers: parse/stringify/pretty, load/dump, pick/omit/merge/zip"
+    } else if topic == "text" {
+        println "Regex and encoding: match/search/find_all/replace_regex, base64, hex, URL encoding, StringScanner"
+    } else if topic == "math" {
+        println "square cube clamp factorial gcd lcm average lerp sign plus Math.even/odd"
+    } else if topic == "random" {
+        println "int float bool choice shuffle sample"
+    } else if topic == "time" {
+        println "Time, Date and DateTime plus now/today/timestamp/parse/date/format/sleep"
+    } else if topic == "system" {
+        println "Environment, process, identity, signals, clocks, user information, and shell escaping"
+    } else if topic == "app" {
+        println "OptionParser, Logger, Benchmark, Timeout, ERB and flat helper factories"
+    } else if topic == "crypto" {
+        println "Digest, HMAC and OpenSSL-backed SSL/certificate/key/cipher helpers"
+    } else if topic == "result" {
+        println "ok(value), err(message), success(result), unwrap(result, fallback), message(result)"
+    } else if topic == "runtime" {
+        println "Reflection/invocation: methods, responds, call, inspect, variables, globals, ancestors, superclass; plus catch/rescue/ensure"
+    } else if topic == "set" {
+        println "Set.new(values), add/delete/include, map/select/reject, union/intersection/difference and subset/superset tests"
+    } else if topic == "sqlite" {
+        println "Database.execute/query/prepare/begin/commit/rollback/changes/last_insert_id/close; requires SQLite-enabled build"
     } else if topic == "ARGV" {
-        print "ARGV and argv -> the mutable command-line argument array"
-    } else if topic == "semicolon" {
-        print "Use ; to separate multiple statements on one line"
+        println "ARGV and argv -> the mutable command-line argument array supplied to the Lucy process"
     } else if topic == "shell" {
-        print "`command` -> executes a host command and captures stdout"
+        println "`command` -> executes a host command and captures stdout; system.shell_escape/join are safer for composed commands"
+    } else if topic == "semicolon" {
+        println "; separates statements on one line; it is not mandatory after every statement"
+    } else if topic == "completion" {
+        println "Tab completes live keywords, globals, variables, modules, class/instance members, arrays, strings, maps and numbers"
+        println "First Tab completes a unique name or the common prefix; repeated Tab cycles through candidates"
+    } else if topic == "history" {
+        println "Up/Down navigate history. The REPL keeps up to 1000 entries in .lucy_history under the user home directory."
     } else {
-        print "No documentation for '" + str(topic) + "'."
+        println "No REPL help topic named '" + str(topic) + "'. Try repl.topics()."
     }
 }

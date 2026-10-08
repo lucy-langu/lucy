@@ -451,7 +451,32 @@ bool ReplLineEditor::read_line(const std::string& prompt, std::string& line,
                 continue;
             }
 
-            if (!completion_listed && matches.size() > 1) {
+            const std::string current_prefix = line.substr(token_start, cursor - token_start);
+
+            if (!completion_listed) {
+                if (matches.size() == 1) {
+                    line.replace(token_start, current_prefix.size(), matches.front());
+                    cursor = token_start + matches.front().size();
+                    render_line(prompt, line, cursor);
+                    completion_index = 0;
+                    completion_listed = true;
+                    continue;
+                }
+
+                // First Tab completes the unambiguous common prefix. A second Tab
+                // then starts cycling through the complete candidate set.
+                std::string common = matches.front();
+                for (std::size_t i = 1; i < matches.size() && !common.empty(); ++i) {
+                    std::size_t n = 0;
+                    while (n < common.size() && n < matches[i].size() && common[n] == matches[i][n])
+                        ++n;
+                    common.resize(n);
+                }
+                if (common.size() > current_prefix.size()) {
+                    line.replace(token_start, current_prefix.size(), common);
+                    cursor = token_start + common.size();
+                }
+
                 std::cout << '\n';
                 for (std::size_t i = 0; i < matches.size(); ++i) {
                     std::cout << matches[i];
@@ -460,10 +485,10 @@ bool ReplLineEditor::read_line(const std::string& prompt, std::string& line,
                 }
                 render_line(prompt, line, cursor);
                 completion_listed = true;
+                completion_index = 0;
                 continue;
             }
 
-            const std::string current_prefix = line.substr(token_start, cursor - token_start);
             const std::string& selected = completion_matches[completion_index % completion_matches.size()];
             line.replace(token_start, current_prefix.size(), selected);
             cursor = token_start + selected.size();

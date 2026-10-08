@@ -1,0 +1,18 @@
+# Lucy 2.0 lexical regression tests.
+let exponent = 1.5e2
+let negative_exponent = 2e-3
+assert exponent === 150.0
+assert negative_exponent === 0.002
+
+let escaped = "line\nnext\tindent\0"
+let hex_escape = "A\x42"
+let unicode_escape = "Lucy \u263A"
+assert escaped.length() == 17
+assert hex_escape == "AB"
+assert unicode_escape == "Lucy ☺"
+
+let continued = 1 + \
+    2
+assert continued == 3
+
+println "lexical rules passed"

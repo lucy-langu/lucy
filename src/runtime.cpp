@@ -1674,7 +1674,11 @@ void Interpreter::import_module(const ImportStmt &x)
             object->klass = klass;
             for (auto &[name, entry] : mod->values())
             {
-                if (!std::holds_alternative<Value::FunctionPtr>(entry.value.data) || name.empty() || name[0] == '_')
+                // Export every public module binding. Older builds exposed only
+                // functions here, which made public classes/constants invisible
+                // through `module.member` and therefore invisible to completion.
+                // Underscore-prefixed names remain implementation details.
+                if (name.empty() || name[0] == '_')
                     continue;
                 object->fields[name] = entry.value;
             }
@@ -1969,45 +1973,39 @@ Value Interpreter::run(const std::vector<StmtPtr> &s, bool echo)
 }
 std::vector<std::string> Interpreter::completion_candidates(const std::string &input) const
 {
+    // Completion is intentionally derived from the live interpreter environment.
+    // The REPL must not have a second, stale copy of the standard-library API.
     static const std::vector<std::string> keywords = {
-        "if", "unless", "else", "while", "repeat", "for", "foreach", "loop", "switch", "case", "default", "func", "lambda",
-        "class", "struct", "return", "break", "continue", "import", "from", "as", "const", "let", "var", "global", "in",
-        "and", "or", "not", "new", "self", "super", "try", "catch", "finally", "throw", "true", "false", "nil",
-        "modules", "modules_info", "print", "println", "input", "exit", "len", "str", "int", "float", "type", "typeof",
-        "range", "sum", "min", "max", "abs", "sqrt", "assert", "bin", "hex", "oct"
+        "if", "unless", "else", "while", "repeat", "do", "for", "foreach", "loop",
+        "switch", "case", "default", "func", "lambda", "class", "struct", "return",
+        "break", "continue", "import", "from", "as", "const", "let", "var", "global",
+        "in", "and", "or", "not", "new", "self", "super", "try", "catch", "finally",
+        "throw", "true", "false", "nil"
     };
 
-    static const std::vector<std::string> modules = {
-        "app", "crypto", "data", "flow", "fs", "http", "math", "random", "repl", "result", "runtime", "set", "sqlite", "system", "text", "time"
+    static const std::vector<std::string> array_members = {
+        "push", "pop", "shift", "unshift", "insert", "remove_at", "clear", "first", "last",
+        "contains", "count", "index", "join", "reverse", "length", "size", "slice",
+        "each", "map", "filter", "any", "all"
     };
-    static const std::unordered_map<std::string, std::vector<std::string>> module_members = {
-        {"app", {"parser", "logger", "benchmark", "timeout", "template"}},
-        {"crypto", {"digest", "hexdigest", "hash", "base64digest", "file", "hmac"}},
-        {"data", {"pick", "omit", "merge", "values", "zip", "parse", "stringify", "pretty", "json_read", "json_write", "yaml_load", "yaml_dump", "csv_parse", "csv_stringify"}},
-        {"flow", {"pipe", "tap", "branch", "repeat"}},
-        {"fs", {"read", "write", "append", "read_lines", "write_lines", "exists", "size", "remove", "copy", "move", "touch", "chmod", "chown", "entries", "files", "dirs", "mkdir", "rmdir", "empty", "glob", "walk", "join", "absolute", "expand", "basename", "dirname", "extension", "stem", "link", "symlink", "open", "console", "read_json", "write_json"}},
-        {"http", {"request", "get", "post", "put", "patch", "delete", "head", "client", "connect", "bind", "listen", "accept", "recv", "send", "close", "resolve", "reverse"}},
-        {"math", {"square", "cube", "clamp", "factorial", "gcd", "lcm", "average", "lerp", "sign"}},
-        {"random", {"int", "float", "bool", "choice", "shuffle", "sample"}},
-        {"repl", {"banner", "version", "prompt", "commands", "topics", "help"}},
-        {"result", {"ok", "err", "success", "unwrap", "message"}},
-        {"runtime", {"printf", "format", "catch", "rescue", "ensure", "methods", "responds", "call", "inspect", "variables", "globals", "ancestors", "superclass"}},
-        {"set", {"new", "from_values", "add", "delete", "include?", "union", "intersection", "difference", "symmetric_difference", "subset?", "superset?", "intersect?"}},
-        {"sqlite", {"open"}},
-        {"system", {"platform", "version", "argv", "cwd", "env", "setenv", "unsetenv", "home", "temp_dir", "command_exists", "pid", "ppid", "run", "capture", "success", "output", "spawn", "wait", "waitpid", "kill", "uid", "gid", "euid", "egid", "groups", "clock_gettime", "trap", "signals", "signal_name", "login", "user", "user_id", "shell_split", "shell_escape", "shell_join"}},
-        {"text", {"match", "search", "find_all", "replace_regex", "base64_encode", "base64_decode", "hex_encode", "hex_decode", "url_encode", "url_decode", "scanner", "shell_split", "shell_escape", "shell_join"}},
-        {"time", {"now", "today", "timestamp", "parse", "date", "format", "sleep"}}
+    static const std::vector<std::string> string_members = {
+        "upper", "upcase", "lower", "downcase", "strip", "trim", "contains", "starts_with",
+        "ends_with", "length", "size", "reverse", "repeat", "to_int", "to_float", "slice",
+        "char_at", "split", "replace"
     };
-
-    static const std::vector<std::string> array_members = {"push", "pop", "shift", "unshift", "insert", "remove_at", "clear", "first", "last", "contains", "count", "index", "join", "reverse", "length", "size", "each", "map", "filter", "any", "all"};
-    static const std::vector<std::string> string_members = {"upper", "upcase", "lower", "downcase", "strip", "trim", "contains", "starts_with", "ends_with", "length", "size", "reverse", "repeat", "to_int", "to_float", "slice", "char_at", "split", "replace"};
-    static const std::vector<std::string> map_members = {"get", "set", "has", "delete", "keys", "values", "length", "size", "clear"};
-    static const std::vector<std::string> number_members = {"abs", "floor", "ceil", "round", "sqrt", "sin", "cos", "tan", "log", "to_int", "to_string", "pow"};
+    static const std::vector<std::string> map_members = {
+        "get", "set", "has", "delete", "keys", "values", "length", "size", "clear"
+    };
+    static const std::vector<std::string> number_members = {
+        "abs", "floor", "ceil", "round", "sqrt", "sin", "cos", "tan", "log",
+        "to_int", "to_string", "to_binary", "to_hex", "to_octal", "pow"
+    };
 
     std::size_t start = input.size();
     while (start > 0) {
         const char ch = input[start - 1];
-        if (!(std::isalnum(static_cast<unsigned char>(ch)) || ch == '_' || ch == '.' || ch == '?')) break;
+        if (!(std::isalnum(static_cast<unsigned char>(ch)) || ch == '_' || ch == '.' || ch == '?'))
+            break;
         --start;
     }
     const std::string token = input.substr(start);
@@ -2015,7 +2013,12 @@ std::vector<std::string> Interpreter::completion_candidates(const std::string &i
     std::vector<std::string> result;
     auto add_matching = [&result](const std::vector<std::string>& candidates, const std::string& prefix) {
         for (const auto& candidate : candidates)
-            if (candidate.compare(0, prefix.size(), prefix) == 0) result.push_back(candidate);
+            if (candidate.compare(0, prefix.size(), prefix) == 0)
+                result.push_back(candidate);
+    };
+    auto add_member = [&result](const std::string& name, const std::string& prefix) {
+        if (name.compare(0, prefix.size(), prefix) == 0)
+            result.push_back(name);
     };
 
     const std::size_t last_dot = token.rfind('.');
@@ -2023,55 +2026,70 @@ std::vector<std::string> Interpreter::completion_candidates(const std::string &i
         const std::string root_name = token.substr(0, last_dot);
         const std::string member_prefix = token.substr(last_dot + 1);
 
-        auto module = module_members.find(root_name);
-        if (module != module_members.end()) {
-            add_matching(module->second, member_prefix);
-            return result;
-        }
-
         try {
             std::size_t part_start = 0;
             std::vector<std::string> parts;
             while (part_start <= root_name.size()) {
                 const std::size_t dot = root_name.find('.', part_start);
-                if (dot == std::string::npos) { parts.push_back(root_name.substr(part_start)); break; }
+                if (dot == std::string::npos) {
+                    parts.push_back(root_name.substr(part_start));
+                    break;
+                }
                 parts.push_back(root_name.substr(part_start, dot - part_start));
                 part_start = dot + 1;
             }
+            if (parts.empty() || parts.front().empty())
+                return result;
 
             Value object = env_->get(parts.front());
             for (std::size_t i = 1; i < parts.size(); ++i)
                 object = const_cast<Interpreter*>(this)->member_get(object, parts[i]);
 
-            const auto add_member = [&](const std::string& name) {
-                if (name.compare(0, member_prefix.size(), member_prefix) == 0) result.push_back(name);
-            };
-            if (std::holds_alternative<Value::ArrayPtr>(object.data)) for (const auto& name : array_members) add_member(name);
-            else if (std::holds_alternative<std::string>(object.data)) for (const auto& name : string_members) add_member(name);
-            else if (std::holds_alternative<Value::MapPtr>(object.data)) for (const auto& name : map_members) add_member(name);
-            else if (object.is_number()) for (const auto& name : number_members) add_member(name);
-            else if (auto instance = std::get_if<Value::InstancePtr>(&object.data)) {
-                for (const auto& [name, value] : (*instance)->fields) add_member(name);
+            // Standard modules are ordinary Lucy instances. Native extensions use
+            // the same instance representation, so both are completed identically.
+            if (auto instance = std::get_if<Value::InstancePtr>(&object.data)) {
+                for (const auto& [name, value] : (*instance)->fields)
+                    add_member(name, member_prefix);
                 for (auto klass = (*instance)->klass; klass; klass = klass->parent)
-                    for (const auto& [name, value] : klass->methods) add_member(name);
+                    for (const auto& [name, value] : klass->methods)
+                        add_member(name, member_prefix);
             } else if (auto klass = std::get_if<Value::ClassPtr>(&object.data)) {
-                add_member("new");
+                add_member("new", member_prefix);
                 for (auto current = *klass; current; current = current->parent)
-                    for (const auto& [name, value] : current->methods) add_member(name);
+                    for (const auto& [name, value] : current->methods)
+                        add_member(name, member_prefix);
+            } else if (std::holds_alternative<Value::ArrayPtr>(object.data)) {
+                add_matching(array_members, member_prefix);
+            } else if (std::holds_alternative<std::string>(object.data)) {
+                add_matching(string_members, member_prefix);
+            } else if (std::holds_alternative<Value::MapPtr>(object.data)) {
+                add_matching(map_members, member_prefix);
+            } else if (object.is_number()) {
+                add_matching(number_members, member_prefix);
             }
         } catch (...) {
-            // Completion is advisory and must never execute code or produce an error.
+            // Completion is advisory. Never execute user code or surface a completion error.
         }
+
+        std::sort(result.begin(), result.end());
+        result.erase(std::unique(result.begin(), result.end()), result.end());
         return result;
     }
 
     add_matching(keywords, token);
-    add_matching(modules, token);
     for (const auto &[name, function] : builtins_)
-        if (name.compare(0, token.size(), token) == 0) result.push_back(name);
+        if (name.compare(0, token.size(), token) == 0)
+            result.push_back(name);
+    for (const auto &[name, klass] : builtin_type_classes_)
+        if (name.compare(0, token.size(), token) == 0)
+            result.push_back(name);
     for (auto environment = env_; environment; environment = environment->parent())
         for (const auto &[name, entry] : environment->values())
-            if (name.compare(0, token.size(), token) == 0) result.push_back(name);
+            if (name.compare(0, token.size(), token) == 0)
+                result.push_back(name);
+
+    std::sort(result.begin(), result.end());
+    result.erase(std::unique(result.begin(), result.end()), result.end());
     return result;
 }
 

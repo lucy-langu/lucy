@@ -1,189 +1,735 @@
-# Lucy 2.0.0 Standard Library Reference
+# Lucy 2.0.0 — Standard Library Reference
 
-The standard library is written primarily in Lucy and backed by a small native runtime boundary where operating-system or external-library facilities are required. The shipped modules are automatically loaded by the interpreter in 2.0.0.
+This is the canonical user-facing standard-library reference. Every shipped module is covered here, including the public functions/classes, common usage patterns, return conventions, and important platform/build notes.
 
-## Public module index
+The final section contains the complete source-derived API inventory. That inventory is intentionally exhaustive: if a public function or class is shipped in `stdlib/*.lucy`, it should appear there.
 
-| Module | Purpose |
-|---|---|
-| `app` | CLI parsing, logging, benchmarking, timeout, templates |
-| `crypto` | digests, HMAC, TLS/OpenSSL-facing objects |
-| `data` | collection transforms and JSON/YAML/CSV |
-| `flow` | value-oriented flow helpers |
-| `fs` | files, directories, paths, IO, links |
-| `http` | HTTP, sockets, DNS |
-| `math` | numeric helpers |
-| `random` | random values and sampling |
-| `repl` | REPL-facing helpers |
-| `result` | success/error values |
-| `runtime` | reflection, formatting, callbacks, collections |
-| `set` | unique collections and set algebra |
-| `sqlite` | SQLite database access when compiled with SQLite |
-| `system` | OS, process, environment, shell, signals |
-| `text` | regex, encoding, scanner, shell escaping |
-| `time` | time, dates, datetime, sleep |
+## 1. Standard-library model
 
-## `app`
+Lucy 2.0.0 automatically loads these shipped modules:
+
+```text
+app crypto data flow fs http math random repl result runtime set sqlite system text time
+```
+
+Therefore this works without an explicit import:
+
+```lucy
+println fs.read("README.md")
+println text.upper("hello")
+println system.platform()
+```
+
+Imports remain useful for user modules, packages, and explicit selective bindings:
+
+```lucy
+import text as t
+from fs import read
+```
+
+Public APIs are intentionally shallow. Prefer `fs.read(...)` over deep namespace chains.
+
+Names beginning with `_` or `__` are implementation details unless a public reference explicitly lists them.
+
+---
+
+# 2. `app` — command-line applications and utilities
+
+`app` contains application-level helpers written in Lucy.
 
 ### OptionParser
 
-`OptionParser.new()` creates a parser. Configuration methods include `banner`, `separator`, `version`, `program_name`, `on`, `parse`, `parse!`, `help`, `summarize`, and `abort`.
-
-Example:
+Use `OptionParser` for simple command-line option parsing:
 
 ```lucy
 let parser = app.parser()
-parser.program_name "lucy-tool"
-parser.on("verbose", "enable verbose mode", false)
-let options = parser.parse()
+parser.banner("Lucy example")
+parser.on("--name", "user name", "Lucy")
+let options = parser.parse(ARGV)
+println options
 ```
+
+Important methods include `banner`, `separator`, `version`, `program_name`, `on`, `parse`, `help`, `summarize`, and `abort`.
 
 ### Logger
 
-`Logger.new(output = nil, level = 0)` creates a logger. Use `debug`, `info`, `warn`, `error`, and `fatal`. `level`, `set_level`, and `level_set` manage the current threshold. Predicate methods `debug?`, `info?`, `warn?`, `error?`, and `fatal?` report whether a level is active.
+```lucy
+let log = app.logger()
+log.info("server started")
+log.warn("configuration is incomplete")
+```
 
-### Benchmark, Timeout, ERB
+Levels are controlled with `level`, `set_level`, and `level_set`. Predicate methods such as `debug?()` and `error?()` can be used before expensive log construction.
 
-- `benchmark()` returns the benchmark helper; `Benchmark.realtime(command)` and `Benchmark.measure(command)` measure execution.
-- `timeout()` returns the timeout helper; `Timeout.timeout(seconds, callback)` runs a callback with a time limit.
-- `template(source)` creates an `ERB` template. `ERB.src`, `ERB.result(values)`, and `ERB.run(values)` expose the template source and rendering.
+### Benchmark
 
-## `crypto`
+```lucy
+let elapsed = app.benchmark().realtime(lambda => work())
+println elapsed
+```
 
-The crypto module exposes digest and HMAC helpers plus OpenSSL-facing resource objects.
+`Benchmark.realtime` and `Benchmark.measure` accept callbacks.
 
-### Public functions
+### Timeout
 
-- `digest(text)` — digest text using the module's configured digest implementation.
-- `hexdigest(text)` — hexadecimal digest representation.
-- `hash(text)` — hash convenience operation.
-- `base64digest(text)` — base64 digest representation.
-- `file(path)` — digest a file.
-- `hmac(key, data)` — HMAC operation.
+`app.timeout().timeout(seconds, callback)` runs a callback with the library's timeout behavior. Timeout semantics are implemented by the shipped library/runtime and should not be confused with a general thread scheduler.
 
-### Classes
+### ERB
 
-`Digest` provides `digest`, `hexdigest`, `base64digest`, and `file`.
+`ERB` provides template rendering from a template string:
 
-`HMAC` provides `digest` and `hexdigest`.
+```lucy
+let template = app.template("Hello $name")
+println template.result({"name": "Lucy"})
+```
 
-`SSLContext`, `SSLSocket`, `Certificate`, `RSA`, `Cipher`, `X509`, `PKey`, and `OpenSSL` expose the current native/OpenSSL-facing object layer. Their constructors and helper methods are:
+---
 
-- `SSLContext.initialize(options)`
-- `SSLSocket.initialize(socket, context)`, `connect(host, port)`, `close()`
-- `Certificate.initialize(data)`
-- `RSA.initialize(pem)`
-- `Cipher.initialize(name)`
-- `X509.certificate(data)`
-- `PKey.rsa(pem)`
-- `OpenSSL.hmac()`, `ssl_context(options)`, `ssl_socket(socket, context)`, `certificate(data)`, `rsa(pem)`, `x509()`, `pkey()`, `cipher(name)`
+# 3. `crypto` — hashing and native cryptographic facilities
 
-Use these lower-level classes when the simple digest/HMAC helpers are insufficient.
+`crypto` exposes digest/HMAC helpers and native OpenSSL-backed objects where the build provides them.
 
-## `data`
+Common helpers:
 
-### Collection helpers
+```lucy
+println crypto.hexdigest("hello")
+println crypto.base64digest("hello")
+println crypto.hmac("secret", "message")
+```
 
-`pick(source, keys)`, `omit(source, keys)`, `merge(left, right)`, `values(source, keys)`, and `zip(keys, values)` provide common map/collection transformations.
+The module also exposes `Digest`, `HMAC`, `SSLContext`, `SSLSocket`, `Certificate`, `RSA`, `Cipher`, `X509`, `PKey`, and `OpenSSL` classes/factories.
+
+Crypto operations can fail with native/runtime errors. Availability depends on the build and linked crypto support.
+
+---
+
+# 4. `data` — JSON, YAML, CSV, and collection transforms
+
+### Basic transforms
+
+```lucy
+let selected = data.pick(user, ["name", "email"])
+let without_secret = data.omit(user, ["password"])
+let combined = data.merge(left, right)
+let pairs = data.zip(keys, values)
+```
 
 ### JSON
 
-`parse(text)`, `stringify(value)`, `pretty(value)`, `json_read(path)`, and `json_write(path, value)` are the flat public helpers.
-
-`JSON.parse`, `JSON.stringify`, `JSON.pretty`, `JSON.load`, and `JSON.dump` expose the same functionality through the class-style API.
-
-Example:
-
 ```lucy
-let payload = data.parse "{\"name\":\"Lucy\"}"
-println data.pretty payload
+let object = data.parse("{\"name\":\"Lucy\"}")
+println data.stringify(object)
+println data.pretty(object)
+
+data.json_write("config.json", object)
+let loaded = data.json_read("config.json")
 ```
+
+The `JSON` class exposes the same family through `JSON.parse`, `JSON.stringify`, `JSON.pretty`, `JSON.load`, and `JSON.dump`.
 
 ### YAML
 
-`yaml_load(text)`, `yaml_dump(value)` and `YAML.load`, `YAML.dump`, `YAML.load_file` handle YAML values.
+```lucy
+let value = data.yaml_load("name: Lucy")
+println data.yaml_dump(value)
+```
 
 ### CSV
 
-`csv_parse(text, delimiter)`, `csv_stringify(rows, delimiter)` and `CSV.parse`, `CSV.stringify`, `CSV.load`, `CSV.dump` handle delimited tabular data.
-
-## `flow`
-
-- `pipe(value, steps)` — apply a sequence of operations to a value.
-- `tap(value, action)` — run an action while preserving the original value.
-- `branch(value, predicate, yes, no)` — select a path based on a predicate.
-- `repeat(value, count, step)` — repeatedly transform a value.
-
-Example:
-
 ```lucy
-let result = flow.pipe 2, [lambda x => x + 1, lambda x => x * 10]
-println result
+let rows = data.csv_parse("name,age\nLucy,2")
+println data.csv_stringify(rows)
 ```
 
-## `fs`
+---
 
-### File content
+# 5. `flow` — small functional control helpers
 
-`read`, `write`, `append`, `read_lines`, and `write_lines` operate on file contents.
+```lucy
+let result = flow.pipe(
+    5,
+    [lambda x => x * 2, lambda x => x + 1]
+)
 
-### File state and mutation
+flow.tap(result, lambda x => println x)
+```
 
-`exists`, `size`, `remove`, `copy`, `move`, `touch`, `chmod`, `chown` inspect or modify filesystem entries.
+Public functions:
 
-### Directories
+- `pipe(value, steps)` — applies callbacks in order.
+- `tap(value, action)` — performs an action and preserves the value.
+- `branch(value, predicate, yes, no = nil)` — selects a callback based on a predicate.
+- `repeat(value, count, step)` — repeatedly applies a transformation.
 
-`entries`, `files`, `dirs`, `mkdir`, `rmdir`, `empty`, `glob`, and `walk` enumerate or manage directory trees.
+---
 
-### Paths
+# 6. `fs` — filesystem and I/O
 
-`join`, `absolute`, `expand`, `basename`, `dirname`, `extension`, and `stem` manipulate path names without requiring callers to build platform-specific separators themselves.
+`fs` is the primary portable filesystem API.
 
-### Links and IO
+### Files
 
-`link`, `symlink`, `open`, and `console` expose links and stream-like IO. `IO` supports `print`, `write`, `read`, `ask`, `seek`, `pos`, `rewind`, `eof`, `fileno`, `close`, `pipe`, and `popen`.
+```lucy
+fs.write("hello.txt", "Hello Lucy")
+fs.append("hello.txt", "\nSecond line")
+println fs.read("hello.txt")
+println fs.exists("hello.txt")
+println fs.size("hello.txt")
+```
+
+Use `read_lines`/`write_lines` for line-oriented work.
+
+### File management
+
+```lucy
+fs.copy("a.txt", "b.txt")
+fs.move("b.txt", "archive/b.txt")
+fs.touch("empty.txt")
+fs.remove("empty.txt")
+```
+
+### Directories and paths
+
+```lucy
+fs.mkdir("build", true)
+println fs.entries(".")
+println fs.files(".")
+println fs.dirs(".")
+println fs.basename("src/lucy.cpp")
+println fs.extension("src/lucy.cpp")
+println fs.stem("src/lucy.cpp")
+println fs.dirname("src/lucy.cpp")
+```
+
+`join`, `absolute`, and `expand` are the portable path helpers.
+
+### Searching
+
+`glob(pattern)` returns matching paths and `walk(path)` recursively visits a tree.
+
+### IO objects
+
+`fs.open(path, mode)` returns an `IO` object. It provides `print`, `write`, `read`, `ask`, `seek`, `pos`, `rewind`, `eof`, `fileno`, `close`, `pipe`, and `popen`.
+
+Use `IO` for streaming/interactive operations where `fs.read`/`fs.write` are too high-level.
 
 ### JSON convenience
 
-`read_json(path)` and `write_json(path, value)` combine filesystem and data operations.
+`fs.read_json(path)` and `fs.write_json(path, value)` are convenience wrappers for common file/data workflows.
 
-Example:
+---
+
+# 7. `http` — HTTP and sockets
+
+### Simple HTTP
 
 ```lucy
-fs.write "hello.txt", "Lucy"
-println fs.read "hello.txt"
+let response = http.get("https://example.com")
+println response.status
+println response.ok
+println response.body
+println response.headers
 ```
 
-## `http`
+Every high-level HTTP request returns a map with exactly these primary fields:
 
-### HTTP functions
+| Field | Type | Meaning |
+|---|---|---|
+| `status` | Int | HTTP status code |
+| `body` | String | response body |
+| `headers` | Map | lower-case response-header names to values |
+| `ok` | Bool | `true` for status 200–299 |
 
-- `request(method, url, body, headers, options)`
-- `get(url, headers, options)`
-- `post(url, body, headers, options)`
-- `put(url, body, headers, options)`
-- `patch(url, body, headers, options)`
-- `delete(url, headers, options)`
-- `head(url, headers, options)`
-- `client(url, proxy)`
+The module also exposes `post`, `put`, `patch`, `delete`, `head`, and the generic `request` function.
 
-`HTTPRequest` models a configured request. `HTTP` provides a client object with `headers`, `timeout`, `connect_timeout`, `proxy`, `user_agent`, `follow_redirects`, `insecure`, and HTTP verb methods.
+### HTTP client
+
+```lucy
+let client = http.client("https://example.com")
+client.headers({"Accept": "application/json"})
+client.timeout(10)
+client.follow_redirects(true)
+let response = client.get()
+```
+
+Timeout values for the high-level HTTP client are expressed in seconds by the public API.
+
+`HTTPRequest` exposes an explicit request object with method, URL, body, headers, and options.
 
 ### Sockets
 
-`connect`, `bind`, `listen`, `accept`, `recv`, `send`, and `close` are the flat socket helpers. `Socket` provides the object-oriented form. `SocketAPI.new()` provides the API object. `Resolv.getaddress(host)` and `Resolv.getname(address)` expose DNS operations; the flat forms are `resolve(host)` and `reverse(address)`.
+`Socket.connect`, `bind`, `listen`, `accept`, `recv`, `send`, and `close` expose lower-level network operations.
 
-Example:
+### DNS
+
+`resolve(host)` / `reverse(address)` and the `Resolv` class provide forward/reverse resolution.
+
+Network failures raise HTTP/process/native errors rather than silently returning a successful response.
+
+---
+
+# 8. `math` — numerical helpers
 
 ```lucy
-let response = http.get "https://example.com"
-println response.status
+println math.square(5)
+println math.factorial(6)
+println math.gcd(48, 18)
+println math.lerp(0, 100, 0.25)
 ```
 
-## `math`
+The module provides both a `Math` class and flat helper functions for the common operations: `square`, `cube`, `clamp`, `factorial`, `gcd`, `lcm`, `average`, `lerp`, and `sign`.
 
-Public helpers:
+`Math.even` and `Math.odd` are available as class methods.
 
+---
+
+# 9. `random` — random values and sampling
+
+```lucy
+let n = random.int(1, 10)
+let x = random.float()
+let item = random.choice(["red", "green", "blue"])
+```
+
+`shuffle(items)` and `sample(items, count)` operate on arrays according to the library's current implementation.
+
+Do not use these helpers as a cryptographic random source.
+
+---
+
+# 10. `repl` — interactive help
+
+The REPL's help surface is implemented in Lucy itself:
+
+```lucy
+println repl.version()
+println repl.commands()
+println repl.topics()
+help "array"
+```
+
+Public functions are `banner`, `version`, `prompt`, `commands`, `topics`, and `help`.
+
+---
+
+# 11. `result` — explicit success/error values
+
+```lucy
+let result = result.ok(42)
+println result.success()
+println result.unwrap(0)
+```
+
+The module provides `ok`, `err`, `success`, `unwrap`, and `message`.
+
+Use it when a function wants to represent expected failure as data rather than immediately throwing a runtime exception.
+
+---
+
+# 12. `runtime` — reflection and callable helpers
+
+`runtime` is the closest thing to a reflection/tooling module in the standard library.
+
+```lucy
+println runtime.inspect(value)
+println runtime.methods(value)
+println runtime.responds(value, "push")
+println runtime.call(value, "push", [10])
+```
+
+The module also exposes convenience wrappers around the `Kernel` class and collection algorithms.
+
+Important functions include:
+
+- `printf`, `format`
+- `catch`, `rescue`, `ensure`
+- `methods`, `responds`, `call`
+- `inspect`
+- `variables`, `globals`
+- `ancestors`, `superclass`
+
+`runtime` is not a promise that every C++ runtime implementation detail is public. Internal helpers remain private.
+
+---
+
+# 13. `set` — set algebra
+
+```lucy
+let a = set.new([1, 2, 3])
+let b = set.new([3, 4])
+
+println a.union(b)
+println a.intersection(b)
+println a.difference(b)
+```
+
+`Set` provides membership, iteration, transformation, selection, and algebraic operations. Flat helper functions are also available.
+
+---
+
+# 14. `sqlite` — SQLite database access
+
+SQLite is optional at build time.
+
+```lucy
+let db = sqlite.open("app.db")
+db.execute("CREATE TABLE IF NOT EXISTS users (name TEXT)")
+db.execute("INSERT INTO users (name) VALUES (?)", ["Lucy"])
+let rows = db.query("SELECT name FROM users")
+println rows
+db.close()
+```
+
+`Database` provides `execute`, `query`, `prepare`, transaction operations, change/insert-id inspection, and `close`.
+
+If Lucy was built without SQLite support, using this module reports:
+
+```text
+SQLiteError: Lucy was built without SQLite support
+```
+
+Enable it with CMake:
+
+```text
+-DLUCY_ENABLE_SQLITE=ON
+```
+
+---
+
+# 15. `system` — operating-system and process APIs
+
+`system` is the portable boundary for OS-specific operations.
+
+```lucy
+println system.platform()
+println system.version()
+println system.cwd()
+println system.env("HOME")
+println system.temp_dir()
+```
+
+Process helpers include `run`, `capture`, `success`, `output`, `spawn`, `wait`, `waitpid`, and `kill`.
+
+Environment helpers include `env`, `setenv`, and `unsetenv`.
+
+The module also exposes identity, signal, clock, login/user, and shell-quoting helpers. Availability of some identity/signal operations is platform-dependent.
+
+For shell construction, prefer `shell_escape` / `shell_join` rather than manually concatenating untrusted arguments.
+
+---
+
+# 16. `text` — text processing and encoding helpers
+
+```lucy
+println text.match("^Lucy", "Lucy 2")
+println text.replace_regex("[0-9]+", "N", "Lucy 2")
+println text.base64_encode("hello")
+println text.hex_encode("hello")
+println text.url_encode("hello world")
+```
+
+The module provides regex operations, Base64, hexadecimal, URL encoding/decoding, and shell-token helpers.
+
+`StringScanner` provides incremental scanning:
+
+```lucy
+let scanner = text.scanner("abc123")
+println scanner.scan("[a-z]+")
+println scanner.scan("[0-9]+")
+```
+
+---
+
+# 17. `time` — time, date, and formatting
+
+```lucy
+let now = time.now()
+println now.year()
+println now.format("%Y-%m-%d")
+println time.timestamp()
+```
+
+`Time`, `Date`, and `DateTime` provide construction, parsing, formatting, component access, arithmetic, and comparison.
+
+Important unit rule:
+
+- `Time.add`, `subtract`, `plus`, `minus`, and `add_ms`/`subtract_ms` use milliseconds where the signature says `milliseconds`.
+- `Date.add`/`subtract` operate in days.
+- `Date.shift_months` / `add_months` / `subtract_months` operate in months.
+- `sleep(milliseconds)` uses milliseconds in the public `time` API.
+- HTTP timeout APIs use seconds.
+
+Read the signature inventory below when a function name has both a high-level and low-level form.
+
+---
+
+# 18. Global builtins and standard-library overlap
+
+The following are global runtime builtins rather than module members:
+
+```text
+print println input exit
+len str int float type typeof
+range sum min max abs sqrt sin cos tan exp floor ceil log log10 pow
+assert bin hex oct
+```
+
+There are also compatibility/runtime globals such as `read_file`, `write_file`, `exists`, `cwd`, `getenv`, `sleep`, and `millis`.
+
+Prefer the module APIs in new application code when an equivalent exists. For example, prefer `fs.read(path)` over compatibility `read_file(path)` and `system.cwd()` over global `cwd()`.
+
+---
+
+# 19. Complete API inventory
+
+The following inventory is source-derived from the shipped `stdlib/*.lucy` files. It is deliberately exhaustive and is the checklist used to prevent documentation drift.
+
+
+- `class OptionParser`
+- `OptionParser.initialize()`
+- `OptionParser.new()`
+- `OptionParser.banner(text)`
+- `OptionParser.separator(text = "")`
+- `OptionParser.version(text)`
+- `OptionParser.program_name(text)`
+- `OptionParser.on(name, description = "", default = nil)`
+- `OptionParser.parse(arguments = ARGV)`
+- `OptionParser.help()`
+- `OptionParser.summarize()`
+- `OptionParser.abort(message)`
+- `class Logger`
+- `Logger.initialize(output = nil, level = 0)`
+- `Logger.new(output = nil, level = 0)`
+- `Logger.level()`
+- `Logger.set_level(value)`
+- `Logger.level_set(value)`
+- `Logger.add(level, message)`
+- `Logger.log(level, message)`
+- `Logger.debug(message)`
+- `Logger.info(message)`
+- `Logger.warn(message)`
+- `Logger.error(message)`
+- `Logger.fatal(message)`
+- `Logger.debug?()`
+- `Logger.info?()`
+- `Logger.warn?()`
+- `Logger.error?()`
+- `Logger.fatal?()`
+- `class Benchmark`
+- `Benchmark.realtime(command)`
+- `Benchmark.measure(command)`
+- `class Timeout`
+- `Timeout.timeout(seconds, callback)`
+- `class ERB`
+- `ERB.initialize(template)`
+- `ERB.src()`
+- `ERB.result(values = {})`
+- `ERB.run(values = {})`
+- `parser()`
+- `logger(output = nil, level = 0)`
+- `benchmark()`
+- `timeout()`
+- `template(source)`
+
+### Complete inventory: `crypto`
+
+- `class Digest`
+- `Digest.digest(text)`
+- `Digest.hexdigest(text)`
+- `Digest.base64digest(text)`
+- `Digest.file(path)`
+- `class HMAC`
+- `HMAC.digest(key, data)`
+- `HMAC.hexdigest(key, data)`
+- `class SSLContext`
+- `SSLContext.initialize(options = {})`
+- `class SSLSocket`
+- `SSLSocket.initialize(socket = nil, context = nil)`
+- `SSLSocket.connect(host, port)`
+- `SSLSocket.close()`
+- `class Certificate`
+- `Certificate.initialize(data = "")`
+- `class RSA`
+- `RSA.initialize(pem = "")`
+- `class Cipher`
+- `Cipher.initialize(name = "")`
+- `class X509`
+- `X509.certificate(data = "")`
+- `class PKey`
+- `PKey.rsa(pem = "")`
+- `class OpenSSL`
+- `OpenSSL.hmac()`
+- `OpenSSL.ssl_context(options = {})`
+- `OpenSSL.ssl_socket(socket = nil, context = nil)`
+- `OpenSSL.certificate(data = "")`
+- `OpenSSL.rsa(pem = "")`
+- `OpenSSL.x509()`
+- `OpenSSL.pkey()`
+- `OpenSSL.cipher(name = "")`
+- `digest(text)`
+- `hexdigest(text)`
+- `hash(text)`
+- `base64digest(text)`
+- `file(path)`
+- `hmac(key, data)`
+
+### Complete inventory: `data`
+
+- `pick(source, keys)`
+- `omit(source, keys)`
+- `merge(left, right)`
+- `values(source, keys)`
+- `zip(keys, values)`
+- `class JSON`
+- `JSON.parse(text)`
+- `JSON.stringify(value)`
+- `JSON.pretty(value)`
+- `JSON.load(path)`
+- `JSON.dump(path, value)`
+- `parse(text)`
+- `stringify(value)`
+- `pretty(value)`
+- `json_read(path)`
+- `json_write(path, value)`
+- `class YAML`
+- `YAML.load(text)`
+- `YAML.dump(value)`
+- `YAML.load_file(path)`
+- `yaml_load(text)`
+- `yaml_dump(value)`
+- `class CSV`
+- `CSV.parse(text, delimiter = ",")`
+- `CSV.stringify(rows, delimiter = ",")`
+- `CSV.load(path, delimiter = ",")`
+- `CSV.dump(path, rows, delimiter = ",")`
+- `csv_parse(text, delimiter = ",")`
+- `csv_stringify(rows, delimiter = ",")`
+
+### Complete inventory: `flow`
+
+- `pipe(value, steps)`
+- `tap(value, action)`
+- `branch(value, predicate, yes, no = nil)`
+- `repeat(value, count, step)`
+
+### Complete inventory: `fs`
+
+- `read(path)`
+- `write(path, content)`
+- `append(path, content)`
+- `read_lines(path)`
+- `write_lines(path, lines)`
+- `exists(path)`
+- `size(path)`
+- `remove(path)`
+- `copy(source, destination)`
+- `move(source, destination)`
+- `touch(path)`
+- `chmod(path, mode)`
+- `chown(path, uid, gid)`
+- `entries(path = ".")`
+- `files(path = ".")`
+- `dirs(path = ".")`
+- `mkdir(path, parents = false)`
+- `rmdir(path)`
+- `empty(path = ".")`
+- `glob(pattern)`
+- `walk(path = ".")`
+- `join(parts)`
+- `absolute(path)`
+- `expand(path)`
+- `basename(path)`
+- `dirname(path)`
+- `extension(path)`
+- `stem(path)`
+- `link(source, destination)`
+- `symlink(source, destination)`
+- `open(path, mode = "r")`
+- `console(prompt = "")`
+- `read_json(path)`
+- `write_json(path, value)`
+- `class IO`
+- `IO.initialize(path = nil, mode = "r")`
+- `IO.print(values)`
+- `IO.write(text)`
+- `IO.read(prompt = "")`
+- `IO.ask(prompt)`
+- `IO.seek(offset, whence = 0)`
+- `IO.pos()`
+- `IO.rewind()`
+- `IO.eof()`
+- `IO.fileno()`
+- `IO.close()`
+- `IO.pipe()`
+- `IO.popen(command)`
+
+### Complete inventory: `http`
+
+- `class HTTPRequest`
+- `HTTPRequest.initialize(method, url, body = "", headers = nil, options = nil)`
+- `HTTPRequest.execute()`
+- `class HTTP`
+- `HTTP.initialize(url = "", proxy = nil)`
+- `HTTP.headers(value)`
+- `HTTP.timeout(seconds)`
+- `HTTP.connect_timeout(seconds)`
+- `HTTP.proxy(proxy_url)`
+- `HTTP.user_agent(value)`
+- `HTTP.follow_redirects(value)`
+- `HTTP.insecure(value = true)`
+- `HTTP.get(path = "")`
+- `HTTP.post(path = "", body = "")`
+- `HTTP.put(path = "", body = "")`
+- `HTTP.patch(path = "", body = "")`
+- `HTTP.delete(path = "")`
+- `HTTP.head(path = "")`
+- `HTTP.request(method, path = "", body = "", headers = nil)`
+- `request(method, url, body = "", headers = nil, options = nil)`
+- `get(url, headers = nil, options = nil)`
+- `post(url, body = "", headers = nil, options = nil)`
+- `put(url, body = "", headers = nil, options = nil)`
+- `patch(url, body = "", headers = nil, options = nil)`
+- `delete(url, headers = nil, options = nil)`
+- `head(url, headers = nil, options = nil)`
+- `client(url = "", proxy = nil)`
+- `class Socket`
+- `Socket.initialize()`
+- `Socket.connect(host, port)`
+- `Socket.bind(host, port)`
+- `Socket.listen(backlog = 16)`
+- `Socket.accept()`
+- `Socket.recv(size = 4096)`
+- `Socket.send(data)`
+- `Socket.close()`
+- `class SocketAPI`
+- `SocketAPI.new()`
+- `class Resolv`
+- `Resolv.getaddress(host)`
+- `Resolv.getname(address)`
+- `connect(host, port)`
+- `bind(host, port)`
+- `listen(socket, backlog = 16)`
+- `accept(socket)`
+- `recv(socket, size = 4096)`
+- `send(socket, data)`
+- `close(socket)`
+- `resolve(host)`
+- `reverse(address)`
+
+### Complete inventory: `math`
+
+- `class Math`
+- `Math.square(x)`
+- `Math.cube(x)`
+- `Math.clamp(x, low, high)`
+- `Math.even(x)`
+- `Math.odd(x)`
+- `Math.factorial(n)`
+- `Math.gcd(a, b)`
+- `Math.lcm(a, b)`
+- `Math.average(values)`
+- `Math.lerp(a, b, t)`
+- `Math.sign(x)`
 - `square(x)`
 - `cube(x)`
 - `clamp(x, low, high)`
@@ -194,18 +740,16 @@ Public helpers:
 - `lerp(a, b, t)`
 - `sign(x)`
 
-`Math` exposes the same operations and additionally has `even(x)` and `odd(x)`.
+### Complete inventory: `random`
 
-## `random`
+- `int(low, high)`
+- `float()`
+- `bool()`
+- `choice(items)`
+- `shuffle(items)`
+- `sample(items, count)`
 
-- `int(low, high)` — integer in the requested range.
-- `float()` — random floating-point value.
-- `bool()` — random boolean.
-- `choice(items)` — choose one item.
-- `shuffle(items)` — shuffle a collection.
-- `sample(items, count)` — choose a sample.
-
-## `repl`
+### Complete inventory: `repl`
 
 - `banner()`
 - `version()`
@@ -214,134 +758,258 @@ Public helpers:
 - `topics()`
 - `help(topic = nil)`
 
-These helpers expose information used by the interactive environment.
+### Complete inventory: `result`
 
-## `result`
+- `ok(value)`
+- `err(message)`
+- `success(result)`
+- `unwrap(result, fallback = nil)`
+- `message(result)`
 
-- `ok(value)` — construct a successful result.
-- `err(message)` — construct an error result.
-- `success(result)` — inspect success state.
-- `unwrap(result, fallback)` — obtain a value or fallback.
-- `message(result)` — obtain an error message.
+### Complete inventory: `runtime`
 
-Use this module when failure is part of normal data flow rather than an exceptional runtime condition.
+- `class Kernel`
+- `Kernel.printf(format_string, values = [])`
+- `Kernel.p(value)`
+- `Kernel.pp(value)`
+- `Kernel.format(format_string, values = [])`
+- `Kernel.sprintf(format_string, values = [])`
+- `Kernel.catch(callback)`
+- `Kernel.rescue(callback, handler)`
+- `Kernel.ensure(callback, cleanup)`
+- `Kernel.system(command)`
+- `Kernel.spawn(command)`
+- `Kernel.trap(signal_number, callback)`
+- `Kernel.global_variables()`
+- `Kernel.local_variables()`
+- `Kernel.methods(value)`
+- `Kernel.respond_to?(value, name)`
+- `Kernel.send(value, name, args = [])`
+- `Kernel.inspect(value)`
+- `Kernel.to_a(value)`
+- `Kernel.to_h(value)`
+- `Kernel.to_sym(value)`
+- `Kernel.ancestors(value)`
+- `Kernel.superclass(value)`
+- `Kernel.singleton_class(value)`
+- `Kernel.proc(callback)`
+- `Kernel.lambda(callback)`
+- `class Collections`
+- `Collections.first(items)`
+- `Collections.last(items)`
+- `Collections.reverse(items)`
+- `Collections.contains(items, value)`
+- `Collections.count(items, value)`
+- `Collections.index(items, value)`
+- `Collections.compact(items)`
+- `Collections.unique(items)`
+- `Collections.flatten(items)`
+- `Collections.sum(items)`
+- `Collections.min(items)`
+- `Collections.max(items)`
+- `printf(format_string, values = [])`
+- `format(format_string, values = [])`
+- `catch(callback)`
+- `rescue(callback, handler)`
+- `ensure(callback, cleanup)`
+- `methods(value)`
+- `responds(value, name)`
+- `call(value, name, args = [])`
+- `inspect(value)`
+- `variables()`
+- `globals()`
+- `ancestors(value)`
+- `superclass(value)`
 
-## `runtime`
+### Complete inventory: `set`
 
-### Formatting and exception helpers
+- `class Set`
+- `Set.initialize(values = [])`
+- `Set.new(values = [])`
+- `Set.add(value)`
+- `Set.delete(value)`
+- `Set.include?(value)`
+- `Set.member?(value)`
+- `Set.each(callback)`
+- `Set.size()`
+- `Set.length()`
+- `Set.empty?()`
+- `Set.clear()`
+- `Set.map(callback)`
+- `Set.select(callback)`
+- `Set.reject(callback)`
+- `Set.merge(other)`
+- `Set.subset(other)`
+- `Set.superset(other)`
+- `Set.intersect(other)`
+- `Set.union(other)`
+- `Set.intersection(other)`
+- `Set.difference(other)`
+- `Set.subset?(other)`
+- `Set.superset?(other)`
+- `Set.intersect?(other)`
+- `Set.symmetric_difference(other)`
+- `new(values = [])`
+- `from_values(values)`
+- `add(target, value)`
+- `delete(target, value)`
+- `include?(target, value)`
+- `union(left, right)`
+- `intersection(left, right)`
+- `difference(left, right)`
+- `symmetric_difference(left, right)`
+- `subset?(left, right)`
+- `superset?(left, right)`
+- `intersect?(left, right)`
 
-`printf`, `format`, `catch`, `rescue`, and `ensure` support formatted output and controlled callback execution.
+### Complete inventory: `sqlite`
 
-### Reflection
+- `class Database`
+- `Database.initialize(path)`
+- `Database.execute(sql, params = [])`
+- `Database.query(sql, params = [])`
+- `Database.prepare(sql)`
+- `Database.begin()`
+- `Database.commit()`
+- `Database.rollback()`
+- `Database.changes()`
+- `Database.last_insert_id()`
+- `Database.close()`
+- `class Statement`
+- `Statement.initialize(handle, sql)`
+- `Statement.bind(params = [])`
+- `Statement.execute()`
+- `Statement.query()`
+- `Statement.close()`
+- `open(path)`
 
-`methods`, `responds`, `call`, `inspect`, `variables`, `globals`, `ancestors`, and `superclass` expose runtime information and dynamic invocation.
+### Complete inventory: `system`
 
-### Kernel and Collections
+- `platform()`
+- `version()`
+- `argv()`
+- `cwd()`
+- `env(name)`
+- `setenv(name, value)`
+- `unsetenv(name)`
+- `home()`
+- `temp_dir()`
+- `command_exists(command)`
+- `pid()`
+- `ppid()`
+- `run(command)`
+- `capture(command)`
+- `success(command)`
+- `output(command)`
+- `spawn(command)`
+- `wait(pid)`
+- `waitpid(pid)`
+- `kill(signal_number, pid)`
+- `uid()`
+- `gid()`
+- `euid()`
+- `egid()`
+- `groups()`
+- `clock_gettime(clock = "monotonic")`
+- `trap(signal_number, callback)`
+- `signals()`
+- `signal_name(signal_number)`
+- `login()`
+- `user(name)`
+- `user_id(uid_value)`
+- `shell_split(text)`
+- `shell_escape(text)`
+- `shell_join(items)`
 
-`Kernel` also exposes `p`, `pp`, `sprintf`, `system`, `spawn`, `trap`, `global_variables`, `local_variables`, `to_a`, `to_h`, `to_sym`, `singleton_class`, `proc`, and `lambda`.
+### Complete inventory: `text`
 
-`Collections` provides `first`, `last`, `reverse`, `contains`, `count`, `index`, `compact`, `unique`, `flatten`, `sum`, `min`, and `max`.
+- `match(pattern, text)`
+- `search(pattern, text)`
+- `find_all(pattern, text)`
+- `replace_regex(pattern, replacement, text)`
+- `base64_encode(text)`
+- `base64_decode(text)`
+- `hex_encode(text)`
+- `hex_decode(text)`
+- `url_encode(text)`
+- `url_decode(text)`
+- `scanner(text)`
+- `shell_split(text)`
+- `shell_escape(text)`
+- `shell_join(items)`
+- `class StringScanner`
+- `StringScanner.initialize(text)`
+- `StringScanner.scan(pattern)`
+- `StringScanner.scan_until(pattern)`
+- `StringScanner.skip(pattern)`
+- `StringScanner.skip_until(pattern)`
+- `StringScanner.check(pattern)`
+- `StringScanner.check_until(pattern)`
+- `StringScanner.match?()`
+- `StringScanner.matched()`
+- `StringScanner.matched_size()`
+- `StringScanner.pre_match()`
+- `StringScanner.post_match()`
 
-Example:
+### Complete inventory: `time`
 
-```lucy
-println runtime.type value
-println runtime.inspect value
-println runtime.methods value
-```
-
-## `set`
-
-`Set` is the unique-value collection. Construction and flat helpers are available through `new`, `from_values`, `add`, `delete`, `include?`, `union`, `intersection`, `difference`, `symmetric_difference`, `subset?`, `superset?`, and `intersect?`.
-
-The object API additionally provides `member?`, `each`, `size`, `length`, `empty?`, `clear`, `map`, `select`, `reject`, `merge`, `subset`, `superset`, and `intersect`.
-
-Example:
-
-```lucy
-let a = set.new [1, 2, 3]
-let b = set.new [3, 4]
-println a.union b
-println a.intersection b
-```
-
-## `sqlite`
-
-SQLite is optional at build time. When enabled:
-
-```lucy
-let db = sqlite.open "app.db"
-db.execute "create table if not exists items (id integer, name text)"
-```
-
-`Database` provides `execute`, `query`, `prepare`, `begin`, `commit`, `rollback`, `changes`, `last_insert_id`, and `close`.
-
-`Statement` provides `bind`, `execute`, `query`, and `close`.
-
-When SQLite support is not compiled in, importing or opening SQLite reports a clear runtime/library error instead of silently pretending the backend exists.
-
-## `system`
-
-### Environment
-
-`platform`, `version`, `argv`, `cwd`, `env`, `setenv`, `unsetenv`, `home`, `temp_dir`, and `command_exists` expose process environment information.
-
-### Processes
-
-`pid`, `ppid`, `run`, `capture`, `success`, `output`, `spawn`, `wait`, `waitpid`, and `kill` manage or inspect processes.
-
-### Identity and clocks
-
-`uid`, `gid`, `euid`, `egid`, `groups`, and `clock_gettime` expose OS identity and clock information where supported.
-
-### Signals and users
-
-`trap`, `signals`, `signal_name`, `login`, `user`, and `user_id` expose signal and user information.
-
-### Shell safety helpers
-
-`shell_split`, `shell_escape`, and `shell_join` are available for parsing and constructing shell command arguments.
-
-## `text`
-
-### Pattern operations
-
-`match`, `search`, `find_all`, and `replace_regex` provide regex-oriented operations.
-
-### Encoding
-
-`base64_encode`, `base64_decode`, `hex_encode`, `hex_decode`, `url_encode`, and `url_decode` handle text/data encodings. These are different from numeric `bin`, `hex`, and `oct`: `text.hex_encode` encodes data, while numeric `hex(255)` formats an integer.
-
-### Scanner
-
-`scanner(text)` creates a `StringScanner`. Its methods are `scan`, `scan_until`, `skip`, `skip_until`, `check`, `check_until`, `match?`, `matched`, `matched_size`, `pre_match`, and `post_match`.
-
-### Shell helpers
-
-The module also provides `shell_split`, `shell_escape`, and `shell_join` for shell argument handling.
-
-## `time`
-
-### Time
-
-`Time` provides `now`, `today`, `strptime`, `format`, `parts`, `year`, `month`, `day`, `hour`, `minute`, `second`, `add`, `subtract`, `plus`, `minus`, `compare`, `succ`, `add_ms`, and `subtract_ms`.
-
-### Date
-
-`Date` provides `parse`, `strptime`, `format`, `add`, `subtract`, `next_day`, `prev_day`, `succ`, `shift_months`, `add_months`, `subtract_months`, and `compare`.
-
-### DateTime
-
-`DateTime` provides `timestamp`, `format`, `parts`, `year`, `month`, `day`, `hour`, `minute`, `second`, `weekday`, and `iso`.
-
-### Module helpers
-
-`now`, `today`, `timestamp`, `parse`, `date`, `format`, and `sleep` are the flat entry points.
-
-## Complete signature inventory
-
-For an exact source-derived list of every shipped class and function signature, see `STANDARD_LIBRARY_API_INVENTORY.md`.
-
-## Naming and compatibility rule
-
-The public API is intentionally flat. Internal names beginning with `__` or private implementation helpers beginning with `_` are not stable application API. Documentation for old names is kept in migration/history material rather than mixed into current usage.
+- `class Time`
+- `Time.initialize(timestamp = nil)`
+- `Time.now()`
+- `Time.today()`
+- `Time.strptime(text, format)`
+- `Time.format(format_string)`
+- `Time.parts()`
+- `Time.year()`
+- `Time.month()`
+- `Time.day()`
+- `Time.hour()`
+- `Time.minute()`
+- `Time.second()`
+- `Time.add(milliseconds)`
+- `Time.subtract(milliseconds)`
+- `Time.plus(milliseconds)`
+- `Time.minus(milliseconds)`
+- `Time.compare(other)`
+- `Time.succ()`
+- `Time.add_ms(milliseconds)`
+- `Time.subtract_ms(milliseconds)`
+- `class Date`
+- `Date.initialize(timestamp = nil)`
+- `Date.parse(text)`
+- `Date.strptime(text, format)`
+- `Date.format(format_string = "%Y-%m-%d")`
+- `Date.add(days)`
+- `Date.subtract(days)`
+- `Date.next_day()`
+- `Date.prev_day()`
+- `Date.succ()`
+- `Date.shift_months(months)`
+- `Date.add_months(months)`
+- `Date.subtract_months(months)`
+- `Date.compare(other)`
+- `class DateTime`
+- `DateTime.initialize(timestamp)`
+- `DateTime.timestamp()`
+- `DateTime.format(pattern)`
+- `DateTime.parts()`
+- `DateTime.year()`
+- `DateTime.month()`
+- `DateTime.day()`
+- `DateTime.hour()`
+- `DateTime.minute()`
+- `DateTime.second()`
+- `DateTime.weekday()`
+- `DateTime.iso()`
+- `class DateTimeModule`
+- `DateTimeModule.now()`
+- `DateTimeModule.from_timestamp(milliseconds)`
+- `DateTimeModule.format(milliseconds, pattern)`
+- `now()`
+- `today()`
+- `timestamp()`
+- `parse(text)`
+- `date(text)`
+- `format(value, pattern = "%Y-%m-%d %H:%M:%S")`
+- `_time_sleep(milliseconds)`
+- `sleep(milliseconds)`

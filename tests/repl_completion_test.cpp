@@ -50,5 +50,17 @@ let point = Point.new(1, 2)
     auto prefix_matches = interpreter.completion_candidates("text.u");
     if (!contains(prefix_matches, "url_encode")) return 7;
 
+    auto app_matches = interpreter.completion_candidates("app.");
+    if (!contains(app_matches, "parser") || !contains(app_matches, "logger") || !contains(app_matches, "OptionParser")) return 8;
+
+    auto time_matches = interpreter.completion_candidates("time.");
+    if (!contains(time_matches, "now") || !contains(time_matches, "sleep")) return 9;
+
+    auto number_matches = interpreter.completion_candidates("point.x.to_");
+    if (!contains(number_matches, "to_binary") || !contains(number_matches, "to_hex") || !contains(number_matches, "to_octal")) return 10;
+
+    auto globals = interpreter.completion_candidates("A");
+    if (!contains(globals, "Array") || !contains(globals, "ARGV")) return 11;
+
     return 0;
 }

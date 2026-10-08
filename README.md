@@ -68,33 +68,13 @@ The same mechanism applies to `Int`, `Double`, `Bool`, `Array`, `Map`, and the o
 
 ## Documentation
 
-The documentation is organized around a small number of substantial topic documents rather than many shallow pages:
+The documentation is intentionally consolidated into a small set of deep references:
 
-- `docs/README.md` — documentation index and source-of-truth policy
-- `docs/GETTING_STARTED.md` — installation and first programs
+- `docs/README.md` — documentation map and source-of-truth policy
+- `docs/GETTING_STARTED.md` — installation, tutorial, and first programs
 - `docs/LANGUAGE_REFERENCE.md` — complete language syntax and semantics
-- `docs/PROGRAMMING_GUIDE.md` — practical programming patterns
-- `docs/STANDARD_LIBRARY.md` — complete current standard-library API
-- `docs/REPL_AND_TOOLING.md` — REPL, history, completion, and editor tooling
-- `docs/PACKAGES_AND_EXTENSIONS.md` — Pure-Lucy packages and C++ extensions
-- `docs/ENVIRONMENT_AND_INSTALLATION.md` — installation, `LUCY_PATH`, resources, SQLite
-- `docs/RUNTIME_AND_ERRORS.md` — runtime types, diagnostics, and failure behavior
-- `docs/IMPLEMENTATION_ARCHITECTURE.md` — C++ implementation architecture
-- `docs/DEVELOPING_LUCY.md` — tests and development workflow
-- `docs/HISTORY_AND_MIGRATION.md` — historical language changes and migration paths
-- `docs/CHANGELOG.md` — current release changes
-
-Historical documents from earlier Lucy releases were used to preserve useful subjects and terminology, but current pages are written against the 2.0 source tree.
-
-## Build
-
-```bash
-cmake -S . -B build
-cmake --build build
-```
-
-The executable is produced as `build/lucy` on Unix-like systems and `build/lucy.exe` on Windows generators.
-
-## License
-
-See `LICENSE`.
+- `docs/STANDARD_LIBRARY.md` — complete standard-library reference and API inventory
+- `docs/REPL_AND_TOOLING.md` — CLI, REPL, completion, packages, testing, and editor workflow
+- `docs/DEVELOPING_LUCY.md` — implementation architecture, extensions, testing, and releases
+- `docs/HISTORY_AND_MIGRATION.md` — historical migration context
+- `docs/CHANGELOG.md` — release history
