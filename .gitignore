@@ -1,4 +1,5 @@
 build/
+build-install/
 *.o
 *.a
 *.so
