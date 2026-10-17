@@ -1,4 +1,4 @@
-# `math` standard library — Lucy 2.0.1
+# `math` standard library — Lucy 2.0.2
 
 Mathematical constants/functions and common numeric helpers.
 

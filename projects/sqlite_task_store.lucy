@@ -4,7 +4,7 @@ let db = sqlite.open("projects/fixtures/tasks.db")
 db.execute("CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY, title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0)")
 db.begin()
 try {
-    db.execute("INSERT INTO tasks (title, done) VALUES (?, ?)", ["Review Lucy 2.0.1", 0])
+    db.execute("INSERT INTO tasks (title, done) VALUES (?, ?)", ["Review Lucy 2.0.2", 0])
     db.execute("INSERT INTO tasks (title, done) VALUES (?, ?)", ["Run CTest", 0])
     db.commit()
 } catch Exception as error {

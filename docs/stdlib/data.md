@@ -1,4 +1,4 @@
-# `data` standard library — Lucy 2.0.1
+# `data` standard library — Lucy 2.0.2
 
 Map transformations plus JSON, YAML, and CSV serialization/parsing.
 

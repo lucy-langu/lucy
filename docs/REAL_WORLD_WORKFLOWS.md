@@ -1,4 +1,4 @@
-# Lucy 2.0.1 — Real-world workflows and engineering patterns
+# Lucy 2.0.2 — Real-world workflows and engineering patterns
 
 This guide demonstrates how the language and standard library fit together in complete workflows. Every code block is intended to be copied into a `.lucy` file after replacing paths and environment-specific values. Network examples are deliberately excluded from automated CI because public endpoints are not deterministic dependencies.
 
@@ -125,7 +125,7 @@ fs.write(options.get("output"), data.csv_stringify(rows))
 println "Wrote " + options.get("output")
 ```
 
-`OptionParser` is intentionally compact, not a full POSIX/GNU parser. In 2.0.1 it accepts `--name value` and `--name=value`, boolean options whose default is a boolean, and rejects unknown options, missing values, and unexpected positional arguments. It does not implement short aliases, automatic type conversion, required-option metadata, or `--` positional argument collection. The sample's required check is therefore application-level.
+`OptionParser` is intentionally compact, not a full POSIX/GNU parser. In 2.0.2 it accepts `--name value` and `--name=value`, boolean options whose default is a boolean, and rejects unknown options, missing values, and unexpected positional arguments. It does not implement short aliases, automatic type conversion, required-option metadata, or `--` positional argument collection. The sample's required check is therefore application-level.
 
 ## 5. Measure a callable without shell execution
 

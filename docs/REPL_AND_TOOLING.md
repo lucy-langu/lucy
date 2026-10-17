@@ -1,4 +1,4 @@
-# Lucy 2.0.1 — REPL, CLI, Tooling, Packages, and Developer Workflow
+# Lucy 2.0.2 — REPL, CLI, Tooling, Packages, and Developer Workflow
 
 This document is the operational manual for using Lucy every day. It combines the former REPL, CLI, package, testing, editor, limits, and tooling references so users do not have to search through small disconnected files.
 
@@ -20,7 +20,7 @@ With no program argument, Lucy starts the REPL.
 
 Command-line arguments are available as both `ARGV` and `argv` in Lucy code.
 
-There is no documented `lucy -e` or `lucy -c` execution mode in 2.0.1. Do not assume those flags exist.
+There is no documented `lucy -e` or `lucy -c` execution mode in 2.0.2. Do not assume those flags exist.
 
 An uncaught script error is reported by the CLI and results in a non-zero process status. In the REPL, errors are printed and the interactive session continues when possible.
 
@@ -32,7 +32,7 @@ Start it with:
 lucy
 ```
 
-The default prompt is provided by the editable `stdlib/repl.lucy` library. The native editor can fall back to a native prompt if that library cannot be loaded.
+The default prompt is provided by the editable `stdlib/repl.lucy` library. The banner and prompts use plain text with no ANSI color styling to avoid inconsistent rendering in Windows consoles. The editor still uses terminal cursor-control sequences for line editing; these are not color codes. The native editor can fall back to a native prompt if that library cannot be loaded.
 
 ### REPL commands
 
@@ -42,11 +42,18 @@ The default prompt is provided by the editable `stdlib/repl.lucy` library. The n
 | `:clear` | Clear the terminal and current input buffer |
 | `:history` | Show recent history |
 | `:version` | Show Lucy version |
-| `:quit` | Exit |
-| `:exit` | Exit |
+| `:about` | Show the plain-text banner |
+| `:reset` | Cancel a pending multiline input buffer |
+| `:vars` | List user-defined global variables with values and runtime types |
+| `:vars --all` | Include runtime, module, and built-in bindings in the listing |
+| `:functions` | List built-in functions, user functions, and visible module methods |
+| `:modules` | List discovered `.lucy` modules and filesystem paths |
+| `:where <name>` | Show a module path or inspect a binding's runtime origin |
+| `:methods <Type>` | List known methods for a built-in type or user class |
+| `:quit`, `:exit` | Exit |
 | `Ctrl-D` | Exit when the input buffer is empty |
 
-There is no separate `:history` topic parser or large colon-command language. The commands above are handled by the native REPL.
+`:where` reports exact paths for discoverable modules and source-file-defined functions/classes. Interactive definitions do not retain source-line metadata, so they are identified as interactive rather than assigned a fabricated location. `:modules` lists `.lucy` files found in configured module search paths; it is not a complete operating-system filesystem index.
 
 ### Language help
 
@@ -91,17 +98,18 @@ After `.`, completion resolves the actual runtime object and lists:
 Examples:
 
 ```text
-Lucy$ fs.<Tab>
-Lucy$ text.u<Tab>
-Lucy$ values.<Tab>
-Lucy$ point.x.to_<Tab>
+lucy> fs.<Tab>
+lucy> text.u<Tab>
+lucy> values.<Tab>
+lucy> point.x.to_<Tab>
 ```
 
 ### 3.2 Tab behavior
 
 - If there is one candidate, the first Tab completes it immediately.
-- If there are multiple candidates, the first Tab completes the longest common prefix and prints the candidate list.
-- Subsequent Tabs cycle through candidates.
+- If there are multiple candidates, the first Tab completes the longest common prefix when possible.
+- The next Tab prints the sorted candidate list; later Tabs cycle through candidates.
+- Editing the line or moving the cursor resets the completion cycle.
 - Candidates are sorted and deduplicated.
 - Completion never intentionally executes arbitrary user expressions.
 - Moving the cursor, editing the line, or navigating history resets the completion cycle.
@@ -156,7 +164,7 @@ When stdin is not an interactive terminal, Lucy falls back to ordinary line-orie
 The REPL tracks brace depth and changes from the primary prompt to the continuation prompt while a block remains open:
 
 ```text
-Lucy$ func greet(name) {
+lucy> func greet(name) {
 ...     println "Hello, $name"
 ... }
 ```
@@ -165,7 +173,7 @@ Input is then parsed as one buffer. A syntax error does not permanently damage t
 
 ## 7. Packages
 
-The runtime recognizes Lucy package/source layouts around `src/init.lucy`. Package resolution is part of module resolution; however, 2.0.1 does not enforce a `lucy.toml` manifest schema and does not provide a package-install command.
+The runtime recognizes Lucy package/source layouts around `src/init.lucy`. Package resolution is part of module resolution; however, 2.0.2 does not enforce a `lucy.toml` manifest schema and does not provide a package-install command.
 
 A practical source package can look like:
 
@@ -215,13 +223,13 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-The suite currently includes language, lexical, semantics, standard-library, numeric-conversion, and REPL-completion coverage.
+The suite currently includes language, lexical, semantics, standard-library, numeric-conversion, built-in type extension, module-path discovery, and REPL-completion coverage. The release verification script also runs every shipped `examples/*.lucy` program.
 
 When adding a language feature, add a focused regression test and run the complete suite.
 
 ## 10. Editor integration
 
-The repository contains editor-related files, but Lucy 2.0.1 does not ship a language server (LSP), formatter, or debugger protocol. Syntax highlighting/editor support should therefore be treated as editor configuration rather than an LSP contract.
+The repository contains editor-related files, but Lucy 2.0.2 does not ship a language server (LSP), formatter, or debugger protocol. Syntax highlighting/editor support should therefore be treated as editor configuration rather than an LSP contract.
 
 ## 11. Troubleshooting by symptom
 
@@ -259,37 +267,10 @@ Lucy aims to keep language semantics identical across Windows, Linux, and macOS.
 
 Application code should prefer `fs`, `system`, `text`, and other standard modules instead of embedding OS-specific shell assumptions.
 
-## 8. 2.0.1 interactive workflow
-
-The default prompt and banner are defined in `stdlib/repl.lucy`; they use ANSI styling in an interactive terminal. ANSI control sequences are stripped when output is redirected or piped. This remains ordinary Lucy code so downstream builds can change the visual identity without recompiling the native editor. The editor has a plain-stdin fallback when input is piped or a terminal cannot be configured.
-
-### Session commands
-
-| Command | Effect |
-|---|---|
-| `:help` | Print the topic index and editor shortcuts |
-| `:help string` | Ask the Lucy help library for a topic (use `help "string"` if the shell command form is unavailable) |
-| `:clear` | Clear the terminal display and the pending input buffer |
-| `:reset` | Cancel a pending multiline expression without exiting |
-| `:about` | Redisplay the styled banner |
-| `:history` | Print recent in-memory/persisted history entries |
-| `:version` | Print the runtime version |
-| `:quit`, `:exit` | Leave the session |
-
-`Ctrl-C` cancels the current line or pending multiline block. `Ctrl-D` exits only when the editor buffer is empty. `Ctrl-L` clears and redraws the terminal. `Ctrl-W` deletes the previous whitespace-delimited word. The editor supports UTF-8 byte input and code-point boundary movement for basic editing; terminal column width for East Asian wide characters and combining sequences is approximate, and the editor is not a full Readline replacement.
-
-### Multiline input and evaluation
-
-The REPL buffers input while braces are unbalanced, then parses and evaluates the accumulated source. This is intentionally lightweight: it is not a full incremental parser, so braces in comments and unusual quoting contexts can confuse the continuation prompt. When an expression produces a non-`nil` value, the REPL prints that value. Statements whose result is `nil` do not produce an extra result line.
-
-### Completion and history
-
-Tab completion reads candidates from the active interpreter environment and object members. First Tab completes a unique match; for ambiguous matches it completes a shared prefix and displays candidates; repeated Tab cycles through the available candidates. History is stored in `.lucy_history` under the user's home directory, capped at 1,000 entries, and duplicate entries are moved toward the newest position. History is local plaintext; do not enter secrets into the REPL.
-
 ### Known editor limitations
 
-- No syntax highlighting of the editable input buffer, bracket-pair highlighting, inline diagnostics, or completion documentation popup.
+- No syntax highlighting, bracket-pair highlighting, inline diagnostics, or completion documentation popup.
 - No multiline cursor editing or persistent multiline history entries; each physical line is stored separately.
-- Completion may evaluate a limited safe subset of expressions to infer the receiver type; it cannot reliably infer every dynamic expression.
-- Terminal escape sequences, true display-cell widths, and Windows console behavior vary by terminal. Verify styling in the actual terminal used for release.
-- `Ctrl-C` cancels buffered source; it is not a general-purpose interrupt mechanism for a running Lucy program.
+- Completion is advisory and may not infer every dynamic expression.
+- Terminal cursor controls and display-cell widths vary by terminal; the REPL no longer emits ANSI color styling, but Windows behavior still needs native-console testing.
+- `Ctrl-C` cancels buffered source; it is not a general-purpose interrupt for a running Lucy program.

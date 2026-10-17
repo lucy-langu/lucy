@@ -1,4 +1,4 @@
-# `crypto` standard library — Lucy 2.0.1
+# `crypto` standard library — Lucy 2.0.2
 
 Digest/HMAC utilities and cryptographic object facades. Verify backend availability before relying on a primitive.
 

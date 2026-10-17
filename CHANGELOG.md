@@ -1,5 +1,16 @@
 # Lucy Changelog
 
+## 2.0.2 — REPL usability, introspection, and documentation synchronization
+
+- Removed ANSI color styling from the REPL banner and prompts to avoid Windows color-rendering problems; retained only terminal control sequences required for editing.
+- Changed Tab completion to expand a unique/common prefix first, show candidates on the next Tab, and cycle through candidates on subsequent Tabs.
+- Added REPL commands `:vars`, `:functions`, `:modules`, `:where <name>`, and `:methods <Type>` for live runtime inspection.
+- Made completion include user-added methods on built-in types such as `String` and `Int`, while hiding internal `__*` builtins from top-level completion.
+- Added runnable examples and regression tests for built-in type extensions and module path introspection; corrected REPL and language reference docs to match implementation.
+- Prevented module discovery from treating arbitrary executable parent directories as Lucy library roots.
+- Fixed `len(string)` to count UTF-8 code points, made `float(string)` reject trailing junk/non-finite values, and implemented the documented `Map.length()`/`Map.size()` methods.
+
+
 ## 2.0.1 — Reliability, documentation, and REPL polish
 
 - Fixed UTF-8 code-point behavior for core string length/index/slice/reverse methods.

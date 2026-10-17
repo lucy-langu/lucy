@@ -204,6 +204,7 @@ std::string longest_common_prefix(const std::vector<std::string>& values) {
 ReplLineEditor::ReplLineEditor()
     : history_path_(history_file_path()) {
 #ifdef _WIN32
+    // Enable VT cursor controls for line editing only; the REPL itself emits no colors.
     enable_virtual_terminal();
 #endif
     load_history();
@@ -304,6 +305,7 @@ bool ReplLineEditor::read_line(const std::string& prompt, std::string& line,
     std::size_t cursor = 0;
     history_index_ = history_.size();
     bool completion_listed = false;
+    bool completion_displayed = false;
     std::string last_completion_prefix;
     std::vector<std::string> completion_matches;
     std::size_t completion_index = 0;
@@ -354,6 +356,7 @@ bool ReplLineEditor::read_line(const std::string& prompt, std::string& line,
                 render_line(prompt, line, cursor);
             }
             completion_listed = false;
+            completion_displayed = false;
             continue;
         }
 
@@ -365,6 +368,7 @@ bool ReplLineEditor::read_line(const std::string& prompt, std::string& line,
                 render_line(prompt, line, cursor);
             }
             completion_listed = false;
+            completion_displayed = false;
             continue;
         }
 
@@ -376,6 +380,7 @@ bool ReplLineEditor::read_line(const std::string& prompt, std::string& line,
                 render_line(prompt, line, cursor);
             }
             completion_listed = false;
+            completion_displayed = false;
             continue;
         }
 
@@ -390,6 +395,7 @@ bool ReplLineEditor::read_line(const std::string& prompt, std::string& line,
             cursor = line.size();
             render_line(prompt, line, cursor);
             completion_listed = false;
+            completion_displayed = false;
             continue;
         }
 
@@ -399,6 +405,7 @@ bool ReplLineEditor::read_line(const std::string& prompt, std::string& line,
                 render_line(prompt, line, cursor);
             }
             completion_listed = false;
+            completion_displayed = false;
             continue;
         }
 
@@ -408,6 +415,7 @@ bool ReplLineEditor::read_line(const std::string& prompt, std::string& line,
                 render_line(prompt, line, cursor);
             }
             completion_listed = false;
+            completion_displayed = false;
             continue;
         }
 
@@ -415,6 +423,7 @@ bool ReplLineEditor::read_line(const std::string& prompt, std::string& line,
             cursor = 0;
             render_line(prompt, line, cursor);
             completion_listed = false;
+            completion_displayed = false;
             continue;
         }
 
@@ -422,6 +431,7 @@ bool ReplLineEditor::read_line(const std::string& prompt, std::string& line,
             cursor = line.size();
             render_line(prompt, line, cursor);
             completion_listed = false;
+            completion_displayed = false;
             continue;
         }
 
@@ -431,6 +441,7 @@ bool ReplLineEditor::read_line(const std::string& prompt, std::string& line,
                 render_line(prompt, line, cursor);
             }
             completion_listed = false;
+            completion_displayed = false;
             continue;
         }
 
@@ -438,6 +449,7 @@ bool ReplLineEditor::read_line(const std::string& prompt, std::string& line,
             cursor = 0;
             render_line(prompt, line, cursor);
             completion_listed = false;
+            completion_displayed = false;
             continue;
         }
 
@@ -445,6 +457,7 @@ bool ReplLineEditor::read_line(const std::string& prompt, std::string& line,
             cursor = line.size();
             render_line(prompt, line, cursor);
             completion_listed = false;
+            completion_displayed = false;
             continue;
         }
 
@@ -452,6 +465,7 @@ bool ReplLineEditor::read_line(const std::string& prompt, std::string& line,
             line.erase(cursor);
             render_line(prompt, line, cursor);
             completion_listed = false;
+            completion_displayed = false;
             continue;
         }
 
@@ -460,12 +474,14 @@ bool ReplLineEditor::read_line(const std::string& prompt, std::string& line,
             cursor = 0;
             render_line(prompt, line, cursor);
             completion_listed = false;
+            completion_displayed = false;
             continue;
         }
 
         if (key == '\t') {
-            // Completion candidates are returned as member/builtin names.  For
-            // `object.me`, only `me` is replaced; `object.` stays untouched.
+            // Tab is deliberately plain and predictable on Windows and Unix:
+            // first Tab expands a unique/common prefix, second Tab lists choices,
+            // subsequent Tabs cycle through them.
             std::size_t expression_start = cursor;
             while (expression_start > 0) {
                 const char ch = line[expression_start - 1];
@@ -475,9 +491,8 @@ bool ReplLineEditor::read_line(const std::string& prompt, std::string& line,
 
             std::size_t token_start = expression_start;
             const std::size_t last_dot = line.rfind('.', cursor == 0 ? 0 : cursor - 1);
-            if (last_dot != std::string::npos && last_dot >= expression_start && last_dot < cursor) {
+            if (last_dot != std::string::npos && last_dot >= expression_start && last_dot < cursor)
                 token_start = last_dot + 1;
-            }
 
             const std::string prefix = line.substr(token_start, cursor - token_start);
             std::vector<std::string> matches;
@@ -485,49 +500,52 @@ bool ReplLineEditor::read_line(const std::string& prompt, std::string& line,
                 matches = completion_matches;
             } else {
                 const auto candidates = completer ? completer(line) : std::vector<std::string>{};
-                for (const auto& candidate : candidates) {
-                    if (candidate.rfind(prefix, 0) == 0) {
-                        matches.push_back(candidate);
-                    }
-                }
+                for (const auto& candidate : candidates)
+                    if (candidate.rfind(prefix, 0) == 0) matches.push_back(candidate);
                 std::sort(matches.begin(), matches.end());
                 matches.erase(std::unique(matches.begin(), matches.end()), matches.end());
                 completion_matches = matches;
                 completion_index = 0;
                 completion_token_start = token_start;
+                completion_displayed = false;
             }
 
             if (matches.empty()) {
                 completion_listed = false;
+                completion_displayed = false;
                 continue;
             }
 
             const std::string current_prefix = line.substr(token_start, cursor - token_start);
-
             if (!completion_listed) {
                 if (matches.size() == 1) {
                     line.replace(token_start, current_prefix.size(), matches.front());
                     cursor = token_start + matches.front().size();
                     render_line(prompt, line, cursor);
-                    completion_index = 0;
                     completion_listed = true;
+                    completion_displayed = true;
+                    completion_index = 0;
                     continue;
                 }
 
-                // First Tab completes the unambiguous common prefix. A second Tab
-                // then starts cycling through the complete candidate set.
                 std::string common = matches.front();
                 for (std::size_t i = 1; i < matches.size() && !common.empty(); ++i) {
                     std::size_t n = 0;
-                    while (n < common.size() && n < matches[i].size() && common[n] == matches[i][n])
-                        ++n;
+                    while (n < common.size() && n < matches[i].size() && common[n] == matches[i][n]) ++n;
                     common.resize(n);
                 }
                 if (common.size() > current_prefix.size()) {
                     line.replace(token_start, current_prefix.size(), common);
                     cursor = token_start + common.size();
+                    render_line(prompt, line, cursor);
                 }
+                completion_listed = true;
+                completion_displayed = false;
+                completion_index = 0;
+                continue;
+            }
 
+            if (!completion_displayed) {
                 std::cout << '\n';
                 for (std::size_t i = 0; i < matches.size(); ++i) {
                     std::cout << matches[i];
@@ -535,17 +553,18 @@ bool ReplLineEditor::read_line(const std::string& prompt, std::string& line,
                     else std::cout << "    ";
                 }
                 render_line(prompt, line, cursor);
-                completion_listed = true;
-                completion_index = 0;
+                completion_displayed = true;
                 continue;
             }
 
+            const std::string updated_prefix = line.substr(token_start, cursor - token_start);
             const std::string& selected = completion_matches[completion_index % completion_matches.size()];
-            line.replace(token_start, current_prefix.size(), selected);
+            line.replace(token_start, updated_prefix.size(), selected);
             cursor = token_start + selected.size();
             render_line(prompt, line, cursor);
             completion_index = (completion_index + 1) % completion_matches.size();
             completion_listed = true;
+            completion_displayed = true;
             continue;
         }
 
@@ -554,6 +573,7 @@ bool ReplLineEditor::read_line(const std::string& prompt, std::string& line,
             ++cursor;
             render_line(prompt, line, cursor);
             completion_listed = false;
+            completion_displayed = false;
         }
     }
 }

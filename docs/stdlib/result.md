@@ -1,4 +1,4 @@
-# `result` standard library — Lucy 2.0.1
+# `result` standard library — Lucy 2.0.2
 
 Small success/error value conventions and unwrap helpers.
 

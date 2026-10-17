@@ -6,9 +6,9 @@ assert parsed.get("name") == "Nima"
 let inline_parsed = parser.parse(["--name=Nima=Lucy"])
 assert inline_parsed.get("name") == "Nima=Lucy"
 parser.program_name("report")
-parser.version("2.0.1")
+parser.version("2.0.2")
 assert parser.help().contains("Program: report")
-assert parser.help().contains("Version: 2.0.1")
+assert parser.help().contains("Version: 2.0.2")
 var positional_failed = false
 try {
     parser.parse(["--", "unexpected"])

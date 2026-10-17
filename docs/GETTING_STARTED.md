@@ -1,4 +1,4 @@
-# Lucy 2.0.1 — Getting Started
+# Lucy 2.0.2 — Getting Started
 
 This is the practical tutorial. It assumes no previous Lucy knowledge and deliberately uses complete, runnable examples.
 
@@ -51,7 +51,7 @@ Lucy functions are first-class values, arrays provide functional methods, and la
 ```lucy
 let name = "Lucy"
 var counter = 0
-const language_version = "2.0.1"
+const language_version = "2.0.2"
 
 counter += 1
 println name
@@ -95,7 +95,7 @@ println name.upper()
 println name.replace("Lucy", "Lucy 2")
 ```
 
-Interpolation supports `$name` and dotted member paths. Arbitrary `${expression}` interpolation is not part of 2.0.1.
+Interpolation supports `$name` and dotted member paths. Arbitrary `${expression}` interpolation is not part of 2.0.2.
 
 ## 6. Arrays
 
@@ -207,7 +207,7 @@ class Admin < User {
 }
 ```
 
-There are no visibility modifiers, interfaces, mixins, multiple inheritance, or separate static/class-method syntax in 2.0.1.
+There are no visibility modifiers, interfaces, mixins, multiple inheritance, or separate static/class-method syntax in 2.0.2.
 
 ## 11. Structs
 
@@ -270,27 +270,29 @@ try {
 }
 ```
 
-The caught value is currently the textual error message. Lucy 2.0.1 does not expose a public exception-object hierarchy.
+The caught value is currently the textual error message. Lucy 2.0.2 does not expose a public exception-object hierarchy.
 
 ## 15. Discovering Lucy interactively
 
 Start with:
 
 ```text
-Lucy$ :help
-Lucy$ help()
-Lucy$ help "modules"
+lucy> :help
+lucy> help()
+lucy> help "modules"
 ```
 
 Use Tab aggressively:
 
 ```text
-Lucy$ fs.<Tab>
-Lucy$ text.u<Tab>
-Lucy$ values.<Tab>
+lucy> fs.<Tab>
+lucy> text.u<Tab>
+lucy> values.<Tab>
 ```
 
-For multiple matches, the first Tab displays candidates and completes their common prefix; subsequent Tabs cycle through them.
+For multiple matches, the first Tab completes the shared prefix if possible, the second Tab displays candidates, and subsequent Tabs cycle through them.
+
+Useful inspection commands include `:vars` (user-defined globals), `:vars --all` (including runtime bindings), `:functions`, `:modules`, `:where fs`, and `:methods String`. In a Lucy script, `modules_info()` returns discovered module names mapped to their source paths.
 
 Use `repl.topics()` to see the built-in help topics and `repl.commands()` for REPL commands.
 

@@ -1,4 +1,4 @@
-# Lucy 2.0.1 — Developing, Extending, Testing, and Releasing Lucy
+# Lucy 2.0.2 — Developing, Extending, Testing, and Releasing Lucy
 
 This is the maintainer/developer reference. It combines the implementation architecture, native extension API, build process, tests, migration/versioning policy, limits, and contribution workflow.
 
@@ -198,7 +198,7 @@ The exact builder methods are defined by the installed `extension.hpp`; the head
 
 ### ABI policy
 
-API versioning exists, but Lucy 2.0.1 does not promise that arbitrary extensions compiled against one runtime build remain binary-compatible forever. Rebuild extensions when the runtime/API changes.
+API versioning exists, but Lucy 2.0.2 does not promise that arbitrary extensions compiled against one runtime build remain binary-compatible forever. Rebuild extensions when the runtime/API changes.
 
 ### Platform names
 
@@ -340,7 +340,7 @@ When adding functionality, choose the smallest correct layer:
 Avoid native wrappers for behavior that can be implemented cleanly in Lucy. Avoid hidden runtime APIs when a public Lucy feature can express the same operation.
 
 
-## Release verification for 2.0.1
+## Release verification for 2.0.2
 
 Use the reproducible verification script from a clean checkout:
 
@@ -357,3 +357,8 @@ python3 tools/generate_stdlib_docs.py
 ```
 
 Review the generated diff, especially after changing public method names or signatures. The generator indexes pure-Lucy declarations; native builtins and runtime-only methods still require the consolidated API inventory and behavior tests.
+
+
+## Documentation example verification
+
+`tools/verify_release.sh` runs all standalone `examples/*.lucy` programs and then executes each per-module quick example in `docs/stdlib/*.md` using `tools/verify_doc_examples.py`. Network-dependent `http` quick examples are explicitly skipped rather than treated as reliable offline tests. Run the checker directly with `python3 tools/verify_doc_examples.py /path/to/lucy`.

@@ -5,6 +5,7 @@ import re
 ROOT = Path(__file__).resolve().parents[1]
 STDLIB = ROOT / "stdlib"
 OUT = ROOT / "docs" / "stdlib"
+VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 DESCRIPTIONS = {
     "app": "Command-line option parsing, logging facade, callable benchmarking, post-hoc duration checks, and templates.",
     "crypto": "Digest/HMAC utilities and cryptographic object facades. Verify backend availability before relying on a primitive.",
@@ -14,7 +15,7 @@ DESCRIPTIONS = {
     "http": "HTTP request helpers, client objects, sockets, DNS resolution, and reverse lookup.",
     "math": "Mathematical constants/functions and common numeric helpers.",
     "random": "Random scalar values and array selection/shuffling helpers.",
-    "repl": "Styled REPL banner/prompt, command/topic metadata, and topic help.",
+    "repl": "Plain-text REPL banner/prompt, command/topic metadata, and topic help.",
     "result": "Small success/error value conventions and unwrap helpers.",
     "runtime": "Kernel/collection facades, formatting, guarded callback helpers, and reflection/dynamic invocation.",
     "set": "Set construction, membership, and set algebra operations.",
@@ -71,7 +72,7 @@ for path in sorted(STDLIB.glob("*.lucy")):
     if name.startswith("_"):
         continue
     classes, funcs, exports = parse_api(path)
-    title = f"# `{name}` standard library — Lucy 2.0.1"
+    title = f"# `{name}` standard library — Lucy {VERSION}"
     content = [title, "", DESCRIPTIONS.get(name, "Standard-library module."), "", 
         "## Availability and imports", "", 
         "The shipped module is loaded automatically in Lucy 2.x. Explicit `import` remains available when you want to make dependencies visible:", "", 

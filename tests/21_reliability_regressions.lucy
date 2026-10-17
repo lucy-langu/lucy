@@ -1,6 +1,11 @@
-# Lucy 2.0.1 regression tests for string, CSV, JSON and strict conversion.
+# Lucy 2.0.2 regression tests for string, CSV, JSON and strict conversion.
 let multibyte = "Aé漢🙂"
 assert multibyte.length() == 4
+assert len(multibyte) == 4
+assert len("é🙂") == 2
+let map_length_check = {"first": 1, "second": 2}
+assert map_length_check.length() == 2
+assert map_length_check.size() == 2
 assert multibyte.char_at(1) == "é"
 assert multibyte.char_at(2) == "漢"
 assert multibyte.char_at(3) == "🙂"
@@ -40,3 +45,19 @@ try {
 }
 assert empty_replace_failed
 println "reliability regressions passed"
+
+var builtin_float_failed = false
+try {
+    float("1.25abc")
+} catch Exception as error {
+    builtin_float_failed = true
+}
+assert builtin_float_failed
+
+var nonfinite_float_failed = false
+try {
+    float("nan")
+} catch Exception as error {
+    nonfinite_float_failed = true
+}
+assert nonfinite_float_failed

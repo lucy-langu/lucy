@@ -1,4 +1,4 @@
-# `time` standard library — Lucy 2.0.1
+# `time` standard library — Lucy 2.0.2
 
 Time/date/date-time objects, parsing, formatting, timestamps, and sleeping.
 

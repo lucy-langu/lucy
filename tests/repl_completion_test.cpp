@@ -27,6 +27,8 @@ let items = [1, 2, 3]
 let name = "Lucy"
 struct Point { x: Int, y: Int }
 let point = Point.new(1, 2)
+class String { func custom_greeting() { return "hello" } }
+class Int { func custom_number() { return self } }
 )");
 
     auto text_matches = interpreter.completion_candidates("text.");
@@ -58,6 +60,11 @@ let point = Point.new(1, 2)
 
     auto number_matches = interpreter.completion_candidates("point.x.to_");
     if (!contains(number_matches, "to_binary") || !contains(number_matches, "to_hex") || !contains(number_matches, "to_octal")) return 10;
+
+    auto extended_string = interpreter.completion_candidates("name.custom_");
+    if (!contains(extended_string, "custom_greeting")) return 12;
+    auto extended_number = interpreter.completion_candidates("point.x.custom_");
+    if (!contains(extended_number, "custom_number")) return 13;
 
     auto globals = interpreter.completion_candidates("A");
     if (!contains(globals, "Array") || !contains(globals, "ARGV")) return 11;

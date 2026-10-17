@@ -1,4 +1,4 @@
-# `text` standard library — Lucy 2.0.1
+# `text` standard library — Lucy 2.0.2
 
 Regular expressions, Base64/hex/URL encoding, shell escaping, and string scanner.
 

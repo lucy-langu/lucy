@@ -1,4 +1,4 @@
-# Lucy 2.0.1 — Standard Library Reference
+# Lucy 2.0.2 — Standard Library Reference
 
 This is the canonical user-facing standard-library reference. Every shipped module is covered here, including the public functions/classes, common usage patterns, return conventions, and important platform/build notes.
 
@@ -6,7 +6,7 @@ The final section contains the complete source-derived API inventory. That inven
 
 ## 1. Standard-library model
 
-Lucy 2.0.1 automatically loads these shipped modules:
+Lucy 2.0.2 automatically loads these shipped modules:
 
 ```text
 app crypto data flow fs http math random repl result runtime set sqlite system text time
@@ -1030,7 +1030,7 @@ The following inventory is source-derived from the shipped `stdlib/*.lucy` files
 
 ## 17. Known implementation limits and caveats
 
-These are explicit boundaries of the 2.0.1 implementation; do not infer stronger guarantees than stated.
+These are explicit boundaries of the 2.0.2 implementation; do not infer stronger guarantees than stated.
 
 - String indexing is Unicode code-point aware for valid UTF-8, not grapheme-cluster aware. `length()` counts code points; `char_at()` and `slice()` use code-point indices; `reverse()` reverses code points. Combining sequences and emoji joined by ZWJ can still display as multiple logical units after reversal. `upper()`/`lower()` are ASCII-oriented rather than full Unicode case conversion.
 - `String.replace(from, to)` rejects an empty `from` with `ValueError` to guarantee progress and prevent an infinite loop.
@@ -1041,3 +1041,15 @@ These are explicit boundaries of the 2.0.1 implementation; do not infer stronger
 - `app.parser()` rejects unknown options, missing values, and unexpected positional arguments; supports `--name=value` and `--name value`; and recognizes boolean options from a boolean default. Short options, required-option declarations, and automatic type conversion are not implemented.
 - `app.benchmark().realtime(callback)` measures a Lucy callback without spawning a shell. The current `millis()` clock has millisecond resolution; short operations can report `0.0`.
 - HTTP, DNS, TLS, process control, file permissions, and signal APIs depend on OS capabilities and external environment. Deterministic CI should mock or isolate these dependencies rather than requiring public internet access.
+
+
+## Runtime-provided module discovery
+
+`modules_info()` is a native global function (not a standard-library module). It returns a map from each discoverable Lucy module name to its source file path. It searches the current source-file directory (when running a script), configured project/install roots, and `LUCY_PATH`; it does not enumerate every file on the machine. In the REPL, `:modules` prints the same kind of discovered module/path information.
+
+```lucy
+let module_paths = modules_info()
+for name in module_paths.keys() {
+    println name + " -> " + module_paths[name]
+}
+```

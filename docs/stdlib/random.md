@@ -1,4 +1,4 @@
-# `random` standard library — Lucy 2.0.1
+# `random` standard library — Lucy 2.0.2
 
 Random scalar values and array selection/shuffling helpers.
 

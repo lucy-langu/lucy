@@ -1,4 +1,4 @@
-# `sqlite` standard library — Lucy 2.0.1
+# `sqlite` standard library — Lucy 2.0.2
 
 SQLite database and prepared-statement wrappers; requires a build with SQLite enabled.
 

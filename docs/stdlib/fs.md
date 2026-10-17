@@ -1,4 +1,4 @@
-# `fs` standard library — Lucy 2.0.1
+# `fs` standard library — Lucy 2.0.2
 
 Filesystem operations, path helpers, text/JSON convenience methods, and IO objects.
 

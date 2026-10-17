@@ -1,4 +1,4 @@
-# Lucy 2.0.1 Standard Library API Inventory
+# Lucy 2.0.2 Standard Library API Inventory
 
 This page is the source-derived signature inventory for the shipped `stdlib/*.lucy` files. It complements `STANDARD_LIBRARY.md`: the main reference explains behavior and usage, while this page makes it easy to verify that a shipped class or function has not been omitted from the documentation set.
 

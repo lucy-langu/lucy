@@ -51,7 +51,9 @@ struct Function{
     Value::InstancePtr bound_self;
     std::shared_ptr<Value> bound_value;
     std::function<Value(const std::vector<Value>&)>native;
+    // Source file for user-defined functions; empty means an interactive definition or native callable.
+    std::string source_file;
 };
-struct Class{std::string name,base;std::unordered_map<std::string,Value>methods;std::shared_ptr<Class>parent;bool is_struct=false;};
+struct Class{std::string name,base;std::unordered_map<std::string,Value>methods;std::shared_ptr<Class>parent;bool is_struct=false;std::string source_file;};
 struct Instance{std::shared_ptr<Class>klass;std::unordered_map<std::string,Value>fields;std::unordered_map<std::string,std::string>field_types;};
 }

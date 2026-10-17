@@ -1,0 +1,14 @@
+class String {
+    func shout() {
+        return self.upper() + "!"
+    }
+}
+
+class Int {
+    func doubled() {
+        return self * 2
+    }
+}
+
+assert("hello".shout() == "HELLO!", "String extension should be available without imports")
+assert(21.doubled() == 42, "Int extension should be available without imports")

@@ -1,4 +1,4 @@
-# `http` standard library — Lucy 2.0.1
+# `http` standard library — Lucy 2.0.2
 
 HTTP request helpers, client objects, sockets, DNS resolution, and reverse lookup.
 

@@ -1,4 +1,4 @@
-# Lucy 2.0.1 Programming Guide
+# Lucy 2.0.2 Programming Guide
 
 This guide is about how to use Lucy effectively rather than listing grammar in isolation.
 

@@ -1,0 +1,5 @@
+# The runtime can report discoverable module source locations.
+let paths = modules_info()
+for name in paths.keys() {
+    println name + " -> " + paths[name]
+}

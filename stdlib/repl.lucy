@@ -2,7 +2,7 @@
 # This is Lucy code on purpose: help text can evolve without changing the C++ runtime.
 
 func banner() {
-    return "\x1b[1;38;5;81mLucy\x1b[0m " + VERSION + "  \x1b[2minteractive environment\x1b[0m\n\x1b[2m────────────────────────────────────────────────────────\x1b[0m\nType \x1b[36m:help\x1b[0m for help · \x1b[36m:reset\x1b[0m to cancel input · \x1b[36m:quit\x1b[0m to exit."
+    return "Lucy " + VERSION + " - interactive environment\nType :help for help, :reset to cancel input, or :quit to exit."
 }
 
 func version() {
@@ -11,16 +11,24 @@ func version() {
 
 func prompt(depth = 0) {
     if depth == 0 {
-        return "\x1b[1;38;5;81mλ\x1b[0m \x1b[1;38;5;114m❯\x1b[0m "
+        return "lucy> "
     }
-    return "\x1b[2;38;5;245m…\x1b[0m "
+    return "... "
 }
 
 func commands() {
     return [
         ":help - Show REPL help",
         ":clear - Clear the terminal and current input buffer",
+        ":reset - Cancel pending multiline input",
+        ":about - Show the plain-text banner",
         ":history - Show recent command history",
+        ":vars - List user-defined global variables (:vars --all includes runtime bindings)",
+        ":vars --all - Include runtime, module, and built-in bindings",
+        ":functions - List available functions",
+        ":modules - List modules and their paths",
+        ":where <name> - Show where a name comes from",
+        ":methods <Type> - List methods available on a type",
         ":version - Show the Lucy version",
         ":quit - Exit the REPL",
         ":exit - Exit the REPL"
@@ -35,7 +43,7 @@ func topics() {
         "if", "unless", "while", "repeat", "for", "switch", "exceptions", "import",
         "modules", "fs", "http", "data", "text", "math", "random", "time", "system",
         "app", "crypto", "result", "runtime", "set", "sqlite", "ARGV", "shell",
-        "semicolon", "completion", "history"
+        "semicolon", "completion", "history", "reflection", "introspection", "type_extensions"
     ]
 }
 
@@ -76,7 +84,7 @@ func help(topic = nil) {
         println "  help \"crypto\"       Digest/HMAC/OpenSSL helpers"
         println ""
         println "Editor:"
-        println "  Tab         Complete keywords, globals, variables, modules, and members"
+        println "  Tab         Complete names; press Tab again to list/cycle candidates"
         println "  Up/Down     Navigate history"
         println "  Left/Right  Move the cursor"
         println "  Home/End    Move to line boundaries"
@@ -92,7 +100,13 @@ func help(topic = nil) {
         return nil
     }
 
-    if topic == "print" {
+    if topic == "reflection" || topic == "introspection" {
+        println "REPL commands: :vars, :functions, :modules, :where <name>, :methods <Type>."
+        println "In Lucy code, use modules_info() for discovered module paths and runtime reflection helpers for values."
+    } else if topic == "type_extensions" {
+        println "Extend built-in types without imports: class String { func shout() { return self.upper() } }"
+        println "Supported built-in class names include Object, Nil, Bool, Int, Double, Number, String, Array, Map, Function, Class, Instance, and Native."
+    } else if topic == "print" {
         println "print(value, ...) -> writes values separated by spaces without adding a newline"
     } else if topic == "println" {
         println "println(value, ...) -> writes values separated by spaces and adds a newline"

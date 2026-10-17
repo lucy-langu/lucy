@@ -1,4 +1,4 @@
-# `runtime` standard library — Lucy 2.0.1
+# `runtime` standard library — Lucy 2.0.2
 
 Kernel/collection facades, formatting, guarded callback helpers, and reflection/dynamic invocation.
 

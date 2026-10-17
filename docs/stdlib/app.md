@@ -1,4 +1,4 @@
-# `app` standard library — Lucy 2.0.1
+# `app` standard library — Lucy 2.0.2
 
 Command-line option parsing, logging facade, callable benchmarking, post-hoc duration checks, and templates.
 

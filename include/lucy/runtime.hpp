@@ -82,6 +82,7 @@ private:
     std::vector<std::shared_ptr<Environment>> environments_;
     std::unordered_map<std::string, std::function<Value(const std::vector<Value>&)>> builtins_;
     std::string current_file_;
+    bool interactive_mode_ = false;
     std::vector<std::string> import_stack_;
     std::unordered_map<std::string, Map> native_modules_;
     std::unordered_map<std::string, std::string> loaded_extensions_;

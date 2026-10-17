@@ -1,4 +1,4 @@
-# `set` standard library — Lucy 2.0.1
+# `set` standard library — Lucy 2.0.2
 
 Set construction, membership, and set algebra operations.
 

@@ -1,6 +1,6 @@
-# Lucy 2.0.1 — Complete Language Reference
+# Lucy 2.0.2 — Complete Language Reference
 
-This is the canonical language reference for Lucy 2.0.1. It describes behavior implemented by the lexer, parser, runtime, shipped library, and regression tests. Unsupported features are explicitly marked instead of being presented as future syntax.
+This is the canonical language reference for Lucy 2.0.2. It describes behavior implemented by the lexer, parser, runtime, shipped library, and regression tests. Unsupported features are explicitly marked instead of being presented as future syntax.
 
 ## 1. Source files and lexical rules
 
@@ -58,7 +58,7 @@ Supported escapes:
 | `\uXXXX` | A four-hex-digit Unicode code point encoded as UTF-8; surrogate code points are rejected |
 | backslash + newline | line continuation |
 
-Unknown escapes are errors. Heredocs, raw-string delimiters, and arbitrary multiline-string syntax are not separate 2.0.1 string forms.
+Unknown escapes are errors. Heredocs, raw-string delimiters, and arbitrary multiline-string syntax are not separate 2.0.2 string forms.
 
 ### 1.5 Interpolation
 
@@ -109,7 +109,7 @@ self super
 
 `repeat` and `do` select the same post-test-loop production.
 
-`super` is reserved, but 2.0.1 does not implement a standalone `super()` / `super.method(...)` expression production. Do not document or rely on such syntax.
+`super` is reserved, but 2.0.2 does not implement a standalone `super()` / `super.method(...)` expression production. Do not document or rely on such syntax.
 
 ## 3. Values and runtime types
 
@@ -380,7 +380,7 @@ Recursion is supported. Lucy does not promise tail-call optimization; deep recur
 
 ## 9. Lambdas
 
-Lucy 2.0.1 has expression-bodied lambdas:
+Lucy 2.0.2 has expression-bodied lambdas:
 
 ```lucy
 let double = lambda x => x * 2
@@ -389,7 +389,7 @@ let add = lambda(a, b) => a + b
 
 They are closures and first-class functions.
 
-Block-bodied or statement-bodied lambda syntax is not a separate supported form in 2.0.1.
+Block-bodied or statement-bodied lambda syntax is not a separate supported form in 2.0.2.
 
 ## 10. Control flow
 
@@ -493,11 +493,11 @@ Lucy supports single inheritance.
 
 ### 11.3 Unsupported OOP features
 
-2.0.1 does not provide separate visibility modifiers, static/class method declarations, method overloading as a language feature, multiple inheritance, mixins, interfaces, abstract classes, or a standalone `super` expression syntax.
+2.0.2 does not provide separate visibility modifiers, static/class method declarations, method overloading as a language feature, multiple inheritance, mixins, interfaces, abstract classes, or a standalone `super` expression syntax.
 
 ### 11.4 Built-in type extension
 
-Built-in types are exposed as classes and can be extended:
+Built-in types are exposed as classes and can be extended in ordinary source code. No `import` is needed to reopen a built-in type; added methods become available to existing values and are included in member completion:
 
 ```lucy
 class String {
@@ -506,10 +506,17 @@ class String {
     }
 }
 
+class Int {
+    func doubled() {
+        return self * 2
+    }
+}
+
 println "hello".shout()
+println 21.doubled()
 ```
 
-The runtime installs built-in type classes for `Object`, `Nil`, `Bool`, `Int`, `Double`, `Number`, `String`, `Array`, `Map`, `Function`, `Class`, `Instance`, and `Native`.
+The runtime installs built-in type classes for `Object`, `Nil`, `Bool`, `Int`, `Double`, `Number`, `String`, `Array`, `Map`, `Function`, `Class`, `Instance`, and `Native`. A type extension adds methods only; fields, constructors, base classes, and per-instance state are not declared by reopening a built-in type. `self` is the original receiver.
 
 ## 12. Structs
 
@@ -596,7 +603,7 @@ try {
 
 Catch matching uses the runtime's textual error category. The caught value is currently a string containing the error message.
 
-There is no public custom exception-class API, structured stack-trace object, or dedicated re-raise syntax in 2.0.1. Multiple `catch` branches can be represented by category matching supported by the parser/runtime, but there is no promise of a conventional object-oriented exception hierarchy.
+There is no public custom exception-class API, structured stack-trace object, or dedicated re-raise syntax in 2.0.2. Multiple `catch` branches can be represented by category matching supported by the parser/runtime, but there is no promise of a conventional object-oriented exception hierarchy.
 
 ## 15. Shell and process interaction
 
@@ -655,7 +662,7 @@ The `runtime` module provides Lucy-level helpers for reflection and invocation, 
 
 ## 18. Memory, concurrency, and execution model
 
-Lucy 2.0.1 is a C++17 interpreter. Runtime values use C++ containers and smart pointers. There is no public language-level garbage collector API.
+Lucy 2.0.2 is a C++17 interpreter. Runtime values use C++ containers and smart pointers. There is no public language-level garbage collector API.
 
 The language does not define a built-in async/await model, generators/yield, scheduler, thread abstraction, or thread-safety guarantee. Native extensions may use host facilities, but they must not assume the interpreter is generally thread-safe.
 
@@ -667,7 +674,7 @@ The language does not define a built-in async/await model, generators/yield, sch
 - Recursion is ultimately limited by the host call stack.
 - Collection and string sizes are limited by available process memory and host container limits rather than a Lucy language-level maximum.
 
-## 20. What Lucy 2.0.1 does not implement
+## 20. What Lucy 2.0.2 does not implement
 
 The following should not be written as 2.0 code without a corresponding language/runtime change:
 
