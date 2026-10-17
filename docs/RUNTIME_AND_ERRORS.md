@@ -1,4 +1,4 @@
-# Lucy 2.0.0 Runtime, Types, and Errors
+# Lucy 2.0.1 Runtime, Types, and Errors
 
 ## 1. Runtime model
 

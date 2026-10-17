@@ -1,6 +1,6 @@
 # Lucy
 
-**Version 2.0.0**
+**Version 2.0.1**
 
 Lucy is a general-purpose programming language implemented in C++17 with runtime type contracts for annotated values and functions. It focuses on readable brace-delimited source, a compact expression system, a practical standard library, and an interactive REPL.
 
@@ -48,7 +48,7 @@ print(count ?? 0)
 
 ## Standard library
 
-Lucy 2.0.0 loads its standard modules automatically. The main modules (`app`, `crypto`, `data`, `flow`, `fs`, `http`, `math`, `random`, `repl`, `result`, `runtime`, `set`, `sqlite`, `system`, `text`, and `time`) are available without a user-written `import`. Explicit `import` remains supported for compatibility and for user modules/packages.
+Lucy 2.0.1 loads its standard modules automatically. The main modules (`app`, `crypto`, `data`, `flow`, `fs`, `http`, `math`, `random`, `repl`, `result`, `runtime`, `set`, `sqlite`, `system`, `text`, and `time`) are available without a user-written `import`. Explicit `import` remains supported for compatibility and for user modules/packages.
 
 ## Extending built-in types
 
@@ -75,6 +75,11 @@ The documentation is intentionally consolidated into a small set of deep referen
 - `docs/LANGUAGE_REFERENCE.md` — complete language syntax and semantics
 - `docs/STANDARD_LIBRARY.md` — complete standard-library reference and API inventory
 - `docs/REPL_AND_TOOLING.md` — CLI, REPL, completion, packages, testing, and editor workflow
+- `docs/REAL_WORLD_WORKFLOWS.md` — end-to-end CSV, JSON, SQLite, CLI and performance patterns
+- `docs/stdlib/` — per-module API references generated from the shipped library source
+- `projects/` — runnable integration projects and fixtures
+- `tools/verify_release.sh` — fresh build, test suite, and integration verification
 - `docs/DEVELOPING_LUCY.md` — implementation architecture, extensions, testing, and releases
 - `docs/HISTORY_AND_MIGRATION.md` — historical migration context
 - `docs/CHANGELOG.md` — release history
+- `docs/VERIFICATION_2_0_1.md` — test environment, passing checks, and unverified platforms

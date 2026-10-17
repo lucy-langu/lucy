@@ -1,4 +1,4 @@
-# Lucy 2.0.0 Packages and Native Extensions
+# Lucy 2.0.1 Packages and Native Extensions
 
 Lucy has two extension layers: Pure-Lucy packages for portable language-level code and native C++ extensions for capabilities that need the host runtime or external libraries.
 

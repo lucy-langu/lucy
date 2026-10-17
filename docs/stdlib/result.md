@@ -1,29 +1,44 @@
-# `result` standard library
+# `result` standard library — Lucy 2.0.1
 
-Small result/value helpers.
+Small success/error value conventions and unwrap helpers.
 
-## Import
+## Availability and imports
+
+The shipped module is loaded automatically in Lucy 2.x. Explicit `import` remains available when you want to make dependencies visible:
 
 ```lucy
 import result
 ```
 
-## Public functions
+Names beginning with `_` or `__` are implementation details unless a public API explicitly documents them.
 
-- `ok(value)`
-- `err(message)`
-- `success(result)`
-- `unwrap(result, fallback = nil)`
-- `message(result)`
-
-## Example
+## Quick example
 
 ```lucy
-import result
-let value = result.ok 42
-println result.unwrap value
+let outcome = result.ok(42)
+if result.success(outcome) {
+    println result.unwrap(outcome)
+}
 ```
+
+## Module-level functions
+
+| Function | Signature |
+|---|---|
+| `ok` | `ok(value)` |
+| `err` | `err(message)` |
+| `success` | `success(result)` |
+| `unwrap` | `unwrap(result, fallback = nil)` |
+| `message` | `message(result)` |
+
+## Classes and methods
+
+No public class declarations were found in this module's pure-Lucy source.
+
+## Contract and error handling
+
+Validate inputs at the application boundary. Runtime errors are reported as Lucy exceptions or native errors; exact messages may vary by platform and build. Do not assume network access, process privileges, filesystem permissions, or optional native dependencies are available.
 
 ## Source of truth
 
-The public function list above is extracted from the current `stdlib/result.lucy` implementation. Internal runtime bridge functions are not public module functions. See `INTERNAL_API.md` and `RUNTIME_CPP.md` for the native boundary.
+Implementation: [`stdlib/result.lucy`](../../stdlib/result.lucy). The signatures above are indexed from the current source file. Behavior is ultimately defined by implementation and regression tests; if you change the source API, regenerate this page and add tests for the new contract.

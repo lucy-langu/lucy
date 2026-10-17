@@ -1,0 +1,42 @@
+# Lucy 2.0.1 regression tests for string, CSV, JSON and strict conversion.
+let multibyte = "Aé漢🙂"
+assert multibyte.length() == 4
+assert multibyte.char_at(1) == "é"
+assert multibyte.char_at(2) == "漢"
+assert multibyte.char_at(3) == "🙂"
+assert multibyte.slice(1, 4) == "é漢🙂"
+assert multibyte.reverse() == "🙂漢éA"
+assert "abc".replace("b", "X") == "aXc"
+
+let csv = data.csv_parse("name,age\n\"Nima, Jr\",20\n")
+assert csv.length() == 2
+assert csv[1][0] == "Nima, Jr"
+assert csv[1][1] == "20"
+assert data.csv_parse("").length() == 0
+assert data.csv_parse("a,b\n").length() == 1
+
+let emoji = data.json.parse("\"\\uD83D\\uDE42\"")
+assert emoji == "🙂"
+
+var integer_failed = false
+try {
+    "12x".to_int()
+} catch Exception as error {
+    integer_failed = true
+}
+assert integer_failed
+var float_failed = false
+try {
+    "1.25abc".to_float()
+} catch Exception as error {
+    float_failed = true
+}
+assert float_failed
+var empty_replace_failed = false
+try {
+    "abc".replace("", "")
+} catch Exception as error {
+    empty_replace_failed = true
+}
+assert empty_replace_failed
+println "reliability regressions passed"

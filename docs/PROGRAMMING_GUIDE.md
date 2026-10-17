@@ -1,4 +1,4 @@
-# Lucy 2.0.0 Programming Guide
+# Lucy 2.0.1 Programming Guide
 
 This guide is about how to use Lucy effectively rather than listing grammar in isolation.
 
@@ -114,7 +114,7 @@ Strings expose object-style methods:
 ```lucy
 let text = "  Lucy  "
 println text.strip()
-println text.upper()
+println "hello".upper()
 println text.lower()
 println text.contains "uc"
 println text.starts_with "Lu"
@@ -256,9 +256,9 @@ try {
 Use the `result` module when success/failure should be represented as ordinary data:
 
 ```lucy
-let result = result.ok 42
-if result.success(result) {
-    println result.unwrap(result)
+let outcome = result.ok(42)
+if result.success(outcome) {
+    println result.unwrap(outcome)
 }
 ```
 
@@ -267,8 +267,8 @@ The exact fields depend on the current result implementation; use `result.succes
 ## 13. Files and data
 
 ```lucy
-let text = fs.read "config.json"
-let config = data.parse text
+let text = fs.read("config.json")
+let config = data.parse(text)
 
 config["version"] = 2
 fs.write "config.json", data.pretty config
@@ -313,9 +313,8 @@ The module also exposes `Date`, `DateTime`, parsing, formatting, timestamps, and
 Runtime reflection belongs in the `runtime` module:
 
 ```lucy
-println runtime.type value
-println runtime.inspect value
-println runtime.methods value
+println runtime.inspect(value)
+println runtime.methods(value)
 
 if runtime.responds value, "start" {
     runtime.call value, "start", []

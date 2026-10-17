@@ -1,4 +1,4 @@
-# Lucy 2.0.0 — Developing, Extending, Testing, and Releasing Lucy
+# Lucy 2.0.1 — Developing, Extending, Testing, and Releasing Lucy
 
 This is the maintainer/developer reference. It combines the implementation architecture, native extension API, build process, tests, migration/versioning policy, limits, and contribution workflow.
 
@@ -198,7 +198,7 @@ The exact builder methods are defined by the installed `extension.hpp`; the head
 
 ### ABI policy
 
-API versioning exists, but Lucy 2.0.0 does not promise that arbitrary extensions compiled against one runtime build remain binary-compatible forever. Rebuild extensions when the runtime/API changes.
+API versioning exists, but Lucy 2.0.1 does not promise that arbitrary extensions compiled against one runtime build remain binary-compatible forever. Rebuild extensions when the runtime/API changes.
 
 ### Platform names
 
@@ -338,3 +338,22 @@ When adding functionality, choose the smallest correct layer:
 - regression -> test suite.
 
 Avoid native wrappers for behavior that can be implemented cleanly in Lucy. Avoid hidden runtime APIs when a public Lucy feature can express the same operation.
+
+
+## Release verification for 2.0.1
+
+Use the reproducible verification script from a clean checkout:
+
+```sh
+./tools/verify_release.sh
+```
+
+The script configures a Release build with SQLite enabled, compiles the runtime and CLI, runs CTest, and executes the JSON configuration, CSV report, and SQLite task-store projects. It removes generated fixture outputs after success. Set `BUILD_DIR` to choose a build directory. The script currently targets a POSIX shell; Windows validation requires a separate native Windows build/test job.
+
+For the source-derived per-module API pages, run:
+
+```sh
+python3 tools/generate_stdlib_docs.py
+```
+
+Review the generated diff, especially after changing public method names or signatures. The generator indexes pure-Lucy declarations; native builtins and runtime-only methods still require the consolidated API inventory and behavior tests.

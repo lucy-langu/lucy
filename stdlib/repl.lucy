@@ -2,7 +2,7 @@
 # This is Lucy code on purpose: help text can evolve without changing the C++ runtime.
 
 func banner() {
-    return "Lucy " + VERSION + " Interactive REPL\nType :help for help, :quit or Ctrl-D to exit."
+    return "\x1b[1;38;5;81mLucy\x1b[0m " + VERSION + "  \x1b[2minteractive environment\x1b[0m\n\x1b[2m────────────────────────────────────────────────────────\x1b[0m\nType \x1b[36m:help\x1b[0m for help · \x1b[36m:reset\x1b[0m to cancel input · \x1b[36m:quit\x1b[0m to exit."
 }
 
 func version() {
@@ -11,9 +11,9 @@ func version() {
 
 func prompt(depth = 0) {
     if depth == 0 {
-        return "Lucy$ "
+        return "\x1b[1;38;5;81mλ\x1b[0m \x1b[1;38;5;114m❯\x1b[0m "
     }
-    return "... "
+    return "\x1b[2;38;5;245m…\x1b[0m "
 }
 
 func commands() {
@@ -41,7 +41,7 @@ func topics() {
 
 func help(topic = nil) {
     if topic == nil {
-        println "Lucy 2.0.0 help"
+        println "Lucy " + VERSION + " help"
         println ""
         println "REPL commands:"
         for command in commands() {
@@ -83,6 +83,10 @@ func help(topic = nil) {
         println "  Ctrl-A/E    Move to beginning/end"
         println "  Ctrl-K/U    Delete to end/beginning"
         println "  Ctrl-D      Exit when the input buffer is empty"
+        println "  Ctrl-C      Cancel the current input or multiline block"
+        println "  Ctrl-L      Clear and redraw the terminal"
+        println "  Ctrl-W      Delete the previous word"
+        println "  :reset      Cancel a multiline expression"
         println ""
         println "Tip: use repl.topics() and repl.commands() to inspect the same help data programmatically."
         return nil

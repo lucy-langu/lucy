@@ -1,4 +1,4 @@
-# Lucy 2.0.0 Implementation Architecture
+# Lucy 2.0.1 Implementation Architecture
 
 This document describes the current C++ implementation rather than the ideal future architecture.
 

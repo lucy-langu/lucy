@@ -42,6 +42,64 @@
 #endif
 using namespace lucy;
 namespace fs = std::filesystem;
+
+static bool lucy_stdout_is_terminal() {
+#ifdef _WIN32
+    DWORD mode = 0;
+    HANDLE output = GetStdHandle(STD_OUTPUT_HANDLE);
+    return output != INVALID_HANDLE_VALUE && GetConsoleMode(output, &mode) != 0;
+#else
+    return isatty(STDOUT_FILENO) != 0;
+#endif
+}
+
+static std::string strip_ansi_sequences(const std::string& input) {
+    std::string output;
+    output.reserve(input.size());
+    bool escape = false, csi = false;
+    for (unsigned char c : input) {
+        if (!escape) {
+            if (c == 0x1b) { escape = true; csi = false; continue; }
+            output += static_cast<char>(c);
+        } else if (!csi) {
+            if (c == '[') { csi = true; continue; }
+            escape = false;
+        } else if (c >= 0x40 && c <= 0x7e) {
+            escape = false; csi = false;
+        }
+    }
+    return output;
+}
+
+// UTF-8 code-point boundaries. Lucy's String API uses Unicode code points
+// (not bytes); grapheme-cluster segmentation is intentionally not implied.
+static std::size_t utf8_width(const std::string& s, std::size_t i) {
+    const unsigned char c = static_cast<unsigned char>(s[i]);
+    std::size_t n = c < 0x80 ? 1 : (c >= 0xC2 && c <= 0xDF ? 2 :
+                      c >= 0xE0 && c <= 0xEF ? 3 : c >= 0xF0 && c <= 0xF4 ? 4 : 1);
+    if (i + n > s.size()) return 1;
+    for (std::size_t j = 1; j < n; ++j)
+        if ((static_cast<unsigned char>(s[i+j]) & 0xC0) != 0x80) return 1;
+    if (n == 3) {
+        const unsigned char b = static_cast<unsigned char>(s[i+1]);
+        if ((c == 0xE0 && b < 0xA0) || (c == 0xED && b >= 0xA0)) return 1;
+    }
+    if (n == 4) {
+        const unsigned char b = static_cast<unsigned char>(s[i+1]);
+        if ((c == 0xF0 && b < 0x90) || (c == 0xF4 && b >= 0x90)) return 1;
+    }
+    return n;
+}
+static std::vector<std::size_t> utf8_offsets(const std::string& s) {
+    std::vector<std::size_t> offsets; offsets.push_back(0);
+    for (std::size_t i=0; i<s.size();) { i += utf8_width(s, i); offsets.push_back(i); }
+    return offsets;
+}
+static std::string utf8_reverse(const std::string& s) {
+    auto o = utf8_offsets(s); std::string out; out.reserve(s.size());
+    for (std::size_t i=o.size()-1; i>0; --i) out.append(s, o[i-1], o[i]-o[i-1]);
+    return out;
+}
 static fs::path executable_path();
 static bool type_matches(const std::string &expected, const Value &value)
 {
@@ -191,7 +249,7 @@ Interpreter::Interpreter(std::vector<std::string> argv)
 
     globals_->define("PI", 3.141592653589793, true);
     globals_->define("E", 2.718281828459045, true);
-    globals_->define("VERSION", "2.0.0", true);
+    globals_->define("VERSION", "2.0.1", true);
 
 #ifdef _WIN32
     globals_->define("PLATFORM", std::string("windows"), true);
@@ -913,7 +971,7 @@ Value Interpreter::member_get(const Value &v, const std::string &n)
     if (std::holds_alternative<std::string>(v.data))
     {
         auto f = [this, n, v](const std::vector<Value> &a) -> Value
-        {auto s=std::get<std::string>(v.data);if(n=="upper"||n=="upcase"){std::transform(s.begin(),s.end(),s.begin(),[](unsigned char c){return (char)std::toupper(c);});return Value(s);}if(n=="lower"||n=="downcase"){std::transform(s.begin(),s.end(),s.begin(),[](unsigned char c){return (char)std::tolower(c);});return Value(s);}if(n=="strip"||n=="trim"){auto b=s.find_first_not_of(" \t\r\n"),e=s.find_last_not_of(" \t\r\n");return Value(b==std::string::npos?"":s.substr(b,e-b+1));}if(n=="contains"||n=="starts_with"||n=="ends_with"){need(a.size(),1,n);auto q=std::get<std::string>(a[0].data);if(n=="contains")return Value(s.find(q)!=std::string::npos);if(n=="starts_with")return Value(s.rfind(q,0)==0);return Value(q.size()<=s.size()&&s.compare(s.size()-q.size(),q.size(),q)==0);}if(n=="length"||n=="size")return Value((long long)s.size());if(n=="reverse"){std::reverse(s.begin(),s.end());return Value(s);}if(n=="repeat"){need(a.size(),1,n);long long k=integer(a[0],n);if(k<0)throw std::runtime_error("ValueError: repeat count cannot be negative");std::string r;for(long long i=0;i<k;++i)r+=s;return Value(r);}if(n=="to_int"){try{return Value(std::stoll(s));}catch(...){throw std::runtime_error("ValueError: invalid integer string");}}if(n=="to_float"){try{return Value(std::stod(s));}catch(...){throw std::runtime_error("ValueError: invalid float string");}}if(n=="slice"){if(a.size()<1||a.size()>2)throw std::runtime_error("ArgumentError: slice expects 1 or 2 arguments");long long start=integer(a[0],n);if(start<0)start+=(long long)s.size();if(start<0)start=0;if(start>(long long)s.size())start=s.size();long long end=(long long)s.size();if(a.size()==2){end=integer(a[1],n);if(end<0)end+=(long long)s.size();if(end<start)end=start;if(end>(long long)s.size())end=s.size();}return Value(s.substr((size_t)start,(size_t)(end-start)));}if(n=="char_at"){need(a.size(),1,n);long long index=integer(a[0],n);if(index<0)index+=(long long)s.size();if(index<0||index>=(long long)s.size())return Value{};return Value(std::string(1,s[(size_t)index]));}if(n=="split"){need(a.size(),1,n);auto sep=std::get<std::string>(a[0].data);if(sep.empty())throw std::runtime_error("ValueError: split separator cannot be empty");Array r;size_t pos=0;while(true){auto q=s.find(sep,pos);if(q==std::string::npos){r.emplace_back(s.substr(pos));break;}r.emplace_back(s.substr(pos,q-pos));pos=q+sep.size();}return Value(std::move(r));}if(n=="replace"){need(a.size(),2,n);auto from=std::get<std::string>(a[0].data),to=std::get<std::string>(a[1].data);size_t pos=0;while((pos=s.find(from,pos))!=std::string::npos){s.replace(pos,from.size(),to);pos+=to.size();}return Value(s);}throw std::runtime_error("NoMethodError: string has no method '"+n+"'"); };
+        {auto s=std::get<std::string>(v.data);if(n=="upper"||n=="upcase"){std::transform(s.begin(),s.end(),s.begin(),[](unsigned char c){return (char)std::toupper(c);});return Value(s);}if(n=="lower"||n=="downcase"){std::transform(s.begin(),s.end(),s.begin(),[](unsigned char c){return (char)std::tolower(c);});return Value(s);}if(n=="strip"||n=="trim"){auto b=s.find_first_not_of(" \t\r\n"),e=s.find_last_not_of(" \t\r\n");return Value(b==std::string::npos?"":s.substr(b,e-b+1));}if(n=="contains"||n=="starts_with"||n=="ends_with"){need(a.size(),1,n);auto q=std::get<std::string>(a[0].data);if(n=="contains")return Value(s.find(q)!=std::string::npos);if(n=="starts_with")return Value(s.rfind(q,0)==0);return Value(q.size()<=s.size()&&s.compare(s.size()-q.size(),q.size(),q)==0);}if(n=="length"||n=="size")return Value((long long)(utf8_offsets(s).size()-1));if(n=="reverse")return Value(utf8_reverse(s));if(n=="repeat"){need(a.size(),1,n);long long k=integer(a[0],n);if(k<0)throw std::runtime_error("ValueError: repeat count cannot be negative");std::string r;for(long long i=0;i<k;++i)r+=s;return Value(r);}if(n=="to_int"){try{std::size_t used=0;long long value=std::stoll(s,&used,10);while(used<s.size()&&std::isspace((unsigned char)s[used]))++used;if(used!=s.size())throw std::invalid_argument("trailing characters");return Value(value);}catch(...){throw std::runtime_error("ValueError: invalid integer string");}}if(n=="to_float"){try{std::size_t used=0;double value=std::stod(s,&used);while(used<s.size()&&std::isspace((unsigned char)s[used]))++used;if(used!=s.size()||!std::isfinite(value))throw std::invalid_argument("invalid float");return Value(value);}catch(...){throw std::runtime_error("ValueError: invalid float string");}}if(n=="slice"){if(a.size()<1||a.size()>2)throw std::runtime_error("ArgumentError: slice expects 1 or 2 arguments");auto offsets=utf8_offsets(s);long long count=(long long)offsets.size()-1;long long start=integer(a[0],n);if(start<0)start+=count;if(start<0)start=0;if(start>count)start=count;long long end=count;if(a.size()==2){end=integer(a[1],n);if(end<0)end+=count;if(end<start)end=start;if(end>count)end=count;}return Value(s.substr(offsets[(size_t)start],offsets[(size_t)end]-offsets[(size_t)start]));}if(n=="char_at"){need(a.size(),1,n);auto offsets=utf8_offsets(s);long long count=(long long)offsets.size()-1;long long index=integer(a[0],n);if(index<0)index+=count;if(index<0||index>=count)return Value{};return Value(s.substr(offsets[(size_t)index],offsets[(size_t)index+1]-offsets[(size_t)index]));}if(n=="split"){need(a.size(),1,n);auto sep=std::get<std::string>(a[0].data);if(sep.empty())throw std::runtime_error("ValueError: split separator cannot be empty");Array r;size_t pos=0;while(true){auto q=s.find(sep,pos);if(q==std::string::npos){r.emplace_back(s.substr(pos));break;}r.emplace_back(s.substr(pos,q-pos));pos=q+sep.size();}return Value(std::move(r));}if(n=="replace"){need(a.size(),2,n);auto from=std::get<std::string>(a[0].data),to=std::get<std::string>(a[1].data);if(from.empty())throw std::runtime_error("ValueError: replace search string cannot be empty");size_t pos=0;while((pos=s.find(from,pos))!=std::string::npos){s.replace(pos,from.size(),to);pos+=to.size();}return Value(s);}throw std::runtime_error("NoMethodError: string has no method '"+n+"'"); };
         return Value(std::make_shared<Function>(Function{n, "", {}, nullptr, env_, nullptr, nullptr, f}));
     }
     if (v.is_number())
@@ -2120,16 +2178,18 @@ void Interpreter::repl()
         try
         {
             Value banner = eval_repl_library("repl.banner()\n");
-            std::cout << banner.to_string() << "\n\n";
+            std::string banner_text = banner.to_string();
+            if (!lucy_stdout_is_terminal()) banner_text = strip_ansi_sequences(banner_text);
+            std::cout << banner_text << "\n\n";
         }
         catch (const std::exception &)
         {
-            std::cout << "Lucy 2.0.0 Interactive REPL\n\n";
+            std::cout << "Lucy 2.0.1 Interactive REPL\n\n";
         }
     }
     else
     {
-        std::cout << "Lucy 2.0.0 Interactive REPL\n\n";
+        std::cout << "Lucy 2.0.1 Interactive REPL\n\n";
     }
 
     std::string buffer;
@@ -2177,6 +2237,7 @@ void Interpreter::repl()
                 Value custom_prompt = eval_repl_library(
                     "repl.prompt(" + std::to_string(block_depth) + ")\n");
                 prompt = custom_prompt.to_string();
+                if (!lucy_stdout_is_terminal()) prompt = strip_ansi_sequences(prompt);
             }
             catch (const std::exception &)
             {
@@ -2189,6 +2250,19 @@ void Interpreter::repl()
                               { return completion_candidates(input); }))
         {
             break;
+        }
+
+        if (line == "\x03") {
+            buffer.clear();
+            block_depth = 0;
+            continue;
+        }
+
+        if (block_depth == 0 && line == ":reset") {
+            buffer.clear();
+            block_depth = 0;
+            std::cout << "\x1b[2mInput buffer reset.\x1b[0m\n";
+            continue;
         }
 
         if (block_depth == 0 && line == ":quit")
@@ -2216,6 +2290,33 @@ void Interpreter::repl()
             continue;
         }
 
+        if (block_depth == 0 && line.compare(0, 6, ":help ") == 0)
+        {
+            const std::string topic = line.substr(6);
+            const bool safe_topic = !topic.empty() && std::all_of(topic.begin(), topic.end(), [](unsigned char c) {
+                return std::isalnum(c) || c == '_' || c == '?';
+            });
+            if (!safe_topic) {
+                std::cerr << "Usage: :help <topic> (letters, digits, underscore, or ?)\n";
+            } else if (repl_library_loaded) {
+                try { eval_repl_library("repl.help(\"" + topic + "\")\n"); }
+                catch (const std::exception &error) { std::cerr << error.what() << '\n'; }
+            } else {
+                std::cout << "REPL help library is unavailable.\n";
+            }
+            continue;
+        }
+
+        if (block_depth == 0 && line == ":about")
+        {
+            try {
+                std::string about = eval_repl_library("repl.banner()\n").to_string();
+                if (!lucy_stdout_is_terminal()) about = strip_ansi_sequences(about);
+                std::cout << about << "\n\n";
+            } catch (const std::exception &) { std::cout << "Lucy 2.0.1 interactive environment\n"; }
+            continue;
+        }
+
         if (block_depth == 0 && line == ":version")
         {
             if (repl_library_loaded)
@@ -2227,12 +2328,12 @@ void Interpreter::repl()
                 }
                 catch (const std::exception &)
                 {
-                    std::cout << "2.0.0\n";
+                    std::cout << "2.0.1\n";
                 }
             }
             else
             {
-                std::cout << "2.0.0\n";
+                std::cout << "2.0.1\n";
             }
             continue;
         }

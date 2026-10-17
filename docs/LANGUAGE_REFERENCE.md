@@ -1,6 +1,6 @@
-# Lucy 2.0.0 — Complete Language Reference
+# Lucy 2.0.1 — Complete Language Reference
 
-This is the canonical language reference for Lucy 2.0.0. It describes behavior implemented by the lexer, parser, runtime, shipped library, and regression tests. Unsupported features are explicitly marked instead of being presented as future syntax.
+This is the canonical language reference for Lucy 2.0.1. It describes behavior implemented by the lexer, parser, runtime, shipped library, and regression tests. Unsupported features are explicitly marked instead of being presented as future syntax.
 
 ## 1. Source files and lexical rules
 
@@ -55,10 +55,10 @@ Supported escapes:
 | `\r` | carriage return |
 | `\t` | tab |
 | `\xNN` | byte from two hexadecimal digits |
-| `\uXXXX` | Unicode code point encoded as UTF-8 |
+| `\uXXXX` | A four-hex-digit Unicode code point encoded as UTF-8; surrogate code points are rejected |
 | backslash + newline | line continuation |
 
-Unknown escapes are errors. Heredocs, raw-string delimiters, and arbitrary multiline-string syntax are not separate 2.0.0 string forms.
+Unknown escapes are errors. Heredocs, raw-string delimiters, and arbitrary multiline-string syntax are not separate 2.0.1 string forms.
 
 ### 1.5 Interpolation
 
@@ -109,7 +109,7 @@ self super
 
 `repeat` and `do` select the same post-test-loop production.
 
-`super` is reserved, but 2.0.0 does not implement a standalone `super()` / `super.method(...)` expression production. Do not document or rely on such syntax.
+`super` is reserved, but 2.0.1 does not implement a standalone `super()` / `super.method(...)` expression production. Do not document or rely on such syntax.
 
 ## 3. Values and runtime types
 
@@ -151,7 +151,7 @@ const answer = 42
 global shared = 10
 ```
 
-`let` and `var` are mutable. `const` is immutable after initialization. A declaration without an initializer receives `nil`.
+`let` and `const` are immutable bindings. `var` is mutable. A declaration without an initializer receives `nil`.
 
 ### 4.2 Type annotations
 
@@ -380,7 +380,7 @@ Recursion is supported. Lucy does not promise tail-call optimization; deep recur
 
 ## 9. Lambdas
 
-Lucy 2.0.0 has expression-bodied lambdas:
+Lucy 2.0.1 has expression-bodied lambdas:
 
 ```lucy
 let double = lambda x => x * 2
@@ -389,7 +389,7 @@ let add = lambda(a, b) => a + b
 
 They are closures and first-class functions.
 
-Block-bodied or statement-bodied lambda syntax is not a separate supported form in 2.0.0.
+Block-bodied or statement-bodied lambda syntax is not a separate supported form in 2.0.1.
 
 ## 10. Control flow
 
@@ -493,7 +493,7 @@ Lucy supports single inheritance.
 
 ### 11.3 Unsupported OOP features
 
-2.0.0 does not provide separate visibility modifiers, static/class method declarations, method overloading as a language feature, multiple inheritance, mixins, interfaces, abstract classes, or a standalone `super` expression syntax.
+2.0.1 does not provide separate visibility modifiers, static/class method declarations, method overloading as a language feature, multiple inheritance, mixins, interfaces, abstract classes, or a standalone `super` expression syntax.
 
 ### 11.4 Built-in type extension
 
@@ -596,7 +596,7 @@ try {
 
 Catch matching uses the runtime's textual error category. The caught value is currently a string containing the error message.
 
-There is no public custom exception-class API, structured stack-trace object, or dedicated re-raise syntax in 2.0.0. Multiple `catch` branches can be represented by category matching supported by the parser/runtime, but there is no promise of a conventional object-oriented exception hierarchy.
+There is no public custom exception-class API, structured stack-trace object, or dedicated re-raise syntax in 2.0.1. Multiple `catch` branches can be represented by category matching supported by the parser/runtime, but there is no promise of a conventional object-oriented exception hierarchy.
 
 ## 15. Shell and process interaction
 
@@ -655,7 +655,7 @@ The `runtime` module provides Lucy-level helpers for reflection and invocation, 
 
 ## 18. Memory, concurrency, and execution model
 
-Lucy 2.0.0 is a C++17 interpreter. Runtime values use C++ containers and smart pointers. There is no public language-level garbage collector API.
+Lucy 2.0.1 is a C++17 interpreter. Runtime values use C++ containers and smart pointers. There is no public language-level garbage collector API.
 
 The language does not define a built-in async/await model, generators/yield, scheduler, thread abstraction, or thread-safety guarantee. Native extensions may use host facilities, but they must not assume the interpreter is generally thread-safe.
 
@@ -667,7 +667,7 @@ The language does not define a built-in async/await model, generators/yield, sch
 - Recursion is ultimately limited by the host call stack.
 - Collection and string sizes are limited by available process memory and host container limits rather than a Lucy language-level maximum.
 
-## 20. What Lucy 2.0.0 does not implement
+## 20. What Lucy 2.0.1 does not implement
 
 The following should not be written as 2.0 code without a corresponding language/runtime change:
 
@@ -688,3 +688,10 @@ The following should not be written as 2.0 code without a corresponding language
 ## 21. Grammar reference
 
 The parser is implemented as a recursive-descent grammar in `src/parser.cpp`. The precedence table above is the authoritative semantic ordering. `GRAMMAR.md` is intentionally an EBNF-style explanatory grammar, not a claim of mechanically generated parser grammar.
+
+
+## 15. Known string and parser limitations
+
+The runtime stores strings as UTF-8 byte sequences. `length()`, `char_at()`, `slice()`, and `reverse()` now operate on UTF-8 code-point boundaries. They do not implement Unicode grapheme-cluster segmentation; combining marks and emoji ZWJ sequences may comprise multiple logical display characters. `upper()` and `lower()` remain ASCII-oriented and are not full Unicode case mapping.
+
+The JSON parser combines valid UTF-16 surrogate pairs and rejects isolated surrogates. Invalid UTF-8 in unescaped JSON string bytes is not fully validated; do not treat parsing as a byte-validation boundary.

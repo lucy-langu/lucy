@@ -1,4 +1,15 @@
-# Lucy 2.0.0 Changelog
+# Lucy Changelog
+
+## 2.0.1 — Reliability, documentation, and REPL polish
+
+- Fixed UTF-8 code-point behavior for core string length/index/slice/reverse methods.
+- Prevented empty-pattern replacement hangs and made numeric conversions reject trailing junk.
+- Corrected CSV record/quoting behavior and JSON surrogate-pair decoding.
+- Made `Benchmark` measure Lucy callbacks rather than executing shell commands.
+- Hardened `OptionParser`, added `--name=value`, and improved REPL styling, topic help, Ctrl-C reset, UTF-8 editing, Ctrl-L, and Ctrl-W.
+- Added regression tests, source-indexed per-module API pages, and runnable CSV/JSON/SQLite projects.
+
+## 2.0.0 Changelog
 
 ## 2.0.0 — Runtime, language, library, and tooling consolidation
 

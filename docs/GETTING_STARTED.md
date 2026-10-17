@@ -1,4 +1,4 @@
-# Lucy 2.0.0 — Getting Started
+# Lucy 2.0.1 — Getting Started
 
 This is the practical tutorial. It assumes no previous Lucy knowledge and deliberately uses complete, runnable examples.
 
@@ -51,14 +51,14 @@ Lucy functions are first-class values, arrays provide functional methods, and la
 ```lucy
 let name = "Lucy"
 var counter = 0
-const language_version = "2.0.0"
+const language_version = "2.0.1"
 
 counter += 1
 println name
 println counter
 ```
 
-`let` and `var` are mutable bindings. `const` cannot be reassigned.
+`let` and `const` create immutable bindings. `var` creates a mutable binding and can be reassigned.
 
 An uninitialized declaration receives `nil`:
 
@@ -95,7 +95,7 @@ println name.upper()
 println name.replace("Lucy", "Lucy 2")
 ```
 
-Interpolation supports `$name` and dotted member paths. Arbitrary `${expression}` interpolation is not part of 2.0.0.
+Interpolation supports `$name` and dotted member paths. Arbitrary `${expression}` interpolation is not part of 2.0.1.
 
 ## 6. Arrays
 
@@ -207,7 +207,7 @@ class Admin < User {
 }
 ```
 
-There are no visibility modifiers, interfaces, mixins, multiple inheritance, or separate static/class-method syntax in 2.0.0.
+There are no visibility modifiers, interfaces, mixins, multiple inheritance, or separate static/class-method syntax in 2.0.1.
 
 ## 11. Structs
 
@@ -231,7 +231,7 @@ The shipped standard modules are loaded automatically. For example:
 
 ```lucy
 println fs.read("hello.txt")
-println text.upper("hello")
+println "hello".upper()
 println system.platform()
 println time.now()
 ```
@@ -270,7 +270,7 @@ try {
 }
 ```
 
-The caught value is currently the textual error message. Lucy 2.0.0 does not expose a public exception-object hierarchy.
+The caught value is currently the textual error message. Lucy 2.0.1 does not expose a public exception-object hierarchy.
 
 ## 15. Discovering Lucy interactively
 

@@ -1,0 +1,14 @@
+import app
+import fs
+import data
+let file = "audit-notes.json"
+let parser = app.parser()
+parser.banner("notes [--add TEXT]")
+parser.on("add", "Add a note", nil)
+let options = parser.parse(["--add", "first note"])
+let notes = [options.get("add"), "second note"]
+fs.write(file, data.stringify(notes))
+let loaded = data.parse(fs.read(file))
+println data.stringify(loaded)
+println parser.help()
+fs.remove(file)

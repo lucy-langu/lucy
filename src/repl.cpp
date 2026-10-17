@@ -147,13 +147,38 @@ int read_key() {
 
 #endif
 
+std::size_t utf8_width_at(const std::string& text, std::size_t pos) {
+    if (pos >= text.size()) return 0;
+    const unsigned char c = static_cast<unsigned char>(text[pos]);
+    std::size_t width = c < 0x80 ? 1 : (c >= 0xC2 && c <= 0xDF ? 2 :
+                         c >= 0xE0 && c <= 0xEF ? 3 : c >= 0xF0 && c <= 0xF4 ? 4 : 1);
+    if (pos + width > text.size()) return 1;
+    for (std::size_t i=1; i<width; ++i)
+        if ((static_cast<unsigned char>(text[pos+i]) & 0xC0) != 0x80) return 1;
+    return width;
+}
+
+std::size_t previous_utf8_boundary(const std::string& text, std::size_t pos) {
+    if (pos == 0) return 0;
+    --pos;
+    while (pos > 0 && (static_cast<unsigned char>(text[pos]) & 0xC0) == 0x80) --pos;
+    return pos;
+}
+
+std::size_t terminal_columns(const std::string& text) {
+    std::size_t columns=0;
+    for (std::size_t i=0; i<text.size();) {
+        i += utf8_width_at(text, i);
+        ++columns;
+    }
+    return columns;
+}
+
 void render_line(const std::string& prompt, const std::string& line,
                  std::size_t cursor) {
     std::cout << '\r' << prompt << line << "\x1b[K";
-    const std::size_t distance = line.size() - cursor;
-    if (distance > 0) {
-        std::cout << "\x1b[" << distance << 'D';
-    }
+    const std::size_t distance = terminal_columns(line.substr(cursor));
+    if (distance > 0) std::cout << "\x1b[" << distance << 'D';
     std::cout.flush();
 }
 
@@ -307,10 +332,36 @@ bool ReplLineEditor::read_line(const std::string& prompt, std::string& line,
             continue;
         }
 
+        if (key == 0x03) { // Ctrl-C: cancel current input without terminating the REPL
+            line = "\x03";
+            std::cout << "^C\n";
+            return true;
+        }
+
+        if (key == 0x0c) { // Ctrl-L
+            std::cout << "\x1b[2J\x1b[H" << std::flush;
+            render_line(prompt, line, cursor);
+            continue;
+        }
+
+        if (key == 0x17) { // Ctrl-W: delete the previous word
+            if (cursor > 0) {
+                std::size_t begin = cursor;
+                while (begin > 0 && std::isspace(static_cast<unsigned char>(line[begin - 1]))) --begin;
+                while (begin > 0 && !std::isspace(static_cast<unsigned char>(line[begin - 1]))) --begin;
+                line.erase(begin, cursor - begin);
+                cursor = begin;
+                render_line(prompt, line, cursor);
+            }
+            completion_listed = false;
+            continue;
+        }
+
         if (key == 0x7f || key == '\b') {
             if (cursor > 0) {
-                line.erase(cursor - 1, 1);
-                --cursor;
+                const std::size_t previous = previous_utf8_boundary(line, cursor);
+                line.erase(previous, cursor - previous);
+                cursor = previous;
                 render_line(prompt, line, cursor);
             }
             completion_listed = false;
@@ -344,7 +395,7 @@ bool ReplLineEditor::read_line(const std::string& prompt, std::string& line,
 
         if (key == 0x104 || key == (0x100 + 75)) { // Left
             if (cursor > 0) {
-                --cursor;
+                cursor = previous_utf8_boundary(line, cursor);
                 render_line(prompt, line, cursor);
             }
             completion_listed = false;
@@ -353,7 +404,7 @@ bool ReplLineEditor::read_line(const std::string& prompt, std::string& line,
 
         if (key == 0x103 || key == (0x100 + 77)) { // Right
             if (cursor < line.size()) {
-                ++cursor;
+                cursor += utf8_width_at(line, cursor);
                 render_line(prompt, line, cursor);
             }
             completion_listed = false;
@@ -376,7 +427,7 @@ bool ReplLineEditor::read_line(const std::string& prompt, std::string& line,
 
         if (key == 0x107) { // Delete
             if (cursor < line.size()) {
-                line.erase(cursor, 1);
+                line.erase(cursor, utf8_width_at(line, cursor));
                 render_line(prompt, line, cursor);
             }
             completion_listed = false;
@@ -498,7 +549,7 @@ bool ReplLineEditor::read_line(const std::string& prompt, std::string& line,
             continue;
         }
 
-        if (key >= 0x20 && key <= 0x7e) {
+        if (key >= 0x20 && key <= 0xff && key != 0x7f) {
             line.insert(cursor, 1, static_cast<char>(key));
             ++cursor;
             render_line(prompt, line, cursor);

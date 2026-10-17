@@ -1,4 +1,4 @@
-# Lucy 2.0.0 — Standard Library Reference
+# Lucy 2.0.1 — Standard Library Reference
 
 This is the canonical user-facing standard-library reference. Every shipped module is covered here, including the public functions/classes, common usage patterns, return conventions, and important platform/build notes.
 
@@ -6,7 +6,7 @@ The final section contains the complete source-derived API inventory. That inven
 
 ## 1. Standard-library model
 
-Lucy 2.0.0 automatically loads these shipped modules:
+Lucy 2.0.1 automatically loads these shipped modules:
 
 ```text
 app crypto data flow fs http math random repl result runtime set sqlite system text time
@@ -16,7 +16,7 @@ Therefore this works without an explicit import:
 
 ```lucy
 println fs.read("README.md")
-println text.upper("hello")
+println "hello".upper()
 println system.platform()
 ```
 
@@ -44,7 +44,7 @@ Use `OptionParser` for simple command-line option parsing:
 ```lucy
 let parser = app.parser()
 parser.banner("Lucy example")
-parser.on("--name", "user name", "Lucy")
+parser.on("name", "user name", "Lucy")
 let options = parser.parse(ARGV)
 println options
 ```
@@ -64,22 +64,25 @@ Levels are controlled with `level`, `set_level`, and `level_set`. Predicate meth
 ### Benchmark
 
 ```lucy
-let elapsed = app.benchmark().realtime(lambda => work())
+func work() {
+    return 1 + 1
+}
+let elapsed = app.benchmark().realtime(lambda() => work())
 println elapsed
 ```
 
-`Benchmark.realtime` and `Benchmark.measure` accept callbacks.
+`Benchmark.realtime` and `Benchmark.measure` accept a callable, execute it in the current Lucy process, and return elapsed seconds. The current clock has millisecond resolution; very short operations can therefore report `0.0`. These methods do not execute shell text.
 
 ### Timeout
 
-`app.timeout().timeout(seconds, callback)` runs a callback with the library's timeout behavior. Timeout semantics are implemented by the shipped library/runtime and should not be confused with a general thread scheduler.
+`app.timeout().timeout(seconds, callback)` measures elapsed time and raises only after the callback returns if the duration exceeded the limit. It does **not** interrupt a callback, cancel blocking I/O, or enforce a hard deadline. Do not use it as a safety boundary or to contain untrusted/possibly non-terminating code.
 
 ### ERB
 
 `ERB` provides template rendering from a template string:
 
 ```lucy
-let template = app.template("Hello $name")
+let template = app.template("Hello {{name}}")
 println template.result({"name": "Lucy"})
 ```
 
@@ -108,10 +111,19 @@ Crypto operations can fail with native/runtime errors. Availability depends on t
 ### Basic transforms
 
 ```lucy
+let user = {name: "Ada", email: "ada@example.test", password: "secret"}
+let left = {name: "Ada"}
+let right = {active: true}
+let keys = ["name", "age"]
+let values = ["Ada", 37]
 let selected = data.pick(user, ["name", "email"])
 let without_secret = data.omit(user, ["password"])
 let combined = data.merge(left, right)
 let pairs = data.zip(keys, values)
+println selected
+println without_secret
+println combined
+println pairs
 ```
 
 ### JSON
@@ -315,9 +327,9 @@ Public functions are `banner`, `version`, `prompt`, `commands`, `topics`, and `h
 # 11. `result` — explicit success/error values
 
 ```lucy
-let result = result.ok(42)
-println result.success()
-println result.unwrap(0)
+let outcome = result.ok(42)
+println result.success(outcome)
+println result.unwrap(outcome)
 ```
 
 The module provides `ok`, `err`, `success`, `unwrap`, and `message`.
@@ -331,13 +343,14 @@ Use it when a function wants to represent expected failure as data rather than i
 `runtime` is the closest thing to a reflection/tooling module in the standard library.
 
 ```lucy
+let value = [1, 2, 3]
 println runtime.inspect(value)
 println runtime.methods(value)
 println runtime.responds(value, "push")
 println runtime.call(value, "push", [10])
 ```
 
-The module also exposes convenience wrappers around the `Kernel` class and collection algorithms.
+The module also exposes convenience wrappers around the `Kernel` class and collection algorithms. There is no public `runtime.type(...)` helper in the shipped implementation; use `runtime.inspect(value)`, `runtime.methods(value)`, and `runtime.responds(value, name)` where appropriate.
 
 Important functions include:
 
@@ -516,8 +529,8 @@ The following inventory is source-derived from the shipped `stdlib/*.lucy` files
 - `Logger.error?()`
 - `Logger.fatal?()`
 - `class Benchmark`
-- `Benchmark.realtime(command)`
-- `Benchmark.measure(command)`
+- `Benchmark.realtime(callback)`
+- `Benchmark.measure(callback)`
 - `class Timeout`
 - `Timeout.timeout(seconds, callback)`
 - `class ERB`
@@ -1013,3 +1026,18 @@ The following inventory is source-derived from the shipped `stdlib/*.lucy` files
 - `format(value, pattern = "%Y-%m-%d %H:%M:%S")`
 - `_time_sleep(milliseconds)`
 - `sleep(milliseconds)`
+
+
+## 17. Known implementation limits and caveats
+
+These are explicit boundaries of the 2.0.1 implementation; do not infer stronger guarantees than stated.
+
+- String indexing is Unicode code-point aware for valid UTF-8, not grapheme-cluster aware. `length()` counts code points; `char_at()` and `slice()` use code-point indices; `reverse()` reverses code points. Combining sequences and emoji joined by ZWJ can still display as multiple logical units after reversal. `upper()`/`lower()` are ASCII-oriented rather than full Unicode case conversion.
+- `String.replace(from, to)` rejects an empty `from` with `ValueError` to guarantee progress and prevent an infinite loop.
+- `String.to_int()` and `String.to_float()` reject trailing non-whitespace characters. Numeric conversion follows the C++ runtime's locale behavior for floating-point parsing; locale-independent parsing is not promised.
+- CSV parsing returns an empty array for empty input and does not create a synthetic record for a final line terminator. It rejects malformed quote placement and unterminated quoted fields. Delimiters are single-byte characters; Unicode delimiters are not supported.
+- JSON parsing combines valid UTF-16 surrogate pairs in `\uXXXX` escapes and rejects isolated surrogates. Validation of raw, unescaped UTF-8 byte sequences is not a complete security boundary.
+- `app.timeout().timeout(seconds, callback)` is post-hoc elapsed-time checking. It cannot interrupt a callback or cancel blocking I/O and must not be used to contain non-terminating or untrusted code.
+- `app.parser()` rejects unknown options, missing values, and unexpected positional arguments; supports `--name=value` and `--name value`; and recognizes boolean options from a boolean default. Short options, required-option declarations, and automatic type conversion are not implemented.
+- `app.benchmark().realtime(callback)` measures a Lucy callback without spawning a shell. The current `millis()` clock has millisecond resolution; short operations can report `0.0`.
+- HTTP, DNS, TLS, process control, file permissions, and signal APIs depend on OS capabilities and external environment. Deterministic CI should mock or isolate these dependencies rather than requiring public internet access.

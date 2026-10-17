@@ -1,29 +1,44 @@
-# `repl` standard library
+# `repl` standard library — Lucy 2.0.1
 
-Help and presentation helpers for the interactive environment.
+Styled REPL banner/prompt, command/topic metadata, and topic help.
 
-## Import
+## Availability and imports
+
+The shipped module is loaded automatically in Lucy 2.x. Explicit `import` remains available when you want to make dependencies visible:
 
 ```lucy
 import repl
 ```
 
-## Public functions
+Names beginning with `_` or `__` are implementation details unless a public API explicitly documents them.
 
-- `banner()`
-- `version()`
-- `prompt(depth = 0)`
-- `commands()`
-- `topics()`
-- `help(topic = nil)`
-
-## Example
+## Quick example
 
 ```lucy
-import repl
 println repl.version()
+println repl.commands()
+println repl.topics()
 ```
+
+## Module-level functions
+
+| Function | Signature |
+|---|---|
+| `banner` | `banner()` |
+| `version` | `version()` |
+| `prompt` | `prompt(depth = 0)` |
+| `commands` | `commands()` |
+| `topics` | `topics()` |
+| `help` | `help(topic = nil)` |
+
+## Classes and methods
+
+No public class declarations were found in this module's pure-Lucy source.
+
+## Contract and error handling
+
+Validate inputs at the application boundary. Runtime errors are reported as Lucy exceptions or native errors; exact messages may vary by platform and build. Do not assume network access, process privileges, filesystem permissions, or optional native dependencies are available.
 
 ## Source of truth
 
-The public function list above is extracted from the current `stdlib/repl.lucy` implementation. Internal runtime bridge functions are not public module functions. See `INTERNAL_API.md` and `RUNTIME_CPP.md` for the native boundary.
+Implementation: [`stdlib/repl.lucy`](../../stdlib/repl.lucy). The signatures above are indexed from the current source file. Behavior is ultimately defined by implementation and regression tests; if you change the source API, regenerate this page and add tests for the new contract.

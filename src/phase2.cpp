@@ -267,35 +267,50 @@ private:
         return {};
     }
 
-    void parse_unicode_escape(std::string& result) {
-        if (position_ + 4 > source_.size()) {
-            fail("incomplete unicode escape");
-        }
-
-        unsigned int codepoint = 0;
-        for (int i = 0; i < 4; ++i) {
-            char c = source_[position_++];
-            codepoint <<= 4;
-            if (c >= '0' && c <= '9') codepoint += c - '0';
-            else if (c >= 'a' && c <= 'f') codepoint += c - 'a' + 10;
-            else if (c >= 'A' && c <= 'F') codepoint += c - 'A' + 10;
+    unsigned int read_hex_quad() {
+        if (position_ + 4 > source_.size()) fail("incomplete unicode escape");
+        unsigned int value = 0;
+        for (int i=0; i<4; ++i) {
+            char c=source_[position_++]; value <<= 4;
+            if (c>='0'&&c<='9') value += c-'0';
+            else if (c>='a'&&c<='f') value += c-'a'+10;
+            else if (c>='A'&&c<='F') value += c-'A'+10;
             else fail("invalid unicode escape");
         }
-
-        append_utf8(result, codepoint);
+        return value;
     }
 
-    static void append_utf8(std::string& result, unsigned int codepoint) {
-        if (codepoint <= 0x7F) {
-            result += static_cast<char>(codepoint);
-        } else if (codepoint <= 0x7FF) {
-            result += static_cast<char>(0xC0 | (codepoint >> 6));
-            result += static_cast<char>(0x80 | (codepoint & 0x3F));
-        } else {
-            result += static_cast<char>(0xE0 | (codepoint >> 12));
-            result += static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
-            result += static_cast<char>(0x80 | (codepoint & 0x3F));
+    void parse_unicode_escape(std::string& result) {
+        unsigned int cp=read_hex_quad();
+        if (cp>=0xD800 && cp<=0xDBFF) {
+            if (position_+2>source_.size() || source_[position_]!='\\' || source_[position_+1]!='u')
+                fail("high surrogate must be followed by a low surrogate");
+            position_ += 2;
+            unsigned int low=read_hex_quad();
+            if (low<0xDC00 || low>0xDFFF) fail("invalid low surrogate");
+            cp=0x10000 + ((cp-0xD800)<<10) + (low-0xDC00);
+        } else if (cp>=0xDC00 && cp<=0xDFFF) {
+            fail("unexpected low surrogate without high surrogate");
         }
+        append_utf8(result, cp);
+    }
+
+    static void append_utf8(std::string& result, unsigned int cp) {
+        if (cp <= 0x7F) result += static_cast<char>(cp);
+        else if (cp <= 0x7FF) {
+            result += static_cast<char>(0xC0 | (cp >> 6));
+            result += static_cast<char>(0x80 | (cp & 0x3F));
+        } else if (cp <= 0xFFFF) {
+            if (cp>=0xD800 && cp<=0xDFFF) throw std::runtime_error("JSONDecodeError: surrogate is not a Unicode scalar value");
+            result += static_cast<char>(0xE0 | (cp >> 12));
+            result += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+            result += static_cast<char>(0x80 | (cp & 0x3F));
+        } else if (cp <= 0x10FFFF) {
+            result += static_cast<char>(0xF0 | (cp >> 18));
+            result += static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
+            result += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+            result += static_cast<char>(0x80 | (cp & 0x3F));
+        } else throw std::runtime_error("JSONDecodeError: Unicode code point out of range");
     }
 
     Value parse_number() {
@@ -585,48 +600,47 @@ std::string url_decode(const std::string& input) {
 // ------------------------------ CSV ------------------------------
 
 Array parse_csv(const std::string& text, char delimiter) {
+    if (delimiter == '\0' || delimiter == '"' || delimiter == '\r' || delimiter == '\n')
+        throw std::runtime_error("CSVError: delimiter must be a single non-quote, non-newline character");
     Array rows;
+    if (text.empty()) return rows;
     Array row;
     std::string field;
-    bool quoted = false;
-
-    for (std::size_t i = 0; i <= text.size(); ++i) {
-        const char c = i < text.size() ? text[i] : '\n';
-
+    bool quoted = false, after_quote = false, field_started = false;
+    bool row_touched = false;
+    auto finish_field = [&]() { row.emplace_back(field); field.clear(); field_started=false; after_quote=false; };
+    auto finish_row = [&]() { finish_field(); rows.emplace_back(std::move(row)); row=Array{}; row_touched=false; };
+    for (std::size_t i=0; i<text.size(); ++i) {
+        char c=text[i];
         if (quoted) {
-            if (c == '"') {
-                if (i + 1 < text.size() && text[i + 1] == '"') {
-                    field += '"';
-                    ++i;
-                } else {
-                    quoted = false;
-                }
-            } else {
-                field += c;
-            }
+            if (c=='"') {
+                if (i+1<text.size() && text[i+1]=='"') { field+='"'; ++i; }
+                else { quoted=false; after_quote=true; }
+            } else field+=c;
+            row_touched=true;
             continue;
         }
-
-        if (c == '"' && field.empty()) {
-            quoted = true;
-        } else if (c == delimiter) {
-            row.emplace_back(field);
-            field.clear();
-        } else if (c == '\n' || c == '\r') {
-            if (c == '\r' && i + 1 < text.size() && text[i + 1] == '\n') ++i;
-            row.emplace_back(field);
-            field.clear();
-            rows.emplace_back(std::move(row));
-            row = Array{};
+        if (after_quote && c!=delimiter && c!='\r' && c!='\n')
+            throw std::runtime_error("CSVError: unexpected character after closing quote at position "+std::to_string(i));
+        if (c=='"') {
+            if (field_started || !field.empty())
+                throw std::runtime_error("CSVError: quote inside unquoted field at position "+std::to_string(i));
+            quoted=true; field_started=true; row_touched=true;
+        } else if (c==delimiter) {
+            finish_field(); row_touched=true;
+        } else if (c=='\r' || c=='\n') {
+            if (c=='\r' && i+1<text.size() && text[i+1]=='\n') ++i;
+            finish_row();
         } else {
-            field += c;
+            field+=c; field_started=true; row_touched=true;
         }
     }
-
     if (quoted) throw std::runtime_error("CSVError: unterminated quoted field");
+    // A final newline terminates the preceding record; it does not create another one.
+    if (row_touched || !row.empty() || !field.empty() || field_started || after_quote)
+        finish_row();
     return rows;
 }
-
 std::string csv_escape(const std::string& value, char delimiter) {
     const bool needs_quotes = value.find_first_of(std::string("\"\r\n") + delimiter) != std::string::npos;
     if (!needs_quotes) return value;
@@ -1076,13 +1090,17 @@ void install_phase2_builtins(BuiltinMap& builtins) {
     // CSV -----------------------------------------------------------
     builtins["__csv_parse"] = [](const std::vector<Value>& args) {
         require_range(args, 1, 2, "csv.parse");
-        const char delimiter = args.size() == 2 ? string_arg(args[1], "csv.parse")[0] : ',';
+        const std::string delimiter_text = args.size() == 2 ? string_arg(args[1], "csv.parse") : ",";
+        if (delimiter_text.size() != 1) throw std::runtime_error("CSVError: delimiter must be exactly one byte");
+        const char delimiter = delimiter_text[0];
         return Value(parse_csv(string_arg(args[0], "csv.parse"), delimiter));
     };
 
     builtins["__csv_stringify"] = [](const std::vector<Value>& args) {
         require_range(args, 1, 2, "csv.stringify");
-        const char delimiter = args.size() == 2 ? string_arg(args[1], "csv.stringify")[0] : ',';
+        const std::string delimiter_text = args.size() == 2 ? string_arg(args[1], "csv.stringify") : ",";
+        if (delimiter_text.size() != 1) throw std::runtime_error("CSVError: delimiter must be exactly one byte");
+        const char delimiter = delimiter_text[0];
         return Value(stringify_csv(args[0], delimiter));
     };
 

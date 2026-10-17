@@ -1,4 +1,4 @@
-# Lucy 2.0.0 Standard Library API Inventory
+# Lucy 2.0.1 Standard Library API Inventory
 
 This page is the source-derived signature inventory for the shipped `stdlib/*.lucy` files. It complements `STANDARD_LIBRARY.md`: the main reference explains behavior and usage, while this page makes it easy to verify that a shipped class or function has not been omitted from the documentation set.
 
@@ -37,8 +37,8 @@ The inventory is generated from the current source tree and should be regenerate
 - `Logger.error?()`
 - `Logger.fatal?()`
 - `class Benchmark`
-- `Benchmark.realtime(command)`
-- `Benchmark.measure(command)`
+- `Benchmark.realtime(callback)`
+- `Benchmark.measure(callback)`
 - `class Timeout`
 - `Timeout.timeout(seconds, callback)`
 - `class ERB`

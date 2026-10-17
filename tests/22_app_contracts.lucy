@@ -1,0 +1,35 @@
+# CLI helpers must reject unknown/missing options and benchmark callbacks, not shell text.
+let parser = app.parser()
+parser.on("name", "user name", "default")
+let parsed = parser.parse(["--name", "Nima"])
+assert parsed.get("name") == "Nima"
+let inline_parsed = parser.parse(["--name=Nima=Lucy"])
+assert inline_parsed.get("name") == "Nima=Lucy"
+parser.program_name("report")
+parser.version("2.0.1")
+assert parser.help().contains("Program: report")
+assert parser.help().contains("Version: 2.0.1")
+var positional_failed = false
+try {
+    parser.parse(["--", "unexpected"])
+} catch Exception as error {
+    positional_failed = true
+}
+assert positional_failed
+var unknown_failed = false
+try {
+    parser.parse(["--unknown"])
+} catch Exception as error {
+    unknown_failed = true
+}
+assert unknown_failed
+var missing_failed = false
+try {
+    parser.parse(["--name"])
+} catch Exception as error {
+    missing_failed = true
+}
+assert missing_failed
+let elapsed = app.benchmark().realtime(lambda() => 1 + 2)
+assert elapsed >= 0
+println "app contracts passed"
