@@ -4,7 +4,7 @@ This document tracks the supplied “Lucy 2.0.3 - Prioritized Bug Report and Roa
 
 ## Addressed in this pass
 
-- **P0-1 (partial):** user-function call depth is bounded (default 64; `LUCY_MAX_CALL_DEPTH` override) and reports `RecursionError`. Parser expression and unary nesting also have limits. Full parser statement/block nesting and all evaluator recursion paths still need a second pass.
+- **P0-1 (partial):** user-function call depth is bounded (default 16; `LUCY_MAX_CALL_DEPTH` override) and reports `RecursionError`. Parser expression and unary nesting also have limits. Full parser statement/block nesting and all evaluator recursion paths still need a second pass.
 - **P0-2:** cyclic array/map printing uses cycle markers; equality is cycle-safe, structural for arrays/maps, and identity-based for instances/functions/classes.
 - **P0-3 (partial):** JSON nesting is limited to 512 levels and fails with `JSONDecodeError`; parser expression/unary recursion is bounded. Deep statement blocks and CSV nesting/size limits remain to be audited.
 - **P0-4 (partial):** integer literals are range-checked; int64 add/subtract/multiply, shifts, floating-to-integer casts, and `random_int(min,max)` bounds are checked. Integer division/power semantics, all builtins/native casts, and edge cases such as minimum-int negation need further review.

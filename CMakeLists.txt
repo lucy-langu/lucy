@@ -113,8 +113,9 @@ add_test(NAME runtime_source_location
         -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_runtime_source_location.cmake)
 set_tests_properties(runtime_source_location PROPERTIES ENVIRONMENT "LUCY_PATH=${CMAKE_CURRENT_SOURCE_DIR}/stdlib")
 
-# Hardening tests use bounded depth to exercise the guard without consuming excessive stack.
-set_tests_properties(32_runtime_hardening PROPERTIES ENVIRONMENT "LUCY_PATH=${CMAKE_CURRENT_SOURCE_DIR}/stdlib;LUCY_MAX_CALL_DEPTH=32")
+# Hardening tests use a deliberately small depth: MSVC Debug frames are substantially larger,
+# and the test must validate the controlled error rather than approach the native stack limit.
+set_tests_properties(32_runtime_hardening PROPERTIES ENVIRONMENT "LUCY_PATH=${CMAKE_CURRENT_SOURCE_DIR}/stdlib;LUCY_MAX_CALL_DEPTH=8")
 
 add_test(NAME integer_overflow_literal_diagnostic
     COMMAND ${CMAKE_COMMAND}

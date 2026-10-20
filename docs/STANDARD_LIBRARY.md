@@ -1091,7 +1091,7 @@ Before changing a module version, update its documentation, regression tests, an
 
 ## Lucy 2.0.3 hardening notes
 
-- User-defined function calls have a configurable maximum depth. The default is 64; set `LUCY_MAX_CALL_DEPTH` to a positive integer to change it (accepted values up to 100000). Exceeding the limit raises `RecursionError`.
+- User-defined function calls have a configurable maximum depth. The default is 16; set `LUCY_MAX_CALL_DEPTH` to a positive integer to change it (accepted values up to 100000). Exceeding the limit raises `RecursionError`.
 - JSON parsing rejects nesting deeper than 512 levels with `JSONDecodeError`; the Lucy parser also limits expression and unary-operator nesting to 512 to avoid native-stack exhaustion.
 - `Dir.rmdir(path)` removes only an empty directory. Recursive deletion must be requested explicitly with `Dir.rmdir(path, true)` or `fs.rmdir(path, true)`.
 - Integer addition, subtraction, and multiplication now report `OverflowError` rather than silently wrapping. Invalid shift counts and out-of-range floating-point-to-integer conversions raise language-level errors.

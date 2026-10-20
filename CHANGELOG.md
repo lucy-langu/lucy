@@ -1,4 +1,8 @@
-## 2.0.5 — Windows/MSVC build fix and stack-safety regression fixes
+## 2.0.5
+
+- Reduced the default interpreted-call depth to 16 to stay conservative on Windows/MSVC Debug stacks.
+- Reduced the runtime-hardening regression test depth to 8 so it verifies the language-level `RecursionError` path without depending on native stack capacity.
+ — Windows/MSVC build fix and stack-safety regression fixes
 
 - Defined `NOMINMAX` for the `lucy_runtime` target on Windows so Windows SDK `min`/`max` macros cannot corrupt calls to `std::min` and `std::max`. This addresses the MSVC compilation cascade in `runtime.cpp` and `stdlib_native.cpp`.
 - Updated the project, runtime, CLI, installer message, standard-library manifest, and core API contract version metadata to `2.0.5`.

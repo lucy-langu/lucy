@@ -81,7 +81,7 @@ private:
     std::shared_ptr<Environment> env_;
     std::vector<std::weak_ptr<Environment>> environments_;
     std::size_t call_depth_ = 0;
-    std::size_t max_call_depth_ = 64;
+    std::size_t max_call_depth_ = 16;
     std::size_t environment_cleanup_counter_ = 0;
     std::unordered_map<std::string, std::function<Value(const std::vector<Value>&)>> builtins_;
     std::string current_file_;
