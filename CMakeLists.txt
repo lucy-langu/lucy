@@ -114,7 +114,7 @@ add_test(NAME runtime_source_location
 set_tests_properties(runtime_source_location PROPERTIES ENVIRONMENT "LUCY_PATH=${CMAKE_CURRENT_SOURCE_DIR}/stdlib")
 
 # Hardening tests use bounded depth to exercise the guard without consuming excessive stack.
-set_tests_properties(32_runtime_hardening PROPERTIES ENVIRONMENT "LUCY_PATH=${CMAKE_CURRENT_SOURCE_DIR}/stdlib;LUCY_MAX_CALL_DEPTH=128")
+set_tests_properties(32_runtime_hardening PROPERTIES ENVIRONMENT "LUCY_PATH=${CMAKE_CURRENT_SOURCE_DIR}/stdlib;LUCY_MAX_CALL_DEPTH=32")
 
 add_test(NAME integer_overflow_literal_diagnostic
     COMMAND ${CMAKE_COMMAND}

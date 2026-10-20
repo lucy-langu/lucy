@@ -587,8 +587,8 @@ StmtPtr Parser::import_statement()
 
 ExprPtr Parser::expression()
 {
-    if (expression_depth_ >= 512)
-        throw std::runtime_error("SyntaxError: expression nesting exceeds the maximum depth of 512 at line " + std::to_string(peek().line) + ", column " + std::to_string(peek().column));
+    if (expression_depth_ >= 64)
+        throw std::runtime_error("SyntaxError: expression nesting exceeds the maximum depth of 64 at line " + std::to_string(peek().line) + ", column " + std::to_string(peek().column));
     struct DepthGuard { std::size_t &depth; explicit DepthGuard(std::size_t &d) : depth(d) { ++depth; } ~DepthGuard() { --depth; } } guard(expression_depth_);
     const Token start = peek();
     auto result = expression_impl();
@@ -740,8 +740,8 @@ ExprPtr Parser::power()
 }
 ExprPtr Parser::unary()
 {
-    if (unary_depth_ >= 512)
-        throw std::runtime_error("SyntaxError: unary operator nesting exceeds the maximum depth of 512 at line " + std::to_string(peek().line) + ", column " + std::to_string(peek().column));
+    if (unary_depth_ >= 64)
+        throw std::runtime_error("SyntaxError: unary operator nesting exceeds the maximum depth of 64 at line " + std::to_string(peek().line) + ", column " + std::to_string(peek().column));
     struct DepthGuard { std::size_t &depth; explicit DepthGuard(std::size_t &d) : depth(d) { ++depth; } ~DepthGuard() { --depth; } } guard(unary_depth_);
     if (match({TokenType::Not, TokenType::Minus, TokenType::Plus, TokenType::BitNot, TokenType::Increment, TokenType::Decrement}))
     {
