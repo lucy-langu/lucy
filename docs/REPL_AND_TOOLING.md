@@ -1,4 +1,4 @@
-# Lucy 2.0.2 — REPL, CLI, Tooling, Packages, and Developer Workflow
+# Lucy 2.0.3 — REPL, CLI, Tooling, Packages, and Developer Workflow
 
 This document is the operational manual for using Lucy every day. It combines the former REPL, CLI, package, testing, editor, limits, and tooling references so users do not have to search through small disconnected files.
 
@@ -229,7 +229,7 @@ When adding a language feature, add a focused regression test and run the comple
 
 ## 10. Editor integration
 
-The repository contains editor-related files, but Lucy 2.0.2 does not ship a language server (LSP), formatter, or debugger protocol. Syntax highlighting/editor support should therefore be treated as editor configuration rather than an LSP contract.
+The repository contains editor-related files, but Lucy 2.0.3 does not ship a language server (LSP), formatter, or debugger protocol. Syntax highlighting/editor support should therefore be treated as editor configuration rather than an LSP contract.
 
 ## 11. Troubleshooting by symptom
 

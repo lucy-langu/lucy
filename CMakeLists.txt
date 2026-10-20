@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(lucy VERSION 2.0.2 LANGUAGES CXX)
+project(lucy VERSION 2.0.3 LANGUAGES CXX)
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -92,3 +92,36 @@ target_link_libraries(lucy_repl_completion_test PRIVATE lucy_runtime)
 add_test(NAME repl_completion COMMAND lucy_repl_completion_test)
 set_tests_properties(repl_completion PROPERTIES ENVIRONMENT "LUCY_PATH=${CMAKE_CURRENT_SOURCE_DIR}/stdlib")
 
+
+add_test(NAME name_error_suggestion
+    COMMAND ${CMAKE_COMMAND}
+        -DLUCY_EXECUTABLE=$<TARGET_FILE:lucy>
+        -DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/tests/name_error_suggestion.lucy.txt
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_name_error_suggestion.cmake)
+set_tests_properties(name_error_suggestion PROPERTIES ENVIRONMENT "LUCY_PATH=${CMAKE_CURRENT_SOURCE_DIR}/stdlib")
+set_tests_properties(31_private_access_rejected PROPERTIES WILL_FAIL TRUE)
+add_test(NAME runtime_source_location
+    COMMAND ${CMAKE_COMMAND}
+        -DLUCY_EXECUTABLE=$<TARGET_FILE:lucy>
+        -DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/tests/32_runtime_source_location.lucy.txt
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_runtime_source_location.cmake)
+set_tests_properties(runtime_source_location PROPERTIES ENVIRONMENT "LUCY_PATH=${CMAKE_CURRENT_SOURCE_DIR}/stdlib")
+
+# Hardening tests use bounded depth to exercise the guard without consuming excessive stack.
+set_tests_properties(32_runtime_hardening PROPERTIES ENVIRONMENT "LUCY_PATH=${CMAKE_CURRENT_SOURCE_DIR}/stdlib;LUCY_MAX_CALL_DEPTH=128")
+
+add_test(NAME integer_overflow_literal_diagnostic
+    COMMAND ${CMAKE_COMMAND}
+        -DLUCY_EXECUTABLE=$<TARGET_FILE:lucy>
+        -DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/tests/integer_overflow_literal.lucy.txt
+        -DEXPECTED_PATTERN=integer\ literal\ out\ of\ range
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_diagnostic.cmake)
+set_tests_properties(integer_overflow_literal_diagnostic PROPERTIES ENVIRONMENT "LUCY_PATH=${CMAKE_CURRENT_SOURCE_DIR}/stdlib")
+
+add_test(NAME deep_parentheses_diagnostic
+    COMMAND ${CMAKE_COMMAND}
+        -DLUCY_EXECUTABLE=$<TARGET_FILE:lucy>
+        -DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/tests/deep_parentheses.lucy.txt
+        -DEXPECTED_PATTERN=expression\ nesting\ exceeds
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_diagnostic.cmake)
+set_tests_properties(deep_parentheses_diagnostic PROPERTIES ENVIRONMENT "LUCY_PATH=${CMAKE_CURRENT_SOURCE_DIR}/stdlib")

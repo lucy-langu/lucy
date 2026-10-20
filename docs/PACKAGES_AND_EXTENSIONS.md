@@ -95,3 +95,9 @@ Return Lucy values where possible. Use native objects only when identity/lifetim
 ## 9. Extension safety and stability
 
 The extension ABI is a runtime boundary. Extensions should target the public header/API rather than including private implementation details. Internal runtime classes are not a substitute for the public extension interface.
+
+## Standard-library module release metadata
+
+Lucy ships its source standard library under `stdlib/`. Each module is independently versioned in `stdlib/manifest.json`; this is distinct from the interpreter's `VERSION`. The manifest currently provides module identity, semantic version, entry point, stability, and declared dependencies. Validate it with `python3 tools/stdlib_manager.py verify` and inspect available module versions with `python3 tools/stdlib_manager.py list`.
+
+This mechanism establishes independent version metadata and release discipline, not a remote package registry or automatic updater. A true remote registry, dependency solver, integrity/signature verification, and transactional update/rollback remain future ecosystem work and are intentionally not represented as already implemented.

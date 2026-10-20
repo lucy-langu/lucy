@@ -1,0 +1,17 @@
+class Animal {
+    func speak() { return "animal" }
+    protected func family() { return "animal-family" }
+}
+class Dog < Animal {
+    static func species() { return "dog" }
+    private func secret() { return "private" }
+    func speak() { return super.speak() + "-dog" }
+    func family_name() { return self.family() }
+    func reveal() { return self.secret() }
+}
+assert(Dog.species() == "dog", "static class methods should be callable through the class")
+let dog = Dog.new()
+assert(dog.speak() == "animal-dog", "super.method() should dispatch to the parent implementation")
+assert(dog.family_name() == "animal-family", "protected methods should be accessible to subclasses")
+assert(dog.reveal() == "private", "private methods should be accessible inside their declaring class")
+println "object model semantics passed"

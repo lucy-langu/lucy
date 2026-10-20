@@ -1,0 +1,4 @@
+class Locked {
+    private func secret() { return "no" }
+}
+println Locked.new().secret()

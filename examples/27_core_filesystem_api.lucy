@@ -1,0 +1,8 @@
+# Import-free filesystem API introduced in Lucy 2.0.3.
+println "Working directory: " + Dir.cwd()
+println "Path basename: " + Path.basename("src/runtime.cpp")
+let probe = "lucy_example_probe.txt"
+File.write(probe, "Lucy 2.0.3")
+println "File exists: " + str(File.exists(probe))
+println "File size: " + str(File.size(probe))
+File.delete(probe)

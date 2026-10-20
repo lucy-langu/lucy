@@ -1,0 +1,23 @@
+# Core singleton-like classes are actual extensible classes.
+File.write("lucy_core_api_probe.tmp", "2.0.3")
+assert(File.read("lucy_core_api_probe.tmp") == "2.0.3", "File.read should work through the core class")
+File.delete("lucy_core_api_probe.tmp")
+class File {
+    func lucy_test_marker() {
+        return "extended"
+    }
+}
+assert(File.lucy_test_marker() == "extended", "class File extensions should affect the global File class")
+class Dir {
+    func lucy_test_marker() {
+        return "directory-extended"
+    }
+}
+assert(Dir.lucy_test_marker() == "directory-extended", "class Dir extensions should affect the global Dir class")
+import fs
+assert(system.cwd() != nil, "system imports must remain available")
+import text
+import time
+assert(type(text) == "instance", "text should remain an importable module")
+assert(type(time) == "instance", "time should remain an importable module")
+println "core class API extension tests passed"

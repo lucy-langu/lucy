@@ -1,4 +1,4 @@
-# Lucy 2.0.2 — Built-in Functions and Native Value Methods
+# Lucy 2.0.3 — Built-in Functions and Native Value Methods
 
 This reference covers functions compiled into the runtime and the native methods available on primitive values. It complements the source-indexed [`stdlib/` API pages](stdlib/) and [`Standard Library`](STANDARD_LIBRARY.md). Internal names beginning with `__` are deliberately omitted; they are implementation details, not public APIs.
 
@@ -61,6 +61,39 @@ This reference covers functions compiled into the runtime and the native methods
 | `VERSION` | Current Lucy runtime version string. |
 | `PLATFORM` | Build platform name (`windows`, `macos`, `linux`, or `unix`). |
 | `ARGV`, `argv` | The same mutable array of script arguments, excluding the script path itself. |
+
+## Import-free core filesystem objects (2.0.3)
+
+These global objects are installed by the runtime and require no `import`. They are namespace-like facades over the canonical `fs` and `system` modules. Existing lowercase APIs remain available.
+
+### `Dir`
+
+| Method | Signature | Contract |
+|---|---|---|
+| `cwd`, `pwd` | `Dir.cwd()`, `Dir.pwd()` | Return the current working directory. |
+| `entries`, `files`, `dirs` | `Dir.entries([path])` | Return directory entries, files, or subdirectories. Defaults follow the underlying `fs` API. |
+| `exist` | `Dir.exist(path)` | Return whether a filesystem entry exists. |
+| `mkdir`, `rmdir` | `Dir.mkdir(path[, parents])`, `Dir.rmdir(path[, recursive])` | Create or remove a directory. `rmdir` is non-recursive by default; pass `true` explicitly to remove a directory tree. Filesystem errors are propagated. |
+| `empty`, `glob`, `walk` | `Dir.empty([path])`, `Dir.glob(pattern)`, `Dir.walk([path])` | Directory utility operations forwarded to `fs`. |
+
+### `File`
+
+| Method | Signature | Contract |
+|---|---|---|
+| `read`, `write`, `append` | `File.read(path)`, `File.write(path, content)`, `File.append(path, content)` | Read text, overwrite a file, or append text. |
+| `read_lines`, `write_lines` | `File.read_lines(path)`, `File.write_lines(path, lines)` | Read/write line-oriented text. |
+| `exists`, `exist` | `File.exists(path)` | Return whether a file or directory exists (same contract as `fs.exists`). |
+| `size` | `File.size(path)` | Return the file size using the underlying filesystem API. |
+| `delete`, `remove`, `copy`, `move`, `touch` | `File.delete(path)`, `File.copy(source, destination)` | File operations delegated to `fs`. `delete`/`remove` take one path. |
+| `open` | `File.open(path[, mode])` | Open a stream using the existing `fs.IO` abstraction. |
+
+### `Path`
+
+| Method | Signature | Contract |
+|---|---|---|
+| `join` | `Path.join(parts)` | Join an array of path components. |
+| `absolute`, `expand` | `Path.absolute(path)`, `Path.expand(path)` | Convert a path to an absolute or expanded path using the current platform implementation. |
+| `basename`, `dirname`, `extension`, `stem` | `Path.basename(path)` etc. | Extract common path components. |
 
 ## Native methods on values
 

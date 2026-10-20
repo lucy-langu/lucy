@@ -1,4 +1,4 @@
-# Lucy 2.0.2 — Getting Started
+# Lucy 2.0.3 — Getting Started
 
 This is the practical tutorial. It assumes no previous Lucy knowledge and deliberately uses complete, runnable examples.
 
@@ -270,7 +270,7 @@ try {
 }
 ```
 
-The caught value is currently the textual error message. Lucy 2.0.2 does not expose a public exception-object hierarchy.
+The caught value is currently the textual error message. Lucy 2.0.3 does not expose a public exception-object hierarchy.
 
 ## 15. Discovering Lucy interactively
 

@@ -1,6 +1,8 @@
 #include <algorithm>
+#include <cmath>
 #include "lucy/parser.hpp"
 #include <sstream>
+#include <limits>
 #include <stdexcept>
 using namespace lucy;
 
@@ -96,6 +98,14 @@ StmtPtr Parser::block_until(std::initializer_list<TokenType> stop)
 }
 
 StmtPtr Parser::statement()
+{
+    const Token start = peek();
+    auto result = statement_impl();
+    if (result) result->location = {start.line, start.column};
+    return result;
+}
+
+StmtPtr Parser::statement_impl()
 {
     // `help topic` is syntax sugar for the Lucy-level REPL help function.
     // The documentation itself lives in stdlib/repl.lucy, not in the runtime.
@@ -473,9 +483,25 @@ StmtPtr Parser::class_statement()
     std::vector<std::shared_ptr<FunctionStmt>> m;
     while (!check(TokenType::RightBrace) && !check(TokenType::EndOfFile))
     {
+        bool is_static = false;
+        std::string visibility = "public";
+        bool modifier_seen = true;
+        while (modifier_seen && check(TokenType::Identifier)) {
+            modifier_seen = false;
+            const std::string modifier = peek().lexeme;
+            if (modifier == "static") { advance(); if (is_static) throw std::runtime_error("SyntaxError: duplicate static modifier"); is_static = true; modifier_seen = true; }
+            else if (modifier == "private") { advance(); visibility = "private"; modifier_seen = true; }
+            else if (modifier == "protected") { advance(); visibility = "protected"; modifier_seen = true; }
+            else if (modifier == "public") { advance(); visibility = "public"; modifier_seen = true; }
+        }
+        const Token method_start = peek();
         if (!match({TokenType::Function, TokenType::Def, TokenType::Func}))
-            throw std::runtime_error("SyntaxError: class body may only contain methods");
-        m.push_back(std::dynamic_pointer_cast<FunctionStmt>(function_statement()));
+            throw std::runtime_error("SyntaxError: class body may only contain methods or method modifiers");
+        auto method = std::dynamic_pointer_cast<FunctionStmt>(function_statement());
+        method->location = {method_start.line, method_start.column};
+        method->is_static = is_static;
+        method->visibility = visibility;
+        m.push_back(method);
         skip_newlines();
     }
     consume(TokenType::RightBrace, "expected '}' to close class");
@@ -559,7 +585,18 @@ StmtPtr Parser::import_statement()
     return std::make_shared<ImportStmt>(m, std::vector<std::string>{}, false, a);
 }
 
-ExprPtr Parser::expression() { return ternary(); }
+ExprPtr Parser::expression()
+{
+    if (expression_depth_ >= 512)
+        throw std::runtime_error("SyntaxError: expression nesting exceeds the maximum depth of 512 at line " + std::to_string(peek().line) + ", column " + std::to_string(peek().column));
+    struct DepthGuard { std::size_t &depth; explicit DepthGuard(std::size_t &d) : depth(d) { ++depth; } ~DepthGuard() { --depth; } } guard(expression_depth_);
+    const Token start = peek();
+    auto result = expression_impl();
+    if (result && (result->location.line == 0 || result->location.column == 0))
+        result->location = {start.line, start.column};
+    return result;
+}
+ExprPtr Parser::expression_impl() { return ternary(); }
 ExprPtr Parser::ternary()
 {
     auto e = coalesce();
@@ -703,6 +740,9 @@ ExprPtr Parser::power()
 }
 ExprPtr Parser::unary()
 {
+    if (unary_depth_ >= 512)
+        throw std::runtime_error("SyntaxError: unary operator nesting exceeds the maximum depth of 512 at line " + std::to_string(peek().line) + ", column " + std::to_string(peek().column));
+    struct DepthGuard { std::size_t &depth; explicit DepthGuard(std::size_t &d) : depth(d) { ++depth; } ~DepthGuard() { --depth; } } guard(unary_depth_);
     if (match({TokenType::Not, TokenType::Minus, TokenType::Plus, TokenType::BitNot, TokenType::Increment, TokenType::Decrement}))
     {
         auto o = previous();
@@ -831,18 +871,33 @@ ExprPtr Parser::primary()
         for (size_t i = start; i < n.size(); ++i) {
             char c = n[i]; int d = (c >= '0' && c <= '9') ? c - '0' : (c >= 'a' && c <= 'f') ? c - 'a' + 10 : c - 'A' + 10;
             if (d >= base) throw std::runtime_error("SyntaxError: invalid digit in integer literal '" + n + "'");
+            if (value > (std::numeric_limits<long long>::max() - d) / base)
+                throw std::runtime_error("SyntaxError: integer literal out of range '" + n + "'");
             value = value * base + d;
         }
         return std::make_shared<Literal>(value);
     }
-    if (match({TokenType::Number}))
-        return std::make_shared<Literal>(std::stod(previous().lexeme));
+    if (match({TokenType::Number})) {
+        const std::string literal = previous().lexeme;
+        try {
+            const double value = std::stod(literal);
+            if (!std::isfinite(value)) throw std::out_of_range("non-finite");
+            return std::make_shared<Literal>(value);
+        } catch (const std::exception &) {
+            throw std::runtime_error("SyntaxError: number literal out of range '" + literal + "'");
+        }
+    }
     if (match({TokenType::String}))
         return std::make_shared<Literal>(previous().lexeme);
     if (match({TokenType::Backtick}))
         return std::make_shared<ShellExpr>(previous().lexeme);
     if (match({TokenType::Self}))
         return std::make_shared<Variable>("self");
+    if (match({TokenType::Super})) {
+        consume(TokenType::Dot, "expected '.' and a parent method after 'super'");
+        auto method = consume(TokenType::Identifier, "expected parent method name after 'super.'");
+        return std::make_shared<SuperExpr>(method.lexeme);
+    }
     if (match({TokenType::New}))
         return std::make_shared<Variable>("new");
     if (match({TokenType::Identifier, TokenType::Default, TokenType::Case}))

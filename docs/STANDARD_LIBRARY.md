@@ -1053,3 +1053,47 @@ for name in module_paths.keys() {
     println name + " -> " + module_paths[name]
 }
 ```
+
+## Core class APIs and import compatibility
+
+`File`, `Dir`, and `Path` are core singleton-like classes. Their class methods are installed from the canonical `fs` and `system` modules, so the public surface is `File.read(path)`, `Dir.cwd()`, and `Path.basename(path)` rather than exposing implementation-only `__*__` functions. The underlying native functions remain implementation details, not recommended application APIs.
+
+These classes can be extended with ordinary Lucy class declarations:
+
+```lucy
+class File {
+    func read_version() {
+        return File.read("VERSION")
+    }
+}
+
+println File.read_version()
+```
+
+A declaration for an existing core class adds or replaces methods on that class; it does not create a separate class or a second `File` namespace. Treat method replacement as a global change to the current interpreter. Keep additions namespaced with project-specific method names to avoid accidentally replacing standard methods.
+
+The lowercase modules remain importable. `import fs`, `import system`, `import text`, and `import time` are supported; their APIs are not removed just because core class methods are available. This is deliberate compatibility behavior, not a requirement to import those modules for basic filesystem operations.
+
+## Independent standard-library module versions
+
+`stdlib/manifest.json` records a semantic version, entry file, stability label, and dependency list for every shipped Lucy source module. The language version and module versions are separate: a compatible fix to `fs` can be published as an `fs` patch without claiming that the Lucy language itself changed version. The manifest is metadata; it does not download or hot-swap code by itself. Distributing an updated module means replacing its `.lucy` file and manifest record as a single tested unit.
+
+Use the repository helper:
+
+```sh
+python3 tools/stdlib_manager.py list
+python3 tools/stdlib_manager.py verify
+python3 tools/stdlib_manager.py set-version fs 1.0.1
+```
+
+Before changing a module version, update its documentation, regression tests, and changelog. Do not bump a version solely to make a release appear newer. The current `sqlite` module is marked optional because native SQLite support depends on the build configuration.
+
+
+## Lucy 2.0.3 hardening notes
+
+- User-defined function calls have a configurable maximum depth. The default is 1000; set `LUCY_MAX_CALL_DEPTH` to a positive integer to change it (accepted values up to 100000). Exceeding the limit raises `RecursionError`.
+- JSON parsing rejects nesting deeper than 512 levels with `JSONDecodeError`; the Lucy parser also limits expression and unary-operator nesting to 512 to avoid native-stack exhaustion.
+- `Dir.rmdir(path)` removes only an empty directory. Recursive deletion must be requested explicitly with `Dir.rmdir(path, true)` or `fs.rmdir(path, true)`.
+- Integer addition, subtraction, and multiplication now report `OverflowError` rather than silently wrapping. Invalid shift counts and out-of-range floating-point-to-integer conversions raise language-level errors.
+- Native extension lookup no longer searches the process working directory or the script directory. Use configured installation roots or `LUCY_PATH` for trusted extension locations; ordinary Lucy imports may still resolve modules relative to their importing source file.
+- Printing cyclic arrays/maps uses `[...]` and `{...}` markers; equality is type-aware, structural for arrays/maps, cycle-safe, and identity-based for class instances and callable objects.

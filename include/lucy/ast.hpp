@@ -7,7 +7,8 @@
 #include <unordered_map>
 #include <vector>
 namespace lucy {
-struct Expr{virtual~Expr()=default;};using ExprPtr=std::shared_ptr<Expr>;
+struct SourceLocation { std::size_t line=0, column=0; };
+struct Expr{SourceLocation location; virtual~Expr()=default;};using ExprPtr=std::shared_ptr<Expr>;
 struct Literal:Expr{Value value;explicit Literal(Value v):value(std::move(v)){}};
 struct Variable:Expr{std::string name;explicit Variable(std::string n):name(std::move(n)){}};
 struct Unary:Expr{Token op;ExprPtr right;bool postfix=false;Unary(Token o,ExprPtr r,bool p=false):op(std::move(o)),right(std::move(r)),postfix(p){}};
@@ -19,9 +20,10 @@ struct ArrayExpr:Expr{std::vector<ExprPtr>items;explicit ArrayExpr(std::vector<E
 struct MapExpr:Expr{std::vector<std::pair<std::string,ExprPtr>>items;explicit MapExpr(std::vector<std::pair<std::string,ExprPtr>>i):items(std::move(i)){}};
 struct Index:Expr{ExprPtr object,index;Index(ExprPtr o,ExprPtr i):object(std::move(o)),index(std::move(i)){}};
 struct Member:Expr{ExprPtr object;std::string name;Member(ExprPtr o,std::string n):object(std::move(o)),name(std::move(n)){}};
+struct SuperExpr:Expr{std::string method;explicit SuperExpr(std::string n):method(std::move(n)){} };
 struct ShellExpr:Expr{std::string command;explicit ShellExpr(std::string c):command(std::move(c)){}};
 struct RangeExpr:Expr{ExprPtr a,b;bool inclusive;RangeExpr(ExprPtr x,ExprPtr y,bool i):a(std::move(x)),b(std::move(y)),inclusive(i){}};
-struct Stmt{virtual~Stmt()=default;};using StmtPtr=std::shared_ptr<Stmt>;
+struct Stmt{SourceLocation location; virtual~Stmt()=default;};using StmtPtr=std::shared_ptr<Stmt>;
 struct ExprStmt:Stmt{ExprPtr expr;explicit ExprStmt(ExprPtr e):expr(std::move(e)){} };
 struct Assign:Stmt{ExprPtr target;Token op;ExprPtr value;Assign(ExprPtr t,Token o,ExprPtr v):target(std::move(t)),op(std::move(o)),value(std::move(v)){} };
 struct VarDecl:Stmt{std::string name,type_name;ExprPtr value;bool constant=false,global=false;VarDecl(std::string n,ExprPtr v,bool c,bool g,std::string t=""):name(std::move(n)),type_name(std::move(t)),value(std::move(v)),constant(c),global(g){} };
@@ -34,7 +36,7 @@ struct LoopStmt:Stmt{StmtPtr body;explicit LoopStmt(StmtPtr b):body(std::move(b)
 struct SwitchStmt:Stmt{ExprPtr value;std::vector<std::pair<ExprPtr,StmtPtr>>cases;StmtPtr default_branch;SwitchStmt(ExprPtr v,std::vector<std::pair<ExprPtr,StmtPtr>>c,StmtPtr d):value(std::move(v)),cases(std::move(c)),default_branch(std::move(d)){} };
 struct Parameter{std::string name,type_name;ExprPtr default_value;bool variadic=false;Parameter(std::string n,ExprPtr d=nullptr,bool v=false,std::string t=""):name(std::move(n)),type_name(std::move(t)),default_value(std::move(d)),variadic(v){} };
 struct LambdaExpr:Expr{std::vector<Parameter>params;ExprPtr body;LambdaExpr(std::vector<Parameter>p,ExprPtr b):params(std::move(p)),body(std::move(b)){}};
-struct FunctionStmt:Stmt{std::string name,return_type;std::vector<Parameter>params;StmtPtr body;FunctionStmt(std::string n,std::vector<Parameter>p,StmtPtr b,std::string r=""):name(std::move(n)),return_type(std::move(r)),params(std::move(p)),body(std::move(b)){} };
+struct FunctionStmt:Stmt{std::string name,return_type;std::vector<Parameter>params;StmtPtr body;bool is_static=false;std::string visibility="public";FunctionStmt(std::string n,std::vector<Parameter>p,StmtPtr b,std::string r=""):name(std::move(n)),return_type(std::move(r)),params(std::move(p)),body(std::move(b)){} };
 struct ReturnStmt:Stmt{ExprPtr value;explicit ReturnStmt(ExprPtr v):value(std::move(v)){} };
 struct ImportStmt:Stmt{std::string module,alias;std::vector<std::string>names;bool selective=false;ImportStmt(std::string m,std::vector<std::string>n={},bool s=false,std::string a=""):module(std::move(m)),alias(std::move(a)),names(std::move(n)),selective(s){} };
 struct ClassStmt:Stmt{std::string name,base;std::vector<std::shared_ptr<FunctionStmt>>methods;ClassStmt(std::string n,std::string b,std::vector<std::shared_ptr<FunctionStmt>>m):name(std::move(n)),base(std::move(b)),methods(std::move(m)){} };
@@ -53,6 +55,10 @@ struct Function{
     std::function<Value(const std::vector<Value>&)>native;
     // Source file for user-defined functions; empty means an interactive definition or native callable.
     std::string source_file;
+    SourceLocation location;
+    std::weak_ptr<Class> owner_class;
+    bool is_static=false;
+    std::string visibility="public";
 };
 struct Class{std::string name,base;std::unordered_map<std::string,Value>methods;std::shared_ptr<Class>parent;bool is_struct=false;std::string source_file;};
 struct Instance{std::shared_ptr<Class>klass;std::unordered_map<std::string,Value>fields;std::unordered_map<std::string,std::string>field_types;};

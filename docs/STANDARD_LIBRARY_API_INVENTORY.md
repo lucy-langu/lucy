@@ -1,8 +1,8 @@
-# Lucy 2.0.2 Standard Library API Inventory
+# Lucy 2.0.3 Standard Library API Inventory
 
 This page is the source-derived signature inventory for the shipped `stdlib/*.lucy` files. It complements `STANDARD_LIBRARY.md`: the main reference explains behavior and usage, while this page makes it easy to verify that a shipped class or function has not been omitted from the documentation set.
 
-The inventory is generated from the current source tree and should be regenerated whenever a standard-library source file changes.
+The inventory is source-oriented and should be regenerated whenever a standard-library source file changes. For the core filesystem facade, signatures, accepted input descriptions, return contracts, error conditions, platform targets, and examples are additionally tracked in [`contracts/core_api.json`](contracts/core_api.json).
 
 ### Complete inventory: `app`
 
@@ -534,3 +534,34 @@ The inventory is generated from the current source tree and should be regenerate
 - `format(value, pattern = "%Y-%m-%d %H:%M:%S")`
 - `_time_sleep(milliseconds)`
 - `sleep(milliseconds)`
+
+
+## Lucy 2.0.3 runtime-installed core facades
+
+These objects are created by the runtime, not declared in a `stdlib/*.lucy` file. They are available without `import` and forward calls to existing canonical APIs.
+
+### `Dir`
+
+- `Dir.cwd()` / `Dir.pwd()`
+- `Dir.entries(path = ".")`
+- `Dir.files(path = ".")`
+- `Dir.dirs(path = ".")`
+- `Dir.exist(path)`
+- `Dir.mkdir(path, parents = false)`
+- `Dir.rmdir(path)`
+- `Dir.empty(path = ".")`
+- `Dir.glob(pattern)`
+- `Dir.walk(path = ".")`
+
+### `File`
+
+- `File.read(path)` / `File.write(path, content)` / `File.append(path, content)`
+- `File.read_lines(path)` / `File.write_lines(path, lines)`
+- `File.exists(path)` / `File.exist(path)` / `File.size(path)`
+- `File.delete(path)` / `File.remove(path)` / `File.copy(source, destination)` / `File.move(source, destination)`
+- `File.touch(path)` / `File.open(path, mode = "r")`
+
+### `Path`
+
+- `Path.join(parts)` / `Path.absolute(path)` / `Path.expand(path)`
+- `Path.basename(path)` / `Path.dirname(path)` / `Path.extension(path)` / `Path.stem(path)`

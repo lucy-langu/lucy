@@ -135,3 +135,16 @@ A public library should:
 5. document whether failure is an exception or a `result` value.
 
 This makes errors useful to both the kernel/runtime and application developers.
+
+
+## 10. Diagnostic quality and current limitations in 2.0.3
+
+Lucy reports stable error categories and source-file context for file execution. Lexer/parser failures include line/column context where the relevant token is available; runtime failures are not yet guaranteed to include a source line, column, or a complete call stack. Do not treat the current output as equivalent to Ruby's `error_highlight` and backtrace system.
+
+For actionable errors, preserve the category and original message when wrapping errors. Native libraries should report the operation and the invalid value/argument, avoid swallowing the underlying OS/library error, and never claim success after a failed filesystem or database operation. A later runtime change should introduce structured diagnostic data (category, message, source span, call frames, and optional notes) before rendering text, rather than attempting to recover locations from error strings.
+
+## Diagnostic quality and current limits
+
+Lucy reports lexical and parser errors with line and column coordinates where the lexer/parser has a token location. Runtime errors include typed categories such as `NameError`, `TypeError`, `ArgumentError`, `IOError`, and `NoMethodError`; undefined-variable errors can suggest a nearby visible name. When running a script, `run_source` also identifies the source filename in the outer error context.
+
+Do not interpret these capabilities as a complete source-mapped runtime diagnostic system. Runtime AST nodes do not yet consistently retain source spans, so every runtime exception cannot reliably point to the exact expression and caret range. Nested call stacks and structured diagnostic objects are also not yet complete. The next correct architectural step is to preserve byte offsets plus line/column spans on tokens and AST nodes, then propagate those spans through evaluation and format a stable diagnostic record (`category`, `message`, `file`, `line`, `column`, source line, caret range, suggestion, and call frames). Heuristic line guesses should not be presented as exact locations.

@@ -69,8 +69,8 @@ func mkdir(path, parents = false) {
     return __dir_mkdir(path, parents)
 }
 
-func rmdir(path) {
-    return __dir_rmdir(path)
+func rmdir(path, recursive = false) {
+    return __dir_rmdir(path, recursive)
 }
 
 func empty(path = ".") {

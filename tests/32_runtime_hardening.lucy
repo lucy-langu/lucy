@@ -1,0 +1,101 @@
+# Regression tests for high-severity issues from the 2.0.3 audit.
+
+# Cyclic containers must print and compare without recursing forever.
+let cycle_a = []
+cycle_a.push(cycle_a)
+let cycle_b = []
+cycle_b.push(cycle_b)
+assert(cycle_a == cycle_b)
+println cycle_a
+
+# Recursion must fail with a controlled language error rather than a native stack overflow.
+func recurse_forever(n) {
+    return recurse_forever(n + 1)
+}
+var recursion_caught = false
+try {
+    recurse_forever(0)
+} catch Exception as error {
+    recursion_caught = error.contains("RecursionError")
+}
+assert(recursion_caught)
+
+# Integer arithmetic must not silently wrap; shifts must validate their count.
+var add_overflow_caught = false
+try {
+    9223372036854775807 + 1
+} catch Exception as error {
+    add_overflow_caught = error.contains("OverflowError")
+}
+assert(add_overflow_caught)
+var multiply_overflow_caught = false
+try {
+    3037000500 * 3037000500
+} catch Exception as error {
+    multiply_overflow_caught = error.contains("OverflowError")
+}
+assert(multiply_overflow_caught)
+
+var shift_caught = false
+try {
+    1 << 64
+} catch Exception as error {
+    shift_caught = error.contains("shift count")
+}
+assert(shift_caught)
+
+var random_range_caught = false
+try {
+    random_int(5, 1)
+} catch Exception as error {
+    random_range_caught = error.contains("lower bound")
+}
+assert(random_range_caught)
+
+# Native API argument mismatches must surface as Lucy TypeErrors, not std::bad_variant_access.
+var file_type_error_caught = false
+try {
+    File.read(5)
+} catch Exception as error {
+    file_type_error_caught = error.contains("TypeError") && error.contains("argument 1")
+}
+assert(file_type_error_caught)
+
+# Deep JSON nesting must fail with a controlled diagnostic rather than overflow the C++ stack.
+var deep_json = ""
+var depth_index = 0
+while depth_index < 600 {
+    deep_json = deep_json + "["
+    depth_index++
+}
+deep_json = deep_json + "0"
+depth_index = 0
+while depth_index < 600 {
+    deep_json = deep_json + "]"
+    depth_index++
+}
+var json_depth_caught = false
+try {
+    data.json.parse(deep_json)
+} catch Exception as error {
+    json_depth_caught = error.contains("maximum nesting depth")
+}
+assert(json_depth_caught)
+
+# Directory removal is non-recursive by default; recursive deletion is explicit.
+let test_root = "lucy_hardening_tmp"
+Dir.mkdir(test_root, true)
+Dir.mkdir(test_root + "/nested", true)
+File.write(test_root + "/nested/data.txt", "safe")
+var nonempty_rmdir_failed = false
+try {
+    Dir.rmdir(test_root)
+} catch Exception as error {
+    nonempty_rmdir_failed = true
+}
+assert(nonempty_rmdir_failed)
+assert(File.exists(test_root + "/nested/data.txt"))
+Dir.rmdir(test_root, true)
+assert(!Dir.exists(test_root))
+
+println "runtime hardening regressions passed"

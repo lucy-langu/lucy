@@ -1,6 +1,6 @@
 # Lucy
 
-**Version 2.0.2**
+**Version 2.0.3**
 
 Lucy is a general-purpose programming language implemented in C++17 with runtime type contracts for annotated values and functions. It focuses on readable brace-delimited source, a compact expression system, a practical standard library, and an interactive REPL.
 
@@ -50,7 +50,7 @@ print(count ?? 0)
 
 ## Standard library
 
-Lucy 2.0.2 loads its standard modules automatically. The main modules (`app`, `crypto`, `data`, `flow`, `fs`, `http`, `math`, `random`, `repl`, `result`, `runtime`, `set`, `sqlite`, `system`, `text`, and `time`) are available without a user-written `import`. Explicit `import` remains supported for compatibility and for user modules/packages.
+Lucy 2.0.3 loads its standard modules automatically. The main modules (`app`, `crypto`, `data`, `flow`, `fs`, `http`, `math`, `random`, `repl`, `result`, `runtime`, `set`, `sqlite`, `system`, `text`, and `time`) are available without a user-written `import`. Explicit `import` remains supported for compatibility and for user modules/packages.
 
 ## Extending built-in types
 
@@ -87,3 +87,17 @@ The documentation is intentionally consolidated into a small set of deep referen
 - `docs/HISTORY_AND_MIGRATION.md` — historical migration context
 - `docs/CHANGELOG.md` — release history
 - `docs/VERIFICATION_2_0_2.md` — test environment, passing checks, and unverified platforms
+
+
+## Core filesystem objects (2.0.3)
+
+The filesystem APIs are available through import-free, Ruby-inspired core facades as well as the lowercase compatibility modules:
+
+```lucy
+println Dir.cwd()
+println Dir.entries(".")
+println File.read("README.md")
+println Path.basename("src/runtime.cpp")
+```
+
+`Dir`, `File`, and `Path` are core runtime objects. They delegate to the same filesystem implementation as `fs`, so there is no second implementation or behavior drift. Explicit imports remain supported for compatibility and user-defined modules, but are not required for these core objects.

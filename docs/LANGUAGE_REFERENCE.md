@@ -491,9 +491,35 @@ class Admin < User {
 
 Lucy supports single inheritance.
 
-### 11.3 Unsupported OOP features
+### 11.3 Method modifiers and parent dispatch
 
-2.0.2 does not provide separate visibility modifiers, static/class method declarations, method overloading as a language feature, multiple inheritance, mixins, interfaces, abstract classes, or a standalone `super` expression syntax.
+Methods may be declared with `static`, `public`, `protected`, or `private` modifiers. These words are contextual identifiers in the class body, not globally reserved keywords.
+
+```lucy
+class Animal {
+    func speak() { return "animal" }
+    protected func family() { return "animal" }
+}
+
+class Dog < Animal {
+    static func species() { return "dog" }
+    private func secret() { return "internal" }
+    func speak() { return super.speak() + "-dog" }
+    func reveal() { return self.secret() }
+}
+
+assert(Dog.species() == "dog")
+assert(Dog.new().speak() == "animal-dog")
+assert(Dog.new().reveal() == "internal")
+```
+
+- Methods without a modifier are public.
+- `static func` defines class-level behavior and is called as `Type.method(...)`.
+- `private` methods can be called from methods declared by the same class. `protected` methods can be called from that class or its subclasses.
+- `super.method(...)` starts method lookup at the parent of the class that defined the currently executing method and keeps the same instance receiver.
+- Visibility is enforced for methods, not arbitrary instance fields. Existing standard-library classes use historical class-call conventions; migration to explicit `static` declarations is not yet complete.
+
+Lucy still does not implement method overloading as a language feature, multiple inheritance, mixins, interfaces, abstract classes, or Ruby's implicit `super` argument forwarding.
 
 ### 11.4 Built-in type extension
 
@@ -702,3 +728,8 @@ The parser is implemented as a recursive-descent grammar in `src/parser.cpp`. Th
 The runtime stores strings as UTF-8 byte sequences. `length()`, `char_at()`, `slice()`, and `reverse()` now operate on UTF-8 code-point boundaries. They do not implement Unicode grapheme-cluster segmentation; combining marks and emoji ZWJ sequences may comprise multiple logical display characters. `upper()` and `lower()` remain ASCII-oriented and are not full Unicode case mapping.
 
 The JSON parser combines valid UTF-16 surrogate pairs and rejects isolated surrogates. Invalid UTF-8 in unescaped JSON string bytes is not fully validated; do not treat parsing as a byte-validation boundary.
+
+
+## Lucy 2.0.3 core filesystem facades
+
+The runtime now exposes import-free global objects `Dir`, `File`, and `Path`. They provide conventional entry points while forwarding to the canonical `fs` and `system` APIs. For example, `Dir.cwd()`, `File.read("README.md")`, and `Path.basename("src/runtime.cpp")` do not require imports. Existing lowercase modules remain supported. These facades are namespace-like runtime objects, not yet full Ruby-compatible classes with class methods, inheritance hooks, or a complete `File`/`Dir` object model.

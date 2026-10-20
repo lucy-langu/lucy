@@ -79,9 +79,13 @@ private:
     std::vector<std::pair<std::string, std::string>> list_modules() const;
     std::shared_ptr<Environment> globals_;
     std::shared_ptr<Environment> env_;
-    std::vector<std::shared_ptr<Environment>> environments_;
+    std::vector<std::weak_ptr<Environment>> environments_;
+    std::size_t call_depth_ = 0;
+    std::size_t max_call_depth_ = 1000;
+    std::size_t environment_cleanup_counter_ = 0;
     std::unordered_map<std::string, std::function<Value(const std::vector<Value>&)>> builtins_;
     std::string current_file_;
+    std::vector<std::string> call_stack_;
     bool interactive_mode_ = false;
     std::vector<std::string> import_stack_;
     std::unordered_map<std::string, Map> native_modules_;
@@ -95,6 +99,9 @@ private:
     void install_builtins();
     void install_builtin_type_classes();
     void load_standard_modules();
+
+    Value execute_impl(const StmtPtr& statement);
+    Value evaluate_impl(const ExprPtr& expression);
 
     Value call(
         const Value& value,

@@ -203,15 +203,18 @@ private:
         }
     }
 
-    Value parse_value() {
+    static constexpr std::size_t max_nesting_depth = 512;
+
+    Value parse_value(std::size_t depth = 0) {
+        if (depth > max_nesting_depth) fail("maximum nesting depth of 512 exceeded");
         skip_space();
         switch (peek()) {
             case 'n': return parse_literal("null", Value{});
             case 't': return parse_literal("true", Value(true));
             case 'f': return parse_literal("false", Value(false));
             case '"': return Value(parse_string());
-            case '[': return parse_array();
-            case '{': return parse_object();
+            case '[': return parse_array(depth);
+            case '{': return parse_object(depth);
             default:
                 if (peek() == '-' || std::isdigit(static_cast<unsigned char>(peek()))) {
                     return parse_number();
@@ -355,14 +358,14 @@ private:
         return Value{};
     }
 
-    Value parse_array() {
+    Value parse_array(std::size_t depth) {
         expect('[');
         Array values;
         skip_space();
         if (consume(']')) return Value(std::move(values));
 
         while (true) {
-            values.push_back(parse_value());
+            values.push_back(parse_value(depth + 1));
             skip_space();
             if (consume(']')) break;
             expect(',');
@@ -370,7 +373,7 @@ private:
         return Value(std::move(values));
     }
 
-    Value parse_object() {
+    Value parse_object(std::size_t depth) {
         expect('{');
         Map values;
         skip_space();
@@ -382,7 +385,7 @@ private:
             std::string key = parse_string();
             skip_space();
             expect(':');
-            values[key] = parse_value();
+            values[key] = parse_value(depth + 1);
             skip_space();
             if (consume('}')) break;
             expect(',');

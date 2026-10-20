@@ -23,3 +23,10 @@
 ## 2.0.0
 
 Initial Lucy 2.0 language release. See [history and migration](HISTORY_AND_MIGRATION.md).
+
+## 2.0.3 — Ruby-inspired core filesystem API
+
+- Added import-free `Dir`, `File`, and `Path` global objects with a conventional object-oriented API surface.
+- Kept `fs` and `system` compatibility APIs; the new facades delegate to them rather than duplicating filesystem logic.
+- Bumped runtime, CLI, and CMake project version to 2.0.3.
+- Added regression coverage for directory access, file metadata, and path operations.

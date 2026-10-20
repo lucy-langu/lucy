@@ -1,0 +1,482 @@
+{
+  "language_version": "2.0.3",
+  "contract_version": 1,
+  "apis": [
+    {
+      "name": "File.read",
+      "signature": "File.read(path: String) -> String",
+      "inputs": {
+        "path": "String path to an existing readable file"
+      },
+      "returns": "String containing the file contents",
+      "errors": [
+        "IOError when the file cannot be opened or read"
+      ],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "let body = File.read(\"README.md\")"
+    },
+    {
+      "name": "File.write",
+      "signature": "File.write(path: String, content: String) -> nil",
+      "inputs": {
+        "path": "String destination path",
+        "content": "String content to write"
+      },
+      "returns": "nil on success",
+      "errors": [
+        "IOError when the destination cannot be created or written"
+      ],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "File.write(\"hello.txt\", \"hello\")"
+    },
+    {
+      "name": "File.append",
+      "signature": "File.append(path: String, content: String) -> nil",
+      "inputs": {
+        "path": "String destination path",
+        "content": "String content to append"
+      },
+      "returns": "nil on success",
+      "errors": [
+        "IOError when the file cannot be opened or written"
+      ],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "File.append(\"hello.txt\", \"!\")"
+    },
+    {
+      "name": "File.exists",
+      "signature": "File.exists(path: String) -> Bool",
+      "inputs": {
+        "path": "String filesystem path"
+      },
+      "returns": "Bool indicating whether the path exists",
+      "errors": [],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "assert(File.exists(\"README.md\"))"
+    },
+    {
+      "name": "File.size",
+      "signature": "File.size(path: String) -> Int",
+      "inputs": {
+        "path": "String path to an existing file"
+      },
+      "returns": "Int file size in bytes",
+      "errors": [
+        "IOError when metadata cannot be read"
+      ],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "let bytes = File.size(\"README.md\")"
+    },
+    {
+      "name": "Dir.cwd",
+      "signature": "Dir.cwd() -> String",
+      "inputs": {},
+      "returns": "String current working directory",
+      "errors": [
+        "IOError when the working directory cannot be determined"
+      ],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "println Dir.cwd()"
+    },
+    {
+      "name": "Dir.entries",
+      "signature": "Dir.entries(path: String) -> Array<String>",
+      "inputs": {
+        "path": "String directory path"
+      },
+      "returns": "Array<String> of entry names",
+      "errors": [
+        "IOError when the directory cannot be enumerated"
+      ],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "println Dir.entries(\".\")"
+    },
+    {
+      "name": "Path.basename",
+      "signature": "Path.basename(path: String) -> String",
+      "inputs": {
+        "path": "String path"
+      },
+      "returns": "String final path component",
+      "errors": [],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "assert(Path.basename(\"src/runtime.cpp\") == \"runtime.cpp\")"
+    },
+    {
+      "name": "Path.dirname",
+      "signature": "Path.dirname(path: String) -> String",
+      "inputs": {
+        "path": "String path"
+      },
+      "returns": "String parent path component",
+      "errors": [],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "println Path.dirname(\"src/runtime.cpp\")"
+    },
+    {
+      "name": "Path.extension",
+      "signature": "Path.extension(path: String) -> String",
+      "inputs": {
+        "path": "String path"
+      },
+      "returns": "String extension including the leading dot (for example, \".cpp\")",
+      "errors": [],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "assert(Path.extension(\"runtime.cpp\") == \".cpp\")"
+    },
+    {
+      "name": "File.read_lines",
+      "signature": "File.read_lines(path: String) -> Array<String>",
+      "inputs": {
+        "path": "String path to readable text file"
+      },
+      "returns": "Array<String> lines from the file",
+      "errors": [
+        "IOError for invalid paths or filesystem permission failures"
+      ],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "let lines = File.read_lines(\"README.md\")"
+    },
+    {
+      "name": "File.write_lines",
+      "signature": "File.write_lines(path: String, lines: Array<String>) -> nil",
+      "inputs": {
+        "path": "String destination path",
+        "lines": "Array<String> lines to write"
+      },
+      "returns": "nil on success",
+      "errors": [
+        "IOError for invalid paths or filesystem permission failures"
+      ],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "File.write_lines(\"lines.txt\", [\"one\", \"two\"])"
+    },
+    {
+      "name": "File.delete",
+      "signature": "File.delete(path: String) -> Bool",
+      "inputs": {
+        "path": "String file path"
+      },
+      "returns": "Bool indicating whether deletion succeeded",
+      "errors": [
+        "IOError for invalid paths or filesystem permission failures"
+      ],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "File.delete(\"temporary.txt\")"
+    },
+    {
+      "name": "File.copy",
+      "signature": "File.copy(source: String, destination: String) -> Bool",
+      "inputs": {
+        "source": "String source file path",
+        "destination": "String destination file path"
+      },
+      "returns": "Bool success result",
+      "errors": [
+        "IOError for invalid paths or filesystem permission failures"
+      ],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "File.copy(\"input.txt\", \"copy.txt\")"
+    },
+    {
+      "name": "File.move",
+      "signature": "File.move(source: String, destination: String) -> Bool",
+      "inputs": {
+        "source": "String source path",
+        "destination": "String destination path"
+      },
+      "returns": "Bool success result",
+      "errors": [
+        "IOError for invalid paths or filesystem permission failures"
+      ],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "File.move(\"old.txt\", \"new.txt\")"
+    },
+    {
+      "name": "File.touch",
+      "signature": "File.touch(path: String) -> Bool",
+      "inputs": {
+        "path": "String file path"
+      },
+      "returns": "Bool success result",
+      "errors": [
+        "IOError for invalid paths or filesystem permission failures"
+      ],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "File.touch(\"empty.txt\")"
+    },
+    {
+      "name": "File.open",
+      "signature": "File.open(path: String, mode: String = \"r\") -> IO",
+      "inputs": {
+        "path": "String path",
+        "mode": "String open mode supported by the IO wrapper"
+      },
+      "returns": "IO wrapper object",
+      "errors": [
+        "IOError for invalid paths or filesystem permission failures"
+      ],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "let file = File.open(\"README.md\", \"r\")"
+    },
+    {
+      "name": "Dir.pwd",
+      "signature": "Dir.pwd() -> String",
+      "inputs": {},
+      "returns": "String current working directory",
+      "errors": [],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "println Dir.pwd()"
+    },
+    {
+      "name": "Dir.files",
+      "signature": "Dir.files(path: String = \".\") -> Array<String>",
+      "inputs": {
+        "path": "String directory path"
+      },
+      "returns": "Array<String> file entries",
+      "errors": [
+        "IOError for invalid paths or filesystem permission failures"
+      ],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "println Dir.files(\".\")"
+    },
+    {
+      "name": "Dir.dirs",
+      "signature": "Dir.dirs(path: String = \".\") -> Array<String>",
+      "inputs": {
+        "path": "String directory path"
+      },
+      "returns": "Array<String> subdirectory entries",
+      "errors": [
+        "IOError for invalid paths or filesystem permission failures"
+      ],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "println Dir.dirs(\".\")"
+    },
+    {
+      "name": "Dir.mkdir",
+      "signature": "Dir.mkdir(path: String, recursive: Bool = false) -> Bool",
+      "inputs": {
+        "path": "String directory path",
+        "recursive": "Bool create parent directories if needed"
+      },
+      "returns": "Bool success result",
+      "errors": [
+        "IOError for invalid paths or filesystem permission failures"
+      ],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "Dir.mkdir(\"tmp/data\", true)"
+    },
+    {
+      "name": "Dir.rmdir",
+      "signature": "Dir.rmdir(path: String) -> Bool",
+      "inputs": {
+        "path": "String directory path"
+      },
+      "returns": "Bool success result",
+      "errors": [
+        "IOError when the directory is missing, non-empty, or not removable"
+      ],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "Dir.rmdir(\"tmp/data\")"
+    },
+    {
+      "name": "Dir.empty",
+      "signature": "Dir.empty(path: String) -> Bool",
+      "inputs": {
+        "path": "String directory path"
+      },
+      "returns": "Bool indicating whether the directory is empty",
+      "errors": [
+        "IOError for invalid paths or filesystem permission failures"
+      ],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "println Dir.empty(\".\")"
+    },
+    {
+      "name": "Dir.glob",
+      "signature": "Dir.glob(pattern: String) -> Array<String>",
+      "inputs": {
+        "pattern": "String path glob pattern"
+      },
+      "returns": "Array<String> matching paths",
+      "errors": [],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "println Dir.glob(\"*.lucy\")"
+    },
+    {
+      "name": "Dir.walk",
+      "signature": "Dir.walk(path: String) -> Array<String>",
+      "inputs": {
+        "path": "String root directory"
+      },
+      "returns": "Array<String> paths below the root",
+      "errors": [
+        "IOError for invalid paths or filesystem permission failures"
+      ],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "println Dir.walk(\"src\")"
+    },
+    {
+      "name": "Path.join",
+      "signature": "Path.join(parts: Array<String>) -> String",
+      "inputs": {
+        "parts": "Array<String> path components"
+      },
+      "returns": "String joined path",
+      "errors": [],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "println Path.join([\"src\", \"runtime.cpp\"])"
+    },
+    {
+      "name": "Path.absolute",
+      "signature": "Path.absolute(path: String) -> String",
+      "inputs": {
+        "path": "String path"
+      },
+      "returns": "String absolute path",
+      "errors": [],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "println Path.absolute(\"README.md\")"
+    },
+    {
+      "name": "Path.expand",
+      "signature": "Path.expand(path: String) -> String",
+      "inputs": {
+        "path": "String path, with supported home expansion"
+      },
+      "returns": "String expanded path",
+      "errors": [],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "println Path.expand(\"~/project\")"
+    },
+    {
+      "name": "Path.stem",
+      "signature": "Path.stem(path: String) -> String",
+      "inputs": {
+        "path": "String path"
+      },
+      "returns": "String filename stem without extension",
+      "errors": [],
+      "platforms": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "example": "assert(Path.stem(\"runtime.cpp\") == \"runtime\")"
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-# Lucy 2.0.2 Environment and Installation
+# Lucy 2.0.3 Environment and Installation
 
 ## 1. Installation layout
 
