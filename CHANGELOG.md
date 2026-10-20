@@ -1,3 +1,11 @@
+## 2.0.4 — Round 2 audit follow-up
+
+- Snapshot-based array callback and `for` iteration prevents iterator invalidation when callbacks mutate the source array.
+- Added bounded recursive rendering/equality and checked numeric behavior for `int(double)`, integer `sum`, `abs`, and exponentiation.
+- Clamped date month shifts to the last valid day of the target month.
+- Added validation for `Math.clamp`, `Math.average`, and `random.sample`.
+- See `docs/AUDIT_FOLLOWUP_2_0_4.md` for scope and unresolved audit items.
+
 # Lucy Changelog
 
 ## 2.0.3 — Core object-oriented APIs and diagnostics

@@ -12,6 +12,9 @@ class Math {
     }
 
     func clamp(x, low, high) {
+        if low > high {
+            throw "ValueError: math.clamp requires low <= high"
+        }
         if x < low {
             return low
         } else if x > high {
@@ -61,7 +64,7 @@ class Math {
 
     func average(values) {
         if values.length() == 0 {
-            return nil
+            throw "ValueError: math.average expects a non-empty array"
         }
         return sum(values) / values.length()
     }

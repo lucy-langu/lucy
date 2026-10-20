@@ -140,7 +140,18 @@ class Date {
             month += 12
             year -= 1
         }
-        text = str(year) + "-" + str(month) + "-" + str(parts.get("day"))
+        day = parts.get("day")
+        days_in_month = 31
+        if month == 4 or month == 6 or month == 9 or month == 11 {
+            days_in_month = 30
+        } else if month == 2 {
+            leap = (year % 4 == 0 and year % 100 != 0) or year % 400 == 0
+            days_in_month = leap ? 29 : 28
+        }
+        if day > days_in_month {
+            day = days_in_month
+        }
+        text = str(year) + "-" + str(month) + "-" + str(day)
         return Date.new(__date_parse(text))
     }
 

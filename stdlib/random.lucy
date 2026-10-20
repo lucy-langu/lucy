@@ -36,6 +36,12 @@ func shuffle(items) {
 }
 
 func sample(items, count) {
+    if count < 0 {
+        throw "ValueError: random.sample count must be non-negative"
+    }
+    if count > items.length() {
+        throw "ValueError: random.sample count cannot exceed the number of items"
+    }
     result = []
     pool = shuffle(items)
     i = 0

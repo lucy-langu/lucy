@@ -1,0 +1,78 @@
+# Round 2 audit regression checks for Lucy 2.0.4.
+
+# Callback traversal must be safe when callbacks mutate the source array.
+let callback_array = [1, 2, 3]
+callback_array.each(lambda x => callback_array.push(x))
+assert(callback_array.length() == 6)
+let mapped_array = [1, 2, 3]
+mapped_array.map(lambda x => mapped_array.push(x))
+assert(mapped_array.length() == 6)
+let for_array = [1, 2, 3]
+for item in for_array {
+    for_array.push(item)
+}
+assert(for_array.length() == 6)
+
+# Integer operations preserve integer types and reject overflow.
+assert(type(sum([1, 2, 3])) == "int")
+assert(type(abs(-5)) == "int")
+var sum_overflow = false
+try {
+    sum([9223372036854775807, 1])
+} catch Exception as error {
+    sum_overflow = error.contains("OverflowError")
+}
+assert(sum_overflow)
+var power_overflow = false
+try {
+    2 ** 63
+} catch Exception as error {
+    power_overflow = error.contains("OverflowError")
+}
+assert(power_overflow)
+var cast_overflow = false
+try {
+    int(1e30)
+} catch Exception as error {
+    cast_overflow = error.contains("OverflowError")
+}
+assert(cast_overflow)
+var abs_overflow = false
+try {
+    abs(-9223372036854775807 - 1)
+} catch Exception as error {
+    abs_overflow = error.contains("OverflowError")
+}
+assert(abs_overflow)
+
+var clamp_invalid = false
+try {
+    math.clamp(5, 10, 1)
+} catch Exception as error {
+    clamp_invalid = error.contains("low <= high")
+}
+assert(clamp_invalid)
+var average_empty = false
+try {
+    math.average([])
+} catch Exception as error {
+    average_empty = error.contains("non-empty")
+}
+assert(average_empty)
+var sample_too_many = false
+try {
+    random.sample([1, 2], 5)
+} catch Exception as error {
+    sample_too_many = error.contains("cannot exceed")
+}
+assert(sample_too_many)
+
+# Rendering deeply nested containers must not recurse without bound.
+var nested = []
+var nesting_index = 0
+while nesting_index < 600 {
+    nested = [nested]
+    nesting_index++
+}
+str(nested)
+println "round 2 audit regressions passed"

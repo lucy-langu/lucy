@@ -7,7 +7,9 @@ using namespace lucy;
 bool Value::is_number()const{return std::holds_alternative<long long>(data)||std::holds_alternative<double>(data);}
 bool Value::is_truthy()const{if(std::holds_alternative<Nil>(data))return false;if(auto p=std::get_if<bool>(&data))return *p;if(auto p=std::get_if<long long>(&data))return *p!=0;if(auto p=std::get_if<double>(&data))return *p!=0.0;if(auto p=std::get_if<std::string>(&data))return !p->empty();if(auto p=std::get_if<ArrayPtr>(&data))return p&&!(*p)->empty();if(auto p=std::get_if<MapPtr>(&data))return p&&!(*p)->empty();return true;}
 namespace {
-std::string value_to_string(const Value &value, std::unordered_set<const void *> &active) {
+std::string value_to_string(const Value &value, std::unordered_set<const void *> &active, std::size_t depth = 0) {
+    constexpr std::size_t kMaxValueRenderDepth = 512;
+    if (depth >= kMaxValueRenderDepth) return "...";
     if(std::holds_alternative<Nil>(value.data)) return "nil";
     if(auto p=std::get_if<bool>(&value.data)) return *p?"true":"false";
     if(auto p=std::get_if<long long>(&value.data)) return std::to_string(*p);
@@ -19,7 +21,7 @@ std::string value_to_string(const Value &value, std::unordered_set<const void *>
         if(active.count(identity)) return "[...]";
         active.insert(identity);
         std::string r="[";
-        for(size_t i=0;i<(*p)->size();++i){if(i)r+=", ";r+=value_to_string((*p)->at(i),active);}
+        for(size_t i=0;i<(*p)->size();++i){if(i)r+=", ";r+=value_to_string((*p)->at(i),active,depth+1);}
         r+="]"; active.erase(identity); return r;
     }
     if(auto p=std::get_if<Value::MapPtr>(&value.data)) {
@@ -28,7 +30,7 @@ std::string value_to_string(const Value &value, std::unordered_set<const void *>
         if(active.count(identity)) return "{...}";
         active.insert(identity);
         std::string r="{";size_t i=0;
-        for(auto&[k,v]:**p){if(i++)r+=", ";r+=k+": "+value_to_string(v,active);}
+        for(auto&[k,v]:**p){if(i++)r+=", ";r+=k+": "+value_to_string(v,active,depth+1);}
         r+="}"; active.erase(identity); return r;
     }
     if(auto p=std::get_if<Value::FunctionPtr>(&value.data)) return "<function "+(*p?(*p)->name:std::string{})+">";

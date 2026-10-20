@@ -323,7 +323,7 @@ Interpreter::Interpreter(std::vector<std::string> argv)
 
     globals_->define("PI", 3.141592653589793, true);
     globals_->define("E", 2.718281828459045, true);
-    globals_->define("VERSION", "2.0.3", true);
+    globals_->define("VERSION", "2.0.4", true);
 
 #ifdef _WIN32
     globals_->define("PLATFORM", std::string("windows"), true);
@@ -447,7 +447,11 @@ void Interpreter::install_builtins()
     {
         if(a.empty() || a.size() > 2) throw std::runtime_error("ArgumentError: int expects 1 or 2 argument(s)");
         if(auto p=std::get_if<long long>(&a[0].data)) return Value(*p);
-        if(auto p=std::get_if<double>(&a[0].data)) return Value((long long)*p);
+        if(auto p=std::get_if<double>(&a[0].data)) {
+            if (!std::isfinite(*p) || static_cast<long double>(*p) < static_cast<long double>(std::numeric_limits<long long>::min()) || static_cast<long double>(*p) > static_cast<long double>(std::numeric_limits<long long>::max()))
+                throw std::runtime_error("OverflowError: int() value is outside the integer range");
+            return Value(static_cast<long long>(*p));
+        }
         if(auto p=std::get_if<std::string>(&a[0].data)) {
             int base = 10;
             if(a.size()==2) {
@@ -497,13 +501,13 @@ void Interpreter::install_builtins()
     builtins_["range"] = [](const std::vector<Value> &a)
     {if(a.empty()||a.size()>3)throw std::runtime_error("ArgumentError: range expects 1 to 3 arguments");long long start=0,stop=0,step=1;if(a.size()==1)stop=integer(a[0],"range");else{start=integer(a[0],"range");stop=integer(a[1],"range");if(a.size()==3)step=integer(a[2],"range");}if(step==0)throw std::runtime_error("ValueError: range step cannot be zero");Array r;if(step>0)for(long long i=start;i<stop;i+=step)r.emplace_back(i);else for(long long i=start;i>stop;i+=step)r.emplace_back(i);return Value(std::move(r)); };
     builtins_["sum"] = [](const std::vector<Value> &a)
-    {need(a.size(),1,"sum");auto p=std::get_if<Value::ArrayPtr>(&a[0].data);if(!p)throw std::runtime_error("TypeError: sum expects an array");double r=0;for(auto&v:**p)r+=num(v,"sum");return Value(r); };
+    {need(a.size(),1,"sum");auto p=std::get_if<Value::ArrayPtr>(&a[0].data);if(!p)throw std::runtime_error("TypeError: sum expects an array");bool all_int=true;long long total=0;for(const auto&v:**p){auto iv=std::get_if<long long>(&v.data);if(!iv){all_int=false;break;}long long next=0;if(checked_add_i64(total,*iv,next))throw std::runtime_error("OverflowError: integer sum overflow");total=next;}if(all_int)return Value(total);double r=0;for(const auto&v:**p)r+=num(v,"sum");return Value(r); };
     builtins_["min"] = [](const std::vector<Value> &a)
     {if(a.empty())throw std::runtime_error("ArgumentError: min expects at least one argument");double r=num(a[0],"min");for(size_t i=1;i<a.size();++i)r=std::min(r,num(a[i],"min"));return Value(r); };
     builtins_["max"] = [](const std::vector<Value> &a)
     {if(a.empty())throw std::runtime_error("ArgumentError: max expects at least one argument");double r=num(a[0],"max");for(size_t i=1;i<a.size();++i)r=std::max(r,num(a[i],"max"));return Value(r); };
     builtins_["abs"] = [](const std::vector<Value> &a)
-    {need(a.size(),1,"abs");return Value(std::fabs(num(a[0],"abs"))); };
+    {need(a.size(),1,"abs");if(auto iv=std::get_if<long long>(&a[0].data)){if(*iv==std::numeric_limits<long long>::min())throw std::runtime_error("OverflowError: abs integer overflow");return Value(*iv<0?-*iv:*iv);}return Value(std::fabs(num(a[0],"abs"))); };
     builtins_["sqrt"] = [](const std::vector<Value> &a)
     {need(a.size(),1,"sqrt");double x=num(a[0],"sqrt");if(x<0)throw std::runtime_error("ValueError: sqrt domain error");return Value(std::sqrt(x)); };
     const std::vector<std::pair<std::string, double (*)(double)>> unary_math_functions{
@@ -770,7 +774,10 @@ bool Interpreter::equal(const Value &a, const Value &b) const
         return std::hash<const void *>{}(p.first) ^ (std::hash<const void *>{}(p.second) << 1);
     }};
     std::unordered_set<Pair, PairHash> visited;
+    std::size_t comparison_depth = 0;
     std::function<bool(const Value &, const Value &)> compare = [&](const Value &left, const Value &right) -> bool {
+        if (comparison_depth >= 512) throw std::runtime_error("ValueError: maximum comparison depth of 512 exceeded");
+        struct DepthGuard { std::size_t &depth; explicit DepthGuard(std::size_t &d): depth(d) { ++depth; } ~DepthGuard() { --depth; } } depth_guard(comparison_depth);
         if (left.is_number() && right.is_number()) {
             if (auto li = std::get_if<long long>(&left.data)) {
                 if (auto ri = std::get_if<long long>(&right.data)) return *li == *ri;
@@ -941,9 +948,13 @@ Value Interpreter::binary(const Value &a, const Token &o, const Value &b)
                                                     : o.type == TokenType::Slash  ? x / y
                                                                                   : std::pow(x, y);
         if (o.type == TokenType::Power && std::holds_alternative<long long>(a.data) && std::holds_alternative<long long>(b.data) && y >= 0 && y <= 63) {
-            double integral = r;
-            if (std::isfinite(integral) && integral >= static_cast<double>(std::numeric_limits<long long>::min()) && integral < 9223372036854775808.0 && std::floor(integral) == integral)
-                return Value(static_cast<long long>(integral));
+            long long base = std::get<long long>(a.data), exponent = std::get<long long>(b.data), result = 1;
+            for (long long i = 0; i < exponent; ++i) {
+                long long next = 0;
+                if (checked_mul_i64(result, base, next)) throw std::runtime_error("OverflowError: integer exponentiation overflow");
+                result = next;
+            }
+            return Value(result);
         }
         return Value(r);
     }
@@ -1175,7 +1186,7 @@ Value Interpreter::member_get(const Value &v, const std::string &n)
     if (std::holds_alternative<Value::ArrayPtr>(v.data))
     {
         auto f = [this, n, v](const std::vector<Value> &args)
-        {auto p=std::get<Value::ArrayPtr>(v.data);if(n=="push"){for(auto&x:args)p->push_back(x);return Value((long long)p->size());}if(n=="pop"){if(p->empty())return Value{};Value x=p->back();p->pop_back();return x;}if(n=="shift"){if(p->empty())return Value{};Value x=p->front();p->erase(p->begin());return x;}if(n=="unshift"){p->insert(p->begin(),args.begin(),args.end());return Value((long long)p->size());}if(n=="insert"){need(args.size(),2,n);long long index=integer(args[0],n);if(index<0)index+=(long long)p->size();if(index<0)index=0;if(index>(long long)p->size())index=p->size();p->insert(p->begin()+index,args[1]);return Value(v);}if(n=="remove_at"){need(args.size(),1,n);long long index=integer(args[0],n);if(index<0)index+=(long long)p->size();if(index<0||index>=(long long)p->size())return Value{};Value removed=p->at(index);p->erase(p->begin()+index);return removed;}if(n=="clear"){p->clear();return Value{};}if(n=="first")return p->empty()?Value{}:p->front();if(n=="last")return p->empty()?Value{}:p->back();if(n=="contains"){need(args.size(),1,n);for(auto&x:*p)if(equal(x,args[0]))return Value(true);return Value(false);}if(n=="count"){need(args.size(),1,n);long long c=0;for(auto&x:*p)if(equal(x,args[0]))++c;return Value(c);}if(n=="index"){need(args.size(),1,n);for(size_t i=0;i<p->size();++i)if(equal(p->at(i),args[0]))return Value((long long)i);return Value{};}if(n=="join"){need(args.size(),1,n);std::string r,sep=string_arg(args[0], 1);for(size_t i=0;i<p->size();++i){if(i)r+=sep;r+=p->at(i).to_string();}return Value(r);}if(n=="reverse"){std::reverse(p->begin(),p->end());return Value(v);}if(n=="length"||n=="size")return Value((long long)p->size());if(n=="slice"){if(args.size()<1||args.size()>2)throw std::runtime_error("ArgumentError: array.slice expects 1 or 2 arguments");long long start=integer(args[0],n), end=(long long)p->size();if(start<0)start+=(long long)p->size();if(start<0)start=0;if(start>(long long)p->size())start=p->size();if(args.size()==2){end=integer(args[1],n);if(end<0)end+=(long long)p->size();if(end<start)end=start;if(end>(long long)p->size())end=p->size();}Array r;for(long long i=start;i<end;++i)r.push_back(p->at((size_t)i));return Value(std::move(r));}if(n=="each"){need(args.size(),1,n);for(auto&x:*p)call(args[0],{x});return Value(v);}if(n=="map"){need(args.size(),1,n);Array r;for(auto&x:*p)r.push_back(call(args[0],{x}));return Value(std::move(r));}if(n=="filter"){need(args.size(),1,n);Array r;for(auto&x:*p)if(call(args[0],{x}).is_truthy())r.push_back(x);return Value(std::move(r));}if(n=="any"){need(args.size(),1,n);for(auto&x:*p)if(call(args[0],{x}).is_truthy())return Value(true);return Value(false);}if(n=="all"){need(args.size(),1,n);for(auto&x:*p)if(!call(args[0],{x}).is_truthy())return Value(false);return Value(true);}throw std::runtime_error("NoMethodError: array has no method '"+n+"'"); };
+        {auto p=std::get<Value::ArrayPtr>(v.data);if(n=="push"){for(auto&x:args)p->push_back(x);return Value((long long)p->size());}if(n=="pop"){if(p->empty())return Value{};Value x=p->back();p->pop_back();return x;}if(n=="shift"){if(p->empty())return Value{};Value x=p->front();p->erase(p->begin());return x;}if(n=="unshift"){p->insert(p->begin(),args.begin(),args.end());return Value((long long)p->size());}if(n=="insert"){need(args.size(),2,n);long long index=integer(args[0],n);if(index<0)index+=(long long)p->size();if(index<0)index=0;if(index>(long long)p->size())index=p->size();p->insert(p->begin()+index,args[1]);return Value(v);}if(n=="remove_at"){need(args.size(),1,n);long long index=integer(args[0],n);if(index<0)index+=(long long)p->size();if(index<0||index>=(long long)p->size())return Value{};Value removed=p->at(index);p->erase(p->begin()+index);return removed;}if(n=="clear"){p->clear();return Value{};}if(n=="first")return p->empty()?Value{}:p->front();if(n=="last")return p->empty()?Value{}:p->back();if(n=="contains"){need(args.size(),1,n);for(auto&x:*p)if(equal(x,args[0]))return Value(true);return Value(false);}if(n=="count"){need(args.size(),1,n);long long c=0;for(auto&x:*p)if(equal(x,args[0]))++c;return Value(c);}if(n=="index"){need(args.size(),1,n);for(size_t i=0;i<p->size();++i)if(equal(p->at(i),args[0]))return Value((long long)i);return Value{};}if(n=="join"){need(args.size(),1,n);std::string r,sep=string_arg(args[0], 1);for(size_t i=0;i<p->size();++i){if(i)r+=sep;r+=p->at(i).to_string();}return Value(r);}if(n=="reverse"){std::reverse(p->begin(),p->end());return Value(v);}if(n=="length"||n=="size")return Value((long long)p->size());if(n=="slice"){if(args.size()<1||args.size()>2)throw std::runtime_error("ArgumentError: array.slice expects 1 or 2 arguments");long long start=integer(args[0],n), end=(long long)p->size();if(start<0)start+=(long long)p->size();if(start<0)start=0;if(start>(long long)p->size())start=p->size();if(args.size()==2){end=integer(args[1],n);if(end<0)end+=(long long)p->size();if(end<start)end=start;if(end>(long long)p->size())end=p->size();}Array r;for(long long i=start;i<end;++i)r.push_back(p->at((size_t)i));return Value(std::move(r));}if(n=="each"){need(args.size(),1,n);Array snapshot=*p;for(const auto&x:snapshot)call(args[0],{x});return Value(v);}if(n=="map"){need(args.size(),1,n);Array snapshot=*p;Array r;r.reserve(snapshot.size());for(const auto&x:snapshot)r.push_back(call(args[0],{x}));return Value(std::move(r));}if(n=="filter"){need(args.size(),1,n);Array snapshot=*p;Array r;for(const auto&x:snapshot)if(call(args[0],{x}).is_truthy())r.push_back(x);return Value(std::move(r));}if(n=="any"){need(args.size(),1,n);Array snapshot=*p;for(const auto&x:snapshot)if(call(args[0],{x}).is_truthy())return Value(true);return Value(false);}if(n=="all"){need(args.size(),1,n);Array snapshot=*p;for(const auto&x:snapshot)if(!call(args[0],{x}).is_truthy())return Value(false);return Value(true);}throw std::runtime_error("NoMethodError: array has no method '"+n+"'"); };
         return Value(std::make_shared<Function>(Function{n, "", {}, nullptr, env_, nullptr, nullptr, f}));
     }
     if (std::holds_alternative<std::string>(v.data))
@@ -1782,11 +1793,13 @@ Value Interpreter::execute_impl(const StmtPtr &s)
             throw std::runtime_error("TypeError: for/foreach expects an array or range");
         auto old = env_;
         env_ = make_environment(old);
+        // Iterate over a snapshot: the loop body may mutate/reallocate the source array.
+        const Array iteration_snapshot = *a->get();
         try
         {
-            for (size_t item_index = 0; item_index < a->get()->size(); ++item_index)
+            for (size_t item_index = 0; item_index < iteration_snapshot.size(); ++item_index)
             {
-                auto &item = a->get()->at(item_index);
+                const Value &item = iteration_snapshot.at(item_index);
                 if (env_->local(x->name))
                     env_->assign(x->name, item);
                 else
@@ -2511,12 +2524,12 @@ void Interpreter::repl()
         }
         catch (const std::exception &)
         {
-            std::cout << "Lucy 2.0.3 Interactive REPL\n\n";
+            std::cout << "Lucy 2.0.4 Interactive REPL\n\n";
         }
     }
     else
     {
-        std::cout << "Lucy 2.0.3 Interactive REPL\n\n";
+        std::cout << "Lucy 2.0.4 Interactive REPL\n\n";
     }
 
     std::set<std::string> initial_global_names;
@@ -2767,7 +2780,7 @@ void Interpreter::repl()
         {
             try {
                 std::cout << eval_repl_library("repl.banner()\n").to_string() << "\n\n";
-            } catch (const std::exception &) { std::cout << "Lucy 2.0.3 interactive environment\n"; }
+            } catch (const std::exception &) { std::cout << "Lucy 2.0.4 interactive environment\n"; }
             continue;
         }
 
@@ -2782,12 +2795,12 @@ void Interpreter::repl()
                 }
                 catch (const std::exception &)
                 {
-                    std::cout << "2.0.3\n";
+                    std::cout << "2.0.4\n";
                 }
             }
             else
             {
-                std::cout << "2.0.3\n";
+                std::cout << "2.0.4\n";
             }
             continue;
         }
