@@ -323,7 +323,7 @@ Interpreter::Interpreter(std::vector<std::string> argv)
 
     globals_->define("PI", 3.141592653589793, true);
     globals_->define("E", 2.718281828459045, true);
-    globals_->define("VERSION", "2.0.4", true);
+    globals_->define("VERSION", "2.0.5", true);
 
 #ifdef _WIN32
     globals_->define("PLATFORM", std::string("windows"), true);
@@ -2524,12 +2524,12 @@ void Interpreter::repl()
         }
         catch (const std::exception &)
         {
-            std::cout << "Lucy 2.0.4 Interactive REPL\n\n";
+            std::cout << "Lucy 2.0.5 Interactive REPL\n\n";
         }
     }
     else
     {
-        std::cout << "Lucy 2.0.4 Interactive REPL\n\n";
+        std::cout << "Lucy 2.0.5 Interactive REPL\n\n";
     }
 
     std::set<std::string> initial_global_names;
@@ -2780,7 +2780,7 @@ void Interpreter::repl()
         {
             try {
                 std::cout << eval_repl_library("repl.banner()\n").to_string() << "\n\n";
-            } catch (const std::exception &) { std::cout << "Lucy 2.0.4 interactive environment\n"; }
+            } catch (const std::exception &) { std::cout << "Lucy 2.0.5 interactive environment\n"; }
             continue;
         }
 
@@ -2795,12 +2795,12 @@ void Interpreter::repl()
                 }
                 catch (const std::exception &)
                 {
-                    std::cout << "2.0.4\n";
+                    std::cout << "2.0.5\n";
                 }
             }
             else
             {
-                std::cout << "2.0.4\n";
+                std::cout << "2.0.5\n";
             }
             continue;
         }

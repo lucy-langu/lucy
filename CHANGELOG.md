@@ -1,3 +1,9 @@
+## 2.0.5 — Windows/MSVC build fix
+
+- Defined `NOMINMAX` for the `lucy_runtime` target on Windows so Windows SDK `min`/`max` macros cannot corrupt calls to `std::min` and `std::max`. This addresses the MSVC compilation cascade in `runtime.cpp` and `stdlib_native.cpp`.
+- Updated the project, runtime, CLI, installer message, standard-library manifest, and core API contract version metadata to `2.0.5`.
+- This fix is based on the reported Windows GitHub Actions log. A native Windows/MSVC run must still confirm the workflow is green.
+
 ## 2.0.4 — Round 2 audit follow-up
 
 - Snapshot-based array callback and `for` iteration prevents iterator invalidation when callbacks mutate the source array.

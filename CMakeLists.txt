@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(lucy VERSION 2.0.4 LANGUAGES CXX)
+project(lucy VERSION 2.0.5 LANGUAGES CXX)
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -20,6 +20,12 @@ add_library(lucy_runtime SHARED
 )
 
 target_include_directories(lucy_runtime PUBLIC include)
+
+# Windows headers define min/max macros that break std::min/std::max,
+# including initializer-list and explicitly templated overloads.
+if(WIN32)
+  target_compile_definitions(lucy_runtime PRIVATE NOMINMAX)
+endif()
 
 if(LUCY_ENABLE_SQLITE)
   find_package(SQLite3 REQUIRED)
