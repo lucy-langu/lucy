@@ -85,7 +85,7 @@ The built-in `range(start, stop, step)` creates an integer array with an exclusi
 
 ## 9. Loop implementation
 
-`for` and `foreach` evaluate an array/range value and bind each element. The optional second loop variable receives the zero-based item index:
+`for` and `foreach` evaluate an array/range or string and bind each element. Strings are snapshotted as UTF-8 code points (not individual bytes), so Unicode characters remain intact. The optional second loop variable receives the zero-based item index:
 
 ```lucy
 for value, index in values {

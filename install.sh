@@ -24,7 +24,7 @@ cmake --install "$BUILD_DIR" --config Release
 
 cat <<EOF
 
-Lucy 2.0.5 installed successfully.
+Lucy 2.0.6 installed successfully.
 Binary: $PREFIX/bin/lucy
 Stdlib: $PREFIX/share/lucy/stdlib
 Editors: $PREFIX/share/lucy/editors

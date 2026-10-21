@@ -1,4 +1,4 @@
-# Round 2 audit regression checks for Lucy 2.0.5.
+# Round 2 audit regression checks retained in Lucy 2.0.6.
 
 # Callback traversal must be safe when callbacks mutate the source array.
 let callback_array = [1, 2, 3]

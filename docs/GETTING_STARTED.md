@@ -95,7 +95,7 @@ println name.upper()
 println name.replace("Lucy", "Lucy 2")
 ```
 
-Interpolation supports `$name` and dotted member paths. Arbitrary `${expression}` interpolation is not part of 2.0.2.
+String interpolation supports `$name`, dotted member paths such as `$user.name`, and full expressions inside `${...}`. Use `${system.platform()}` when calling a function; `$system.platform` refers to the function value itself. Examples: `println "Hello, $name"` and `println "Platform: ${system.platform()}"`.
 
 ## 6. Arrays
 

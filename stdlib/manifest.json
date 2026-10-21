@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "language_version": "2.0.5",
+  "language_version": "2.0.6",
   "description": "Lucy independently versioned standard-library modules",
   "versioning_policy": "Each module has its own semantic version. A patch release must preserve the documented API; minor releases may add backward-compatible APIs; major releases may break compatibility.",
   "modules": {

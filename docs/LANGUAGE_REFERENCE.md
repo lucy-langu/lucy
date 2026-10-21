@@ -60,17 +60,25 @@ Supported escapes:
 
 Unknown escapes are errors. Heredocs, raw-string delimiters, and arbitrary multiline-string syntax are not separate 2.0.2 string forms.
 
-### 1.5 Interpolation
+### 1.5 String interpolation
 
-String interpolation resolves simple names and dotted member paths:
+Lucy supports both shorthand interpolation and full expression interpolation:
 
 ```lucy
 let name = "Lucy"
 println "Hello, $name"
-println "Platform: $system.platform"
+println "User: $user.name"
+println "Platform: ${system.platform()}"
+println "Calculation: ${10 + 20}"
+println "Uppercase: ${name.upper()}"
 ```
 
-Arbitrary `${expression}` interpolation is not supported. There is no separate interpolation escape syntax for `$`; construct a literal dollar sign when necessary.
+- `$name` inserts the value of a variable.
+- `$user.name` resolves a dotted member path. It does not call a function merely because the final member is callable; for example, `$system.platform` inserts the function value.
+- `${expression}` evaluates a Lucy expression and inserts its result. Use this form for function calls, arithmetic, and other expressions: `${system.platform()}`.
+- Interpolation is evaluated when the string expression is evaluated. Errors raised while evaluating an embedded expression follow normal Lucy runtime error rules.
+
+There is no dedicated interpolation escape syntax for a literal `$`; construct the string using ordinary string concatenation when a literal dollar sign is needed.
 
 ### 1.6 Numeric literals
 
@@ -304,7 +312,7 @@ let config = {"host": "localhost", "port": 8080}
 println config["host"]
 ```
 
-Strings can be indexed/sliced according to the runtime's string representation; string methods are documented in the standard-library reference.
+Strings support both single-code-point indexing and range slicing. Inclusive ranges (`..`) include the final index, while exclusive ranges (`...`) stop before it. Negative indexes count from the end, and range endpoints are clamped to the string bounds. Indexing and slicing operate on UTF-8 code points (not grapheme clusters). For example, `text[0..4]` returns the first five code points and `text[0...4]` returns the first four. String methods are documented in the standard-library reference.
 
 ## 8. Functions
 
@@ -443,7 +451,7 @@ for value, index in values {
 }
 ```
 
-`foreach` is the parser's alias form. The iterable must be an Array or range in the current runtime. Maps and strings are not general `for` iterables.
+`foreach` is the parser's alias form. Arrays, ranges, and strings are iterable. A string yields one UTF-8 code point per iteration; the optional index is a zero-based code-point index. Maps are not currently general `for` iterables.
 
 ### 10.7 `switch`
 

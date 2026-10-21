@@ -79,6 +79,16 @@ std::vector<StmtPtr> Parser::parse()
     }
     return out;
 }
+
+ExprPtr Parser::parse_expression_only()
+{
+    skip_newlines();
+    ExprPtr result = expression();
+    skip_newlines();
+    if (!check(TokenType::EndOfFile))
+        throw std::runtime_error("SyntaxError: unexpected token after interpolation expression");
+    return result;
+}
 StmtPtr Parser::block_until(std::initializer_list<TokenType> stop)
 {
     std::vector<StmtPtr> out;

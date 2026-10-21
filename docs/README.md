@@ -1,4 +1,5 @@
-# Lucy 2.0.3 Documentation
+# Lucy 2.0.6 Documentation
+- [Lucy 2.0.6 release verification](VERIFICATION_2_0_6.md)
 
 This directory documents the language, runtime, standard library, tools, extensions, build process, and known implementation limits. Treat the shipped source and regression tests as the executable contract; when prose disagrees with behavior, record the mismatch and correct the prose or implementation.
 
@@ -28,7 +29,8 @@ This directory documents the language, runtime, standard library, tools, extensi
 | [Changelog](CHANGELOG.md) | User-visible version history. |
 | [Real-world Workflows](REAL_WORLD_WORKFLOWS.md) | Complete application workflows and operational cautions. |
 | [Red-team Audit](RED_TEAM_AUDIT.md) | Historical 2.0.1 findings, dispositions, and remaining boundaries. |
-| [2.0.2 Verification Record](VERIFICATION_2_0_2.md) | Exact build/test environment, passing checks, and unverified areas. |
+| [2.0.2 Verification Record](VERIFICATION_2_0_2.md) | Historical build/test environment and verification status. |
+| [2.0.6 Verification Record](VERIFICATION_2_0_6.md) | Release scope, regression coverage, and verified/unverified platforms. |
 
 ## Per-module API pages
 

@@ -1,4 +1,4 @@
-# `system` standard library — Lucy 2.0.2
+# `system` standard library — Lucy 2.0.6
 
 Platform/environment inspection, process execution, identity, signals, clocks, and shell helpers.
 

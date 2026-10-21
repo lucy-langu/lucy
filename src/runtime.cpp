@@ -323,7 +323,7 @@ Interpreter::Interpreter(std::vector<std::string> argv)
 
     globals_->define("PI", 3.141592653589793, true);
     globals_->define("E", 2.718281828459045, true);
-    globals_->define("VERSION", "2.0.5", true);
+    globals_->define("VERSION", "2.0.6", true);
 
 #ifdef _WIN32
     globals_->define("PLATFORM", std::string("windows"), true);
@@ -1034,9 +1034,48 @@ Value Interpreter::binary(const Value &a, const Token &o, const Value &b)
 }
 std::string Interpreter::interpolate(const std::string &s)
 {
-    std::string o;
+    std::string out;
     for (size_t i = 0; i < s.size();)
     {
+        // ${...} evaluates a full Lucy expression, including calls such as
+        // ${system.platform()}. Track nested braces and quoted strings so map
+        // literals and braces inside strings do not terminate interpolation.
+        if (s[i] == '$' && i + 1 < s.size() && s[i + 1] == '{')
+        {
+            size_t begin = i + 2;
+            size_t j = begin;
+            size_t depth = 1;
+            char quote = '\0';
+            bool escaped = false;
+            for (; j < s.size(); ++j)
+            {
+                const char c = s[j];
+                if (quote != '\0') {
+                    if (escaped) escaped = false;
+                    else if (c == '\\') escaped = true;
+                    else if (c == quote) quote = '\0';
+                    continue;
+                }
+                if (c == '\'' || c == '"') { quote = c; continue; }
+                if (c == '{') ++depth;
+                else if (c == '}' && --depth == 0) break;
+            }
+            if (j >= s.size())
+                throw std::runtime_error("SyntaxError: unterminated ${...} string interpolation");
+            const std::string expression_source = s.substr(begin, j - begin);
+            try {
+                Lexer lexer(expression_source);
+                Parser parser(lexer.scan());
+                out += evaluate(parser.parse_expression_only()).to_string();
+            } catch (const ReturnSignal&) { throw; }
+              catch (const BreakSignal&) { throw; }
+              catch (const ContinueSignal&) { throw; }
+              catch (const std::exception& ex) {
+                throw std::runtime_error(std::string("InterpolationError: ") + ex.what());
+            }
+            i = j + 1;
+            continue;
+        }
         if (s[i] == '$')
         {
             size_t j = i + 1;
@@ -1044,24 +1083,27 @@ std::string Interpreter::interpolate(const std::string &s)
                 ++j;
             if (j > i + 1)
             {
-                std::string k = s.substr(i + 1, j - i - 1);
-                size_t d = k.find('.');
+                std::string key = s.substr(i + 1, j - i - 1);
+                size_t dot = key.find('.');
                 try
                 {
-                    o += d == std::string::npos ? env_->get(k).to_string() : member_get(env_->get(k.substr(0, d)), k.substr(d + 1)).to_string();
+                    out += dot == std::string::npos
+                        ? env_->get(key).to_string()
+                        : member_get(env_->get(key.substr(0, dot)), key.substr(dot + 1)).to_string();
                     i = j;
                     continue;
                 }
                 catch (...)
                 {
-                    throw std::runtime_error("NameError: cannot interpolate '$" + k + "'");
+                    throw std::runtime_error("NameError: cannot interpolate '$" + key + "'");
                 }
             }
         }
-        o += s[i++];
+        out += s[i++];
     }
-    return o;
+    return out;
 }
+
 Value Interpreter::member_get(const Value &v, const std::string &n)
 {
     auto bind = [this, &v](const Value& method) -> Value {
@@ -1400,11 +1442,34 @@ Value Interpreter::evaluate_impl(const ExprPtr &e)
         }
         if (auto s = std::get_if<std::string>(&o.data))
         {
+            const auto offsets = utf8_offsets(*s);
+            const long long n = static_cast<long long>(offsets.size()) - 1;
+            if (auto r = std::dynamic_pointer_cast<RangeExpr>(x->index))
+            {
+                long long start = integer(evaluate(r->a), "slice");
+                long long end = integer(evaluate(r->b), "slice");
+                if (start < 0) start += n;
+                if (end < 0) end += n;
+                start = std::max(0LL, std::min(start, n));
+                if (r->inclusive)
+                    end = std::max(-1LL, std::min(end, n - 1));
+                else
+                    end = std::max(0LL, std::min(end, n));
+
+                const long long stop = r->inclusive ? end + 1 : end;
+                if (stop <= start)
+                    return Value(std::string{});
+                const auto byte_start = offsets[static_cast<std::size_t>(start)];
+                const auto byte_end = offsets[static_cast<std::size_t>(stop)];
+                return Value(s->substr(byte_start, byte_end - byte_start));
+            }
             if (i < 0)
-                i += s->size();
-            if (i < 0 || i >= (long long)s->size())
+                i += n;
+            if (i < 0 || i >= n)
                 throw std::runtime_error("IndexError: string index out of range");
-            return Value(std::string(1, (*s)[i]));
+            const auto begin = offsets[static_cast<std::size_t>(i)];
+            const auto end = offsets[static_cast<std::size_t>(i + 1)];
+            return Value(s->substr(begin, end - begin));
         }
         throw std::runtime_error("TypeError: indexing requires array, map, or string");
     }
@@ -1788,13 +1853,21 @@ Value Interpreter::execute_impl(const StmtPtr &s)
     if (auto x = std::dynamic_pointer_cast<ForStmt>(s))
     {
         auto v = evaluate(x->iterable);
-        auto a = std::get_if<Value::ArrayPtr>(&v.data);
-        if (!a)
-            throw std::runtime_error("TypeError: for/foreach expects an array or range");
+        // Build a stable snapshot before entering the loop. Arrays may be mutated
+        // by the body, while strings are iterated by UTF-8 code point (not byte).
+        Array iteration_snapshot;
+        if (auto a = std::get_if<Value::ArrayPtr>(&v.data)) {
+            if (*a) iteration_snapshot = **a;
+        } else if (auto str = std::get_if<std::string>(&v.data)) {
+            const auto offsets = utf8_offsets(*str);
+            iteration_snapshot.reserve(offsets.size() > 0 ? offsets.size() - 1 : 0);
+            for (std::size_t i = 1; i < offsets.size(); ++i)
+                iteration_snapshot.emplace_back(str->substr(offsets[i - 1], offsets[i] - offsets[i - 1]));
+        } else {
+            throw std::runtime_error("TypeError: for/foreach expects an array, range, or string");
+        }
         auto old = env_;
         env_ = make_environment(old);
-        // Iterate over a snapshot: the loop body may mutate/reallocate the source array.
-        const Array iteration_snapshot = *a->get();
         try
         {
             for (size_t item_index = 0; item_index < iteration_snapshot.size(); ++item_index)
@@ -2524,12 +2597,12 @@ void Interpreter::repl()
         }
         catch (const std::exception &)
         {
-            std::cout << "Lucy 2.0.5 Interactive REPL\n\n";
+            std::cout << "Lucy 2.0.6 Interactive REPL\n\n";
         }
     }
     else
     {
-        std::cout << "Lucy 2.0.5 Interactive REPL\n\n";
+        std::cout << "Lucy 2.0.6 Interactive REPL\n\n";
     }
 
     std::set<std::string> initial_global_names;
@@ -2780,7 +2853,7 @@ void Interpreter::repl()
         {
             try {
                 std::cout << eval_repl_library("repl.banner()\n").to_string() << "\n\n";
-            } catch (const std::exception &) { std::cout << "Lucy 2.0.5 interactive environment\n"; }
+            } catch (const std::exception &) { std::cout << "Lucy 2.0.6 interactive environment\n"; }
             continue;
         }
 
@@ -2795,12 +2868,12 @@ void Interpreter::repl()
                 }
                 catch (const std::exception &)
                 {
-                    std::cout << "2.0.5\n";
+                    std::cout << "2.0.6\n";
                 }
             }
             else
             {
-                std::cout << "2.0.5\n";
+                std::cout << "2.0.6\n";
             }
             continue;
         }

@@ -8,7 +8,7 @@ namespace {
 
 void print_usage() {
     std::cout
-        << "Lucy 2.0.5\n"
+        << "Lucy 2.0.6\n"
         << "Usage:\n"
         << "  lucy <file.lucy> [arguments...]\n"
         << "  lucy -i\n\n"
@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
         }
 
         if (command == "-v" || command == "--version") {
-            std::cout << "2.0.5\n";
+            std::cout << "2.0.6\n";
             return 0;
         }
 

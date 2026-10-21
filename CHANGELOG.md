@@ -1,9 +1,24 @@
-## 2.0.5
+## 2.0.6 — String semantics, interpolation, and documentation consistency
 
+- Fixed string range indexing: `text[0..4]` returns five UTF-8 code points, while `text[0...4]` returns four; negative endpoints and out-of-bounds clamping follow the documented range rules.
+- Fixed direct string indexing to operate on UTF-8 code-point boundaries, including negative indexes, rather than raw bytes.
+- Added string iteration for `for`/`foreach`; each iteration yields one UTF-8 code point and the optional index is zero-based.
+- Added full expression interpolation using `${...}`, including function calls such as `${system.platform()}` and expressions such as `${10 + 20}`. `$name` and dotted member-path shorthand remain supported.
+- Corrected the language reference, which previously claimed expression interpolation was unsupported despite its implementation and tests. Synchronized getting-started examples, changelog, runtime/API version metadata, and release verification notes.
+- Preserved the Windows `NOMINMAX` build fix and conservative call/nesting limits from the 2.0.5 hardening work.
+- Added regression tests for string range indexing, Unicode-aware string iteration, and expression interpolation.
+- Validation recorded for this source bundle: Linux build and CTest run. Windows/MSVC must be confirmed by CI before claiming Windows verification.
+
+## 2.0.5 — Windows/MSVC build fix and stack-safety regression fixes
+
+- Fixed `for`/`foreach` over strings: each iteration now yields one UTF-8 code point and the optional index is zero-based.
+- Added regression coverage for ASCII and Unicode string iteration.
+- Fixed string range indexing: `text[0..4]` now returns the first five code points instead of only the first character; `...` remains end-exclusive.
+- Made direct string indexing use UTF-8 code-point boundaries, including negative indexes, rather than returning a single raw byte.
 - Reduced the default interpreted-call depth to 16 to stay conservative on Windows/MSVC Debug stacks.
 - Reduced the runtime-hardening regression test depth to 8 so it verifies the language-level `RecursionError` path without depending on native stack capacity.
- — Windows/MSVC build fix and stack-safety regression fixes
-
+- Added full expression interpolation with `${...}`, including function calls such as `${system.platform()}`; retained `$name` and dotted member-path interpolation.
+- Added regression tests for arithmetic, method calls, module function calls, and map expressions inside interpolation.
 - Defined `NOMINMAX` for the `lucy_runtime` target on Windows so Windows SDK `min`/`max` macros cannot corrupt calls to `std::min` and `std::max`. This addresses the MSVC compilation cascade in `runtime.cpp` and `stdlib_native.cpp`.
 - Updated the project, runtime, CLI, installer message, standard-library manifest, and core API contract version metadata to `2.0.5`.
 - This fix is based on the reported Windows GitHub Actions log. A native Windows/MSVC run must still confirm the workflow is green.

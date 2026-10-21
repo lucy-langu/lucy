@@ -120,6 +120,8 @@ println text.contains "uc"
 println text.starts_with "Lu"
 println text.ends_with "y"
 println text.slice(1, 3)
+println text[0..4]     # first five code points, inclusive
+println text[0...4]    # first four code points, exclusive
 println text.char_at 0
 println text.split " "
 println text.replace("Lucy", "Lucy 2")
