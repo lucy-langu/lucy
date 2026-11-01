@@ -21,7 +21,9 @@
 #include <atomic>
 
 #ifdef _WIN32
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 #include <windows.h>
 #include <process.h>
 #else
@@ -169,17 +171,17 @@ std::string quote_windows_argument(const std::string& value) {
     std::string out = "\"";
     std::size_t slashes = 0;
     for (char c : value) {
-        if (c == '\\\\') { ++slashes; continue; }
+        if (c == '\\') { ++slashes; continue; }
         if (c == '"') {
-            out.append(slashes * 2 + 1, '\\\\');
+            out.append(slashes * 2 + 1, '\\');
             out += '"';
         } else {
-            out.append(slashes, '\\\\');
+            out.append(slashes, '\\');
             out += c;
         }
         slashes = 0;
     }
-    out.append(slashes * 2, '\\\\');
+    out.append(slashes * 2, '\\');
     out += '"';
     return out;
 }
