@@ -1,5 +1,5 @@
-# Lucy 2.0.6 Documentation
-- [Lucy 2.0.6 release verification](VERIFICATION_2_0_6.md)
+# Lucy 2.0.7 Documentation
+- [Lucy 2.0.7 release scope and verification](RELEASE_2_0_7.md)\n- [Lucy 2.0.7 verification checklist](VERIFICATION_2_0_7.md)
 
 This directory documents the language, runtime, standard library, tools, extensions, build process, and known implementation limits. Treat the shipped source and regression tests as the executable contract; when prose disagrees with behavior, record the mismatch and correct the prose or implementation.
 
@@ -13,6 +13,8 @@ This directory documents the language, runtime, standard library, tools, extensi
 6. [REPL and Tooling](REPL_AND_TOOLING.md) — interactive use, completion, CLI, editor integration, and troubleshooting.
 7. [Real-world Workflows](REAL_WORLD_WORKFLOWS.md) — end-to-end CSV, JSON, SQLite, CLI, performance and security patterns.
 8. [Runnable Projects](../projects/README.md) — three integration examples with fixtures.
+9. [Ecosystem Tooling](ECOSYSTEM_TOOLING.md) — project scaffolding, local packages, native extensions, build and test workflows.
+10. [Ecosystem Verification](ECOSYSTEM_VERIFICATION.md) — latest integration test results and remaining scope.
 
 ## Reference and maintenance
 
@@ -21,7 +23,9 @@ This directory documents the language, runtime, standard library, tools, extensi
 | [Environment and Installation](ENVIRONMENT_AND_INSTALLATION.md) | Build prerequisites, installation paths, environment variables, and platform notes. |
 | [Standard Library API Inventory](STANDARD_LIBRARY_API_INVENTORY.md) | Source-oriented listing of shipped library classes and methods; verify it against the source before release. |
 | [Core API Contract](contracts/core_api.json) | Machine-readable signatures, input descriptions, return contracts, errors, platform targets, and examples for the core filesystem facade. |
-| [Packages and Extensions](PACKAGES_AND_EXTENSIONS.md) | Import resolution, packages, native extension boundary, and extension examples. |
+| [Packages and Extensions](PACKAGES_AND_EXTENSIONS.md) | Import resolution, local packages, native extension boundary, and extension examples. |
+| [Ecosystem Tooling](ECOSYSTEM_TOOLING.md) | Lucy-native project, package, extension, build, and test tools. |
+| [Ecosystem Verification](ECOSYSTEM_VERIFICATION.md) | Integration results and explicitly unimplemented roadmap items. |\n| [Package Registry Specification](PACKAGE_REGISTRY_SPEC.md) | Remote registry API and publishing contract (specification). |\n| [Dependency Resolver Specification](DEPENDENCY_RESOLVER_SPEC.md) | Deterministic dependency resolution and lockfile design (specification). |\n| [LSP Specification](LSP_SPEC.md) | Language Server Protocol design and editor capability tiers (specification). |\n| [Debugging and Diagnostics](DEBUGGING_AND_DIAGNOSTICS.md) | Bug triage, diagnostic quality, and debugging workflow. |\n| [Regression and Release Process](REGRESSION_AND_RELEASE_PROCESS.md) | Regression discipline and release verification gates. |\n| [Ecosystem 2.0.7 Status](ECOSYSTEM_2_0_7_STATUS.md) | Shipped tooling versus future ecosystem components. |
 | [Runtime and Errors](RUNTIME_AND_ERRORS.md) | Runtime behavior, exception handling, and error categories. |
 | [Implementation Architecture](IMPLEMENTATION_ARCHITECTURE.md) | Lexer/parser/runtime architecture and value execution model. |
 | [Developing Lucy](DEVELOPING_LUCY.md) | Source layout, build, tests, native extension work, and release workflow. |
@@ -31,6 +35,7 @@ This directory documents the language, runtime, standard library, tools, extensi
 | [Red-team Audit](RED_TEAM_AUDIT.md) | Historical 2.0.1 findings, dispositions, and remaining boundaries. |
 | [2.0.2 Verification Record](VERIFICATION_2_0_2.md) | Historical build/test environment and verification status. |
 | [2.0.6 Verification Record](VERIFICATION_2_0_6.md) | Release scope, regression coverage, and verified/unverified platforms. |
+| [Lucy-native Tooling](TOOLS_AND_AUTOMATION.md) | Repository tools, commands, and process API contracts. |
 
 ## Per-module API pages
 
@@ -41,10 +46,10 @@ These pages are source-indexed and list module-level functions, exported objects
 - [`repl`](stdlib/repl.md) · [`result`](stdlib/result.md) · [`runtime`](stdlib/runtime.md) · [`set`](stdlib/set.md)
 - [`sqlite`](stdlib/sqlite.md) · [`system`](stdlib/system.md) · [`text`](stdlib/text.md) · [`time`](stdlib/time.md)
 
-Regenerate the per-module pages after changing pure-Lucy APIs:
+Regenerate the per-module pages after changing pure-Lucy APIs (after building Lucy):
 
 ```sh
-python3 tools/generate_stdlib_docs.py
+./build/lucy tools/generate_stdlib_docs.lucy
 ```
 
 ## Canonicality and snippet policy

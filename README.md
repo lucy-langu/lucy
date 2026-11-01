@@ -1,6 +1,6 @@
 # Lucy
 
-**Version 2.0.3**
+**Version 2.0.7**
 
 Lucy is a general-purpose programming language implemented in C++17 with runtime type contracts for annotated values and functions. It focuses on readable brace-delimited source, a compact expression system, a practical standard library, and an interactive REPL.
 
@@ -82,14 +82,16 @@ The documentation is intentionally consolidated into a small set of deep referen
 - `docs/stdlib/` — per-module API references generated from the shipped library source
 - `projects/` — runnable integration projects and fixtures
 - `tools/verify_release.sh` — fresh build, regression suite, runnable examples, and documentation-example verification
-- `tools/verify_doc_examples.py` — execute per-module quick examples against the built runtime
+- `tools/verify_doc_examples.lucy` — execute per-module quick examples against the built runtime
+- `docs/TOOLS_AND_AUTOMATION.md` — repository and ecosystem tooling implemented in Lucy
+- `docs/ECOSYSTEM_TOOLING.md` — project scaffolding, package workflows, registry/resolver/LSP architecture, extension templates, build and test workflows
 - `docs/DEVELOPING_LUCY.md` — implementation architecture, extensions, testing, and releases
 - `docs/HISTORY_AND_MIGRATION.md` — historical migration context
-- `docs/CHANGELOG.md` — release history
-- `docs/VERIFICATION_2_0_2.md` — test environment, passing checks, and unverified platforms
+- `docs/CHANGELOG.md` — release history\n- `docs/RELEASE_2_0_7.md` — 2.0.7 scope and implementation boundaries\n- `docs/VERIFICATION_2_0_7.md` — pending release verification checklist\n- `docs/PACKAGE_REGISTRY_SPEC.md`, `docs/DEPENDENCY_RESOLVER_SPEC.md`, and `docs/LSP_SPEC.md` — ecosystem architecture contracts
+- `docs/VERIFICATION_2_0_7.md` — release scope, regression coverage, and verification status
 
 
-## Core filesystem objects (2.0.3)
+## Core filesystem objects
 
 The filesystem APIs are available through import-free, Ruby-inspired core facades as well as the lowercase compatibility modules:
 

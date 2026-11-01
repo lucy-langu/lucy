@@ -1,6 +1,6 @@
-# `system` standard library — Lucy 2.0.6
+# `system` standard library — Lucy 2.0.7
 
-Platform/environment inspection, process execution, identity, signals, clocks, and shell helpers.
+Platform/environment inspection, argv-based process execution, identity, signals, clocks, and shell helpers.
 
 ## Availability and imports
 
@@ -17,7 +17,8 @@ Names beginning with `_` or `__` are implementation details unless a public API 
 ```lucy
 println system.platform()
 println system.cwd()
-println system.env("HOME")
+let result = system.exec(["cmake", "--version"], {"timeout_ms": 5000})
+println result.get("stdout")
 ```
 
 ## Module-level functions
@@ -36,6 +37,7 @@ println system.env("HOME")
 | `command_exists` | `command_exists(command)` |
 | `pid` | `pid()` |
 | `ppid` | `ppid()` |
+| `exec` | `exec(argv, options = {})` |
 | `run` | `run(command)` |
 | `capture` | `capture(command)` |
 | `success` | `success(command)` |
@@ -67,6 +69,21 @@ No public class declarations were found in this module's pure-Lucy source.
 ## Contract and error handling
 
 Validate inputs at the application boundary. Runtime errors are reported as Lucy exceptions or native errors; exact messages may vary by platform and build. Do not assume network access, process privileges, filesystem permissions, or optional native dependencies are available.
+
+### Direct process execution
+
+`system.exec(argv, options = {})` starts a process without a command shell. Pass the executable and each argument as a separate string. Supported options are `cwd` and `timeout_ms`.
+
+```lucy
+let result = system.exec(["cmake", "--build", "build"], {"cwd": ".", "timeout_ms": 120000})
+if !result.get("success") {
+    println result.get("stderr")
+    exit(1)
+}
+println result.get("stdout")
+```
+
+The result map contains `stdout`, `stderr`, `status`, `success`, `timed_out`, and `pid`. Exit status `124` denotes a timeout. Prefer this API for package managers, build systems, test runners, and editor tooling. `system.run` remains available for compatibility and shell-specific workflows.
 
 ## Source of truth
 

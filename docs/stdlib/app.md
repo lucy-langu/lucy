@@ -1,4 +1,4 @@
-# `app` standard library — Lucy 2.0.2
+# `app` standard library — Lucy 2.0.7
 
 Command-line option parsing, logging facade, callable benchmarking, post-hoc duration checks, and templates.
 
@@ -23,10 +23,6 @@ println options.get("output")
 let elapsed = app.benchmark().realtime(lambda() => 1 + 1)
 println elapsed
 ```
-
-## Exported module-level objects
-
-`benchmark`, `erb`, `logger`, `option_parser`, `timeout`
 
 ## Module-level functions
 
@@ -104,13 +100,6 @@ println elapsed
 ## Contract and error handling
 
 Validate inputs at the application boundary. Runtime errors are reported as Lucy exceptions or native errors; exact messages may vary by platform and build. Do not assume network access, process privileges, filesystem permissions, or optional native dependencies are available.
-
-### Important behavioral contracts
-
-- `OptionParser` accepts `--name value` and `--name=value`; boolean options are declared by setting a boolean default. Unknown flags, missing values, and positional arguments are errors. Short aliases, automatic type conversion, and required-option metadata are not implemented.
-- `Benchmark.realtime(callback)` and `Benchmark.measure(callback)` time a Lucy callback without launching a shell. The timer has millisecond resolution.
-- `Timeout.timeout(seconds, callback)` checks elapsed time only after the callback returns. It cannot cancel a blocked or infinite callback.
-- `Logger` is a lightweight facade and should not be assumed to provide a full logging backend or structured sink without inspecting the current implementation.
 
 ## Source of truth
 

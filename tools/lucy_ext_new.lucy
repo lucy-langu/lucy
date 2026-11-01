@@ -1,0 +1,29 @@
+import fs
+
+func valid_name(value) {
+    return text.match("^[a-z][a-z0-9_]*$", value)
+}
+
+if ARGV.length() < 1 {
+    println "Usage: lucy tools/lucy_ext_new.lucy <module_name> [directory]"
+    exit(2)
+}
+let name = ARGV[0]
+if !valid_name(name) {
+    println "Extension name must be lowercase snake_case."
+    exit(2)
+}
+let destination = ARGV.length() > 1 ? ARGV[1] : "lucy-" + name
+if fs.exists(destination) {
+    println "Destination already exists: " + destination
+    exit(2)
+}
+fs.mkdir(fs.join([destination, "src"]), true)
+fs.mkdir(fs.join([destination, "tests"]), true)
+fs.write(fs.join([destination, "src", name + ".cpp"]),
+    "#include <lucy/extension.hpp>\n\nLUCY_EXTENSION_INIT {\n    api.module(\"" + name + "\")\n        .constant(\"version\", \"0.1.0\")\n        .function(\"hello\", [](lucy::Interpreter &, const std::vector<lucy::Value> &args) {\n            if (!args.empty())\n                throw std::runtime_error(\"ArgumentError: " + name + ".hello expects no arguments\");\n            return lucy::Value(\"Hello from " + name + "\");\n        });\n    return true;\n}\n")
+fs.write(fs.join([destination, "CMakeLists.txt"]),
+    "cmake_minimum_required(VERSION 3.16)\nproject(lucy_" + name + " LANGUAGES CXX)\nset(CMAKE_CXX_STANDARD 17)\nset(CMAKE_CXX_STANDARD_REQUIRED ON)\n\nset(LUCY_SOURCE_DIR \"\" CACHE PATH \"Lucy source tree\")\nset(LUCY_RUNTIME_DIR \"\" CACHE PATH \"Lucy build directory\")\nif(NOT LUCY_SOURCE_DIR OR NOT LUCY_RUNTIME_DIR)\n  message(FATAL_ERROR \"Set LUCY_SOURCE_DIR and LUCY_RUNTIME_DIR\")\nendif()\n\nadd_library(lucy_" + name + " MODULE src/" + name + ".cpp)\ntarget_include_directories(lucy_" + name + " PRIVATE \"" + "$" + "{LUCY_SOURCE_DIR}/include\")\ntarget_link_directories(lucy_" + name + " PRIVATE \"" + "$" + "{LUCY_RUNTIME_DIR}\")\ntarget_link_libraries(lucy_" + name + " PRIVATE lucy_runtime)\nset_target_properties(lucy_" + name + " PROPERTIES PREFIX \"\" OUTPUT_NAME \"lucy_" + name + "\")\n")
+fs.write(fs.join([destination, "README.md"]),
+    "# lucy_" + name + "\n\nNative Lucy extension skeleton.\n\n## Build\n\n```sh\ncmake -S . -B build -DLUCY_SOURCE_DIR=/path/to/lucy -DLUCY_RUNTIME_DIR=/path/to/lucy/build\ncmake --build build\n```\n\nCopy the resulting platform library into a directory searched by `LUCY_PATH`, then `import " + name + "` from Lucy.\n")
+println "Created native extension skeleton: " + fs.absolute(destination)

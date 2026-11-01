@@ -1,4 +1,4 @@
-# `data` standard library — Lucy 2.0.2
+# `data` standard library — Lucy 2.0.7
 
 Map transformations plus JSON, YAML, and CSV serialization/parsing.
 
@@ -20,10 +20,6 @@ println data.json.pretty(value)
 let rows = data.csv_parse("name,age\nLucy,2")
 println data.csv_stringify(rows)
 ```
-
-## Exported module-level objects
-
-`csv`, `json`, `yaml`
 
 ## Module-level functions
 

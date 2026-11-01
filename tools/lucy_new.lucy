@@ -1,0 +1,36 @@
+import fs
+
+func valid_name(value) {
+    return text.match("^[A-Za-z][A-Za-z0-9_-]*$", value)
+}
+
+if ARGV.length() < 1 {
+    println "Usage: lucy tools/lucy_new.lucy <project-name> [directory]"
+    exit(2)
+}
+
+let name = ARGV[0]
+if !valid_name(name) {
+    println "Invalid project name. Start with a letter; use only letters, digits, '_' or '-'."
+    exit(2)
+}
+let destination = ARGV.length() > 1 ? ARGV[1] : name
+if fs.exists(destination) {
+    println "Destination already exists: " + destination
+    exit(2)
+}
+
+for directory in ["src", "tests", "packages", "extensions", "docs"] {
+    fs.mkdir(fs.join([destination, directory]), true)
+}
+
+fs.write(fs.join([destination, "src", "main.lucy"]),
+    "# " + name + "\n\nprintln \"Hello from " + name + "\"\n")
+fs.write(fs.join([destination, "tests", "smoke.lucy"]),
+    "assert 1 + 1 == 2\nprintln \"smoke test passed\"\n")
+fs.write(fs.join([destination, "lucy.toml"]),
+    "[project]\nname = \"" + name + "\"\nversion = \"0.1.0\"\nentry = \"src/main.lucy\"\n\n[toolchain]\nlucy = \">=2.0.6\"\n")
+fs.write(fs.join([destination, "README.md"]),
+    "# " + name + "\n\nA Lucy project.\n\n## Run\n\n```sh\nlucy src/main.lucy\n```\n\n## Test\n\n```sh\nlucy tests/smoke.lucy\n```\n")
+println "Created Lucy project: " + fs.absolute(destination)
+println "Next: cd " + destination + " && lucy src/main.lucy"

@@ -1,4 +1,4 @@
-# `runtime` standard library — Lucy 2.0.2
+# `runtime` standard library — Lucy 2.0.7
 
 Kernel/collection facades, formatting, guarded callback helpers, and reflection/dynamic invocation.
 
@@ -19,10 +19,6 @@ println runtime.inspect([1, 2, 3])
 println runtime.methods("Lucy")
 println runtime.responds("Lucy", "upper")
 ```
-
-## Exported module-level objects
-
-`collections`, `kernel`
 
 ## Module-level functions
 

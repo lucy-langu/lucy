@@ -98,6 +98,41 @@ The extension ABI is a runtime boundary. Extensions should target the public hea
 
 ## Standard-library module release metadata
 
-Lucy ships its source standard library under `stdlib/`. Each module is independently versioned in `stdlib/manifest.json`; this is distinct from the interpreter's `VERSION`. The manifest currently provides module identity, semantic version, entry point, stability, and declared dependencies. Validate it with `python3 tools/stdlib_manager.py verify` and inspect available module versions with `python3 tools/stdlib_manager.py list`.
+Lucy ships its source standard library under `stdlib/`. Each module is independently versioned in `stdlib/manifest.json`; this is distinct from the interpreter's `VERSION`. The manifest currently provides module identity, semantic version, entry point, stability, and declared dependencies. Validate it with `./build/lucy tools/stdlib_manager.lucy verify` and inspect available module versions with `./build/lucy tools/stdlib_manager.lucy list`.
 
 This mechanism establishes independent version metadata and release discipline, not a remote package registry or automatic updater. A true remote registry, dependency solver, integrity/signature verification, and transactional update/rollback remain future ecosystem work and are intentionally not represented as already implemented.
+
+
+## Lucy-native package management
+
+The repository includes `tools/lucy_pkg.lucy` for local source package workflows:
+
+```sh
+lucy tools/lucy_pkg.lucy init
+lucy tools/lucy_pkg.lucy add my_package ./my_package.lucy 0.1.0
+lucy tools/lucy_pkg.lucy update my_package ./my_package_v2.lucy 0.2.0
+lucy tools/lucy_pkg.lucy verify
+lucy tools/lucy_pkg.lucy list
+lucy tools/lucy_pkg.lucy remove my_package
+```
+
+The current manager installs a single local `.lucy` entry source and maintains `lucy.lock` plus package metadata. It does not yet fetch remote packages, solve transitive dependencies, or verify signed registry artifacts. See [Ecosystem Tooling](ECOSYSTEM_TOOLING.md) for the exact current contract and roadmap.
+
+## Native extension scaffolding
+
+Create a starter extension with `lucy tools/lucy_ext_new.lucy telemetry`. The generated project uses the public extension header and CMake. Build it against the same Lucy source tree and runtime build that will load it; extension ABI compatibility is not guaranteed across arbitrary interpreter builds.
+
+
+## Project-local package discovery
+
+When Lucy executes a source file under a directory tree containing `lucy.toml`, it walks upward to the nearest project root and adds that root's `packages/` directory to import lookup. A package installed at `packages/<name>/src/init.lucy` is imported with `import <name>` and is bound under the requested module name, not the implementation filename `init`. Package names are also included in REPL module completion. This lookup is additive to `LUCY_PATH`, so the shared standard library remains available without copying it into every project. The project's `extensions/` directory is added to native extension lookup by the same project-root discovery.
+
+
+## Remote registry and dependency resolution boundary (2.0.7)
+
+The package manager described above remains local-source oriented. Lucy 2.0.7 adds formal architecture specifications for a remote package registry and a transitive dependency resolver:
+
+- [Package Registry Specification](PACKAGE_REGISTRY_SPEC.md)
+- [Dependency Resolver Specification](DEPENDENCY_RESOLVER_SPEC.md)
+
+Neither remote publication/download nor transitive solving is implemented by `tools/lucy_pkg.lucy` in this source archive. Do not infer support from the existence of these design documents. The current `lucy.lock` behavior is local package metadata/integrity bookkeeping, not a registry-signed supply-chain attestation.

@@ -41,6 +41,11 @@ func move(source, destination) {
     return __file_move(source, destination)
 }
 
+# Atomically replace destination with a fully written temporary file.
+func replace(source, destination) {
+    return __file_replace(source, destination)
+}
+
 func touch(path) {
     return __file_touch(path)
 }
@@ -51,6 +56,10 @@ func chmod(path, mode) {
 
 func chown(path, uid, gid) {
     return __file_chown(path, uid, gid)
+}
+
+func chdir(path) {
+    return __dir_chdir(path)
 }
 
 func entries(path = ".") {

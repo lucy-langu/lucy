@@ -1,9 +1,53 @@
 {
   "schema_version": 1,
-  "language_version": "2.0.6",
+  "language_version": "2.0.7",
   "description": "Lucy independently versioned standard-library modules",
   "versioning_policy": "Each module has its own semantic version. A patch release must preserve the documented API; minor releases may add backward-compatible APIs; major releases may break compatibility.",
   "modules": {
+    "sqlite": {
+      "version": "1.0.0",
+      "entry": "sqlite.lucy",
+      "stability": "optional",
+      "dependencies": [
+        "sqlite-native"
+      ]
+    },
+    "set": {
+      "version": "1.0.0",
+      "entry": "set.lucy",
+      "stability": "stable",
+      "dependencies": []
+    },
+    "text": {
+      "version": "1.0.0",
+      "entry": "text.lucy",
+      "stability": "stable",
+      "dependencies": []
+    },
+    "random": {
+      "version": "1.0.0",
+      "entry": "random.lucy",
+      "stability": "stable",
+      "dependencies": []
+    },
+    "runtime": {
+      "version": "1.0.0",
+      "entry": "runtime.lucy",
+      "stability": "stable",
+      "dependencies": []
+    },
+    "repl": {
+      "version": "1.0.0",
+      "entry": "repl.lucy",
+      "stability": "stable",
+      "dependencies": []
+    },
+    "system": {
+      "version": "1.0.0",
+      "entry": "system.lucy",
+      "stability": "stable",
+      "dependencies": []
+    },
     "app": {
       "version": "1.0.0",
       "entry": "app.lucy",
@@ -16,15 +60,33 @@
       "stability": "stable",
       "dependencies": []
     },
+    "time": {
+      "version": "1.0.0",
+      "entry": "time.lucy",
+      "stability": "stable",
+      "dependencies": []
+    },
     "data": {
       "version": "1.0.0",
       "entry": "data.lucy",
       "stability": "stable",
       "dependencies": []
     },
+    "result": {
+      "version": "1.0.0",
+      "entry": "result.lucy",
+      "stability": "stable",
+      "dependencies": []
+    },
     "flow": {
       "version": "1.0.0",
       "entry": "flow.lucy",
+      "stability": "stable",
+      "dependencies": []
+    },
+    "math": {
+      "version": "1.0.0",
+      "entry": "math.lucy",
       "stability": "stable",
       "dependencies": []
     },
@@ -37,68 +99,6 @@
     "http": {
       "version": "1.0.0",
       "entry": "http.lucy",
-      "stability": "stable",
-      "dependencies": []
-    },
-    "math": {
-      "version": "1.0.0",
-      "entry": "math.lucy",
-      "stability": "stable",
-      "dependencies": []
-    },
-    "random": {
-      "version": "1.0.0",
-      "entry": "random.lucy",
-      "stability": "stable",
-      "dependencies": []
-    },
-    "repl": {
-      "version": "1.0.0",
-      "entry": "repl.lucy",
-      "stability": "stable",
-      "dependencies": []
-    },
-    "result": {
-      "version": "1.0.0",
-      "entry": "result.lucy",
-      "stability": "stable",
-      "dependencies": []
-    },
-    "runtime": {
-      "version": "1.0.0",
-      "entry": "runtime.lucy",
-      "stability": "stable",
-      "dependencies": []
-    },
-    "set": {
-      "version": "1.0.0",
-      "entry": "set.lucy",
-      "stability": "stable",
-      "dependencies": []
-    },
-    "sqlite": {
-      "version": "1.0.0",
-      "entry": "sqlite.lucy",
-      "stability": "optional",
-      "dependencies": [
-        "sqlite-native"
-      ]
-    },
-    "system": {
-      "version": "1.0.0",
-      "entry": "system.lucy",
-      "stability": "stable",
-      "dependencies": []
-    },
-    "text": {
-      "version": "1.0.0",
-      "entry": "text.lucy",
-      "stability": "stable",
-      "dependencies": []
-    },
-    "time": {
-      "version": "1.0.0",
-      "entry": "time.lucy",
       "stability": "stable",
       "dependencies": []
     }

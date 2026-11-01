@@ -1,4 +1,4 @@
-# `crypto` standard library — Lucy 2.0.2
+# `crypto` standard library — Lucy 2.0.7
 
 Digest/HMAC utilities and cryptographic object facades. Verify backend availability before relying on a primitive.
 
@@ -19,10 +19,6 @@ println crypto.hexdigest("hello")
 println crypto.base64digest("hello")
 println crypto.hmac("secret", "message")
 ```
-
-## Exported module-level objects
-
-`_digest`, `openssl`, `pkey`, `x509`
 
 ## Module-level functions
 

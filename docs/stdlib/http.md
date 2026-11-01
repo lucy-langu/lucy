@@ -1,4 +1,4 @@
-# `http` standard library — Lucy 2.0.2
+# `http` standard library — Lucy 2.0.7
 
 HTTP request helpers, client objects, sockets, DNS resolution, and reverse lookup.
 
@@ -19,10 +19,6 @@ let response = http.get("https://example.com")
 println response.status
 println response.ok
 ```
-
-## Exported module-level objects
-
-`http`, `resolv`, `socket`
 
 ## Module-level functions
 

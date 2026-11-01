@@ -1,4 +1,4 @@
-# `flow` standard library — Lucy 2.0.2
+# `flow` standard library — Lucy 2.0.7
 
 Small functional composition helpers for callbacks and transformations.
 

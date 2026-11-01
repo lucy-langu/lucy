@@ -1,0 +1,176 @@
+# Lucy-native standard-library manifest manager.
+import fs
+import data
+
+MANIFEST = "stdlib/manifest.json"
+
+func get_or(source, key, fallback) {
+    return source.has(key) ? source.get(key) : fallback
+}
+
+func version_parts(value) {
+    if !text.match("^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$", value) {
+        throw "invalid semantic version: $value"
+    }
+    parts = value.split(".")
+    return [int(parts[0]), int(parts[1]), int(parts[2])]
+}
+
+func compare_versions(left, right) {
+    a = version_parts(left)
+    b = version_parts(right)
+    i = 0
+    while i < 3 {
+        if a[i] < b[i] { return -1 }
+        if a[i] > b[i] { return 1 }
+        i += 1
+    }
+    return 0
+}
+
+func satisfies(version, expression) {
+    current = version_parts(version)
+    constraints = expression.split(",")
+    for raw in constraints {
+        rule = raw.strip()
+        operator = "=="
+        wanted_text = rule
+        for candidate in [">=", "<=", ">", "<", "==", "="] {
+            if rule.starts_with(candidate) {
+                operator = candidate
+                wanted_text = rule.slice(candidate.length()).strip()
+                break
+            }
+        }
+        comparison = compare_versions(version, wanted_text)
+        valid = operator == ">=" ? comparison >= 0 : operator == "<=" ? comparison <= 0 : operator == ">" ? comparison > 0 : operator == "<" ? comparison < 0 : comparison == 0
+        if !valid { return false }
+    }
+    return true
+}
+
+func load_manifest() {
+    manifest = data.parse(fs.read(MANIFEST))
+    if manifest.get("schema_version") != 1 or type(manifest.get("modules")) != "map" {
+        throw "unsupported manifest schema or missing modules"
+    }
+    return manifest
+}
+
+func verify(manifest) {
+    failures = []
+    modules = manifest.get("modules")
+    for name in modules.keys() {
+        item = modules.get(name)
+        version = get_or(item, "version", "")
+        entry = get_or(item, "entry", "")
+        stability = get_or(item, "stability", "")
+        if !text.match("^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$", version) {
+            failures.push("$name: invalid semantic version '$version'")
+        }
+        if fs.basename(entry) != entry or !entry.ends_with(".lucy") {
+            failures.push("$name: entry must be a simple .lucy filename")
+        } else if !fs.exists(fs.join(["stdlib", entry])) {
+            failures.push("$name: missing entry file '$entry'")
+        }
+        if !["stable", "preview", "optional", "deprecated"].contains(stability) {
+            failures.push("$name: invalid stability label '$stability'")
+        }
+        constraints = get_or(item, "dependency_constraints", {})
+        for dependency in constraints.keys() {
+            if !modules.has(dependency) {
+                failures.push("$name: unknown dependency '$dependency'")
+            } else {
+                dependency_version = modules.get(dependency).get("version", "")
+                if !satisfies(dependency_version, constraints.get(dependency)) {
+                    failures.push(name + ": " + dependency + " " + dependency_version + " does not satisfy " + constraints.get(dependency))
+                }
+            }
+        }
+    }
+    if failures.length() > 0 {
+        println "Standard-library manifest verification failed:"
+        for failure in failures { println " - $failure" }
+        return false
+    }
+    println "Verified " + str(modules.length()) + " standard-library module records."
+    return true
+}
+
+func usage() {
+    println "Usage: lucy tools/stdlib_manager.lucy <list|verify|set-version|install-source> ..."
+    println "  list"
+    println "  verify"
+    println "  set-version <module> <version>"
+    println "  install-source <module> <version> <source> [--allow-downgrade]"
+}
+
+if ARGV.length() == 0 {
+    usage()
+    exit(2)
+}
+
+manifest = load_manifest()
+command = ARGV[0]
+modules = manifest.get("modules")
+
+if command == "list" {
+    for name in modules.keys() {
+        item = modules.get(name)
+        println name + " " + item.get("version") + " " + item.get("stability") + " " + item.get("entry")
+    }
+} else if command == "verify" {
+    exit(verify(manifest) ? 0 : 1)
+} else if command == "set-version" or command == "install-source" {
+    minimum = command == "set-version" ? 3 : 4
+    if ARGV.length() < minimum {
+        usage()
+        exit(2)
+    }
+    module = ARGV[1]
+    new_version = ARGV[2]
+    if !modules.has(module) { println "unknown stdlib module: $module"; exit(2) }
+    try { version_parts(new_version) } catch Exception as error { println error; exit(2) }
+    item = modules.get(module)
+    old_version = item.get("version")
+    if command == "set-version" {
+        item.set("version", new_version)
+        fs.write(MANIFEST, data.json.pretty(manifest) + "\n")
+        println "Updated " + module + " to " + new_version + "; language version remains " + manifest.get("language_version") + "."
+        exit(verify(load_manifest()) ? 0 : 1)
+    }
+    source = ARGV[3]
+    allow_downgrade = ARGV.contains("--allow-downgrade")
+    if compare_versions(new_version, old_version) < 0 and !allow_downgrade {
+        println "refusing downgrade from $old_version to $new_version; pass --allow-downgrade explicitly"
+        exit(2)
+    }
+    if !fs.exists(source) { println "source file does not exist: $source"; exit(2) }
+    new_source = fs.read(source)
+    if new_source.strip() == "" { println "refusing to install an empty module source"; exit(2) }
+    entry_path = fs.join(["stdlib", item.get("entry")])
+    old_source = fs.read(entry_path)
+    old_manifest = fs.read(MANIFEST)
+    temp_source = entry_path + ".lucy-tmp-" + str(system.pid())
+    temp_manifest = MANIFEST + ".tmp-" + str(system.pid())
+    try {
+        fs.write(temp_source, new_source)
+        fs.replace(temp_source, entry_path)
+        item.set("version", new_version)
+        fs.write(temp_manifest, data.json.pretty(manifest) + "\n")
+        fs.replace(temp_manifest, MANIFEST)
+        if !verify(load_manifest()) { throw "post-install manifest verification failed" }
+    } catch Exception as error {
+        fs.write(entry_path, old_source)
+        fs.write(MANIFEST, old_manifest)
+        if fs.exists(temp_source) { fs.remove(temp_source) }
+        if fs.exists(temp_manifest) { fs.remove(temp_manifest) }
+        println "stdlib update rolled back: $error"
+        exit(1)
+    }
+    println "Installed " + module + " " + old_version + " -> " + new_version + " at " + entry_path + "."
+    println "Note: manifest/file integrity is checked; Lucy source semantics and API compatibility require tests."
+} else {
+    usage()
+    exit(2)
+}

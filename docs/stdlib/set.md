@@ -1,4 +1,4 @@
-# `set` standard library — Lucy 2.0.2
+# `set` standard library — Lucy 2.0.7
 
 Set construction, membership, and set algebra operations.
 
@@ -19,10 +19,6 @@ let left = set.from_values([1, 2, 3])
 let right = set.from_values([3, 4])
 println set.union(left, right)
 ```
-
-## Exported module-level objects
-
-`set`
 
 ## Module-level functions
 

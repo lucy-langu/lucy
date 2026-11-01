@@ -336,7 +336,7 @@ println system.argv()
 println system.capture "git --version"
 ```
 
-Use `system.run` or `system.spawn` when process behavior matters. Use shell expressions only when the compact syntax is appropriate.
+Prefer `system.exec(argv, options)` for developer tooling and commands that accept arguments. It launches without a shell, captures stdout and stderr separately, and supports `cwd` and `timeout_ms`. Use `system.run` or `system.spawn` only when shell semantics or their specific lifecycle behavior are intentionally required; never interpolate untrusted input into a shell command.
 
 ## 18. CLI applications
 

@@ -50,7 +50,14 @@ func ppid() {
     return __process_ppid()
 }
 
+# Execute argv directly (no shell parsing). Options: cwd, timeout_ms.
+# Returns stdout, stderr, status, success, timed_out, and pid.
+func exec(argv, options = {}) {
+    return __process_exec(argv, options)
+}
+
 func run(command) {
+    # Shell execution is retained for compatibility; prefer exec() for arguments.
     return __process_run(command)
 }
 

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(lucy VERSION 2.0.6 LANGUAGES CXX)
+project(lucy VERSION 2.0.7 LANGUAGES CXX)
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -93,6 +93,11 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests")
   endforeach()
 endif()
 
+add_test(NAME project_local_package_resolution
+  COMMAND lucy "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/project_packages/main.lucy")
+set_tests_properties(project_local_package_resolution PROPERTIES
+  ENVIRONMENT "LUCY_PATH=${CMAKE_CURRENT_SOURCE_DIR}/stdlib")
+
 add_executable(lucy_repl_completion_test tests/repl_completion_test.cpp)
 target_link_libraries(lucy_repl_completion_test PRIVATE lucy_runtime)
 add_test(NAME repl_completion COMMAND lucy_repl_completion_test)
@@ -132,3 +137,6 @@ add_test(NAME deep_parentheses_diagnostic
         -DEXPECTED_PATTERN=expression\ nesting\ exceeds
         -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_diagnostic.cmake)
 set_tests_properties(deep_parentheses_diagnostic PROPERTIES ENVIRONMENT "LUCY_PATH=${CMAKE_CURRENT_SOURCE_DIR}/stdlib")
+
+add_test(NAME stdlib_manifest_verify COMMAND lucy tools/stdlib_manager.lucy verify)
+set_tests_properties(stdlib_manifest_verify PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} ENVIRONMENT "LUCY_PATH=${CMAKE_CURRENT_SOURCE_DIR}/stdlib")

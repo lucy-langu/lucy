@@ -1,0 +1,3 @@
+import hello_pkg
+assert hello_pkg.answer() == 42
+println "project-local package resolution passed"

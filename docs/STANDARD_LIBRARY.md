@@ -421,7 +421,7 @@ println system.env("HOME")
 println system.temp_dir()
 ```
 
-Process helpers include `run`, `capture`, `success`, `output`, `spawn`, `wait`, `waitpid`, and `kill`.
+`exec(argv, options)` launches a process without a shell, captures stdout/stderr separately, returns its status and PID, and supports a working directory and timeout. Prefer it for build/package/test tooling. Compatibility helpers include `run`, `capture`, `success`, `output`, `spawn`, `wait`, `waitpid`, and `kill`.
 
 Environment helpers include `env`, `setenv`, and `unsetenv`.
 
@@ -1081,9 +1081,9 @@ The lowercase modules remain importable. `import fs`, `import system`, `import t
 Use the repository helper:
 
 ```sh
-python3 tools/stdlib_manager.py list
-python3 tools/stdlib_manager.py verify
-python3 tools/stdlib_manager.py set-version fs 1.0.1
+./build/lucy tools/stdlib_manager.lucy list
+./build/lucy tools/stdlib_manager.lucy verify
+./build/lucy tools/stdlib_manager.lucy set-version fs 1.0.1
 ```
 
 Before changing a module version, update its documentation, regression tests, and changelog. Do not bump a version solely to make a release appear newer. The current `sqlite` module is marked optional because native SQLite support depends on the build configuration.

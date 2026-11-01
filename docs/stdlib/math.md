@@ -1,4 +1,4 @@
-# `math` standard library — Lucy 2.0.2
+# `math` standard library — Lucy 2.0.7
 
 Mathematical constants/functions and common numeric helpers.
 
@@ -19,10 +19,6 @@ println math.square(9)
 println math.clamp(12, 0, 10)
 println math.gcd(24, 18)
 ```
-
-## Exported module-level objects
-
-`math`
 
 ## Module-level functions
 

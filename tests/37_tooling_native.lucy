@@ -1,0 +1,12 @@
+import fs
+
+let base = fs.join([system.temp_dir(), "lucy-atomic-replace-" + str(system.pid())])
+let source = base + ".new"
+let destination = base + ".target"
+fs.write(source, "new-content")
+fs.write(destination, "old-content")
+fs.replace(source, destination)
+assert(fs.read(destination) == "new-content", "atomic replacement did not update destination")
+assert(!fs.exists(source), "atomic replacement did not consume source")
+fs.remove(destination)
+println "PASS Lucy-native tooling filesystem primitives"

@@ -1,4 +1,4 @@
-# Lucy 2.0.2 — Developing, Extending, Testing, and Releasing Lucy
+# Lucy 2.0.7 — Developing, Debugging, Testing, and Releasing Lucy
 
 This is the maintainer/developer reference. It combines the implementation architecture, native extension API, build process, tests, migration/versioning policy, limits, and contribution workflow.
 
@@ -149,7 +149,7 @@ The runtime searches project/install locations and `LUCY_PATH` for libraries/ext
 
 `LUCY_PATH` is a Lucy installation/project root rather than an arbitrary list syntax. Extension search roots are derived from it and the executable/project layout.
 
-`lucy.toml` is not currently parsed/enforced by the runtime. Do not implement documentation that implies a package registry or dependency resolver exists.
+`lucy.toml` is currently project/package metadata used by repository tooling and project-root discovery; do not assume a remote registry or transitive dependency resolver is active. The 2.0.7 specifications define future contracts without claiming implementation.
 
 ## 9. REPL architecture
 
@@ -353,7 +353,7 @@ The script configures a Release build with SQLite enabled, compiles the runtime 
 For the source-derived per-module API pages, run:
 
 ```sh
-python3 tools/generate_stdlib_docs.py
+./build/lucy tools/generate_stdlib_docs.lucy
 ```
 
 Review the generated diff, especially after changing public method names or signatures. The generator indexes pure-Lucy declarations; native builtins and runtime-only methods still require the consolidated API inventory and behavior tests.
@@ -361,4 +361,7 @@ Review the generated diff, especially after changing public method names or sign
 
 ## Documentation example verification
 
-`tools/verify_release.sh` runs all standalone `examples/*.lucy` programs and then executes each per-module quick example in `docs/stdlib/*.md` using `tools/verify_doc_examples.py`. Network-dependent `http` quick examples are explicitly skipped rather than treated as reliable offline tests. Run the checker directly with `python3 tools/verify_doc_examples.py /path/to/lucy`.
+`tools/verify_release.sh` runs all standalone `examples/*.lucy` programs and then executes each per-module quick example in `docs/stdlib/*.md` using `tools/verify_doc_examples.lucy`. Network-dependent `http` quick examples are explicitly skipped rather than treated as reliable offline tests. Run the checker directly with `./build/lucy tools/verify_doc_examples.lucy /path/to/lucy`.
+
+
+## 2.0.7 ecosystem specifications\n\nThe remote registry, transitive resolver, and LSP contracts are documented in `docs/PACKAGE_REGISTRY_SPEC.md`, `docs/DEPENDENCY_RESOLVER_SPEC.md`, and `docs/LSP_SPEC.md`. Their status is specification-only in this archive. Follow `docs/DEBUGGING_AND_DIAGNOSTICS.md` and `docs/REGRESSION_AND_RELEASE_PROCESS.md` for the stabilization workflow.\n

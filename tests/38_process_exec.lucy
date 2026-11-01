@@ -1,0 +1,36 @@
+import system
+
+var command = []
+if system.platform() == "windows" {
+    command = ["cmd.exe", "/c", "echo LucyProcessExec"]
+} else {
+    command = ["/bin/echo", "LucyProcessExec"]
+}
+let result = system.exec(command)
+assert result.get("success") == true
+assert result.get("stdout").contains("LucyProcessExec")
+assert result.get("stderr") == ""
+assert result.get("timed_out") == false
+assert result.get("pid") > 0
+
+var error_command = []
+if system.platform() == "windows" {
+    error_command = ["cmd.exe", "/c", "echo LucyProcessError 1>&2 & exit /b 7"]
+} else {
+    error_command = ["/bin/sh", "-c", "echo LucyProcessError >&2; exit 7"]
+}
+let failed = system.exec(error_command)
+assert failed.get("success") == false
+assert failed.get("status") == 7
+assert failed.get("stderr").contains("LucyProcessError")
+
+var timeout_command = []
+if system.platform() == "windows" {
+    timeout_command = ["cmd.exe", "/c", "ping -n 4 127.0.0.1 > nul"]
+} else {
+    timeout_command = ["/bin/sh", "-c", "sleep 2"]
+}
+let timed = system.exec(timeout_command, {"timeout_ms": 100})
+assert timed.get("timed_out") == true
+assert timed.get("status") == 124
+println "process exec passed"

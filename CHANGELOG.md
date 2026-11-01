@@ -1,3 +1,26 @@
+# Lucy Changelog
+
+## 2.0.7 — Ecosystem architecture, diagnostics, and stability
+
+- Defined the Lucy Package Registry architecture: package identity, immutable releases, manifest metadata, publishing workflow, API shape, artifact integrity, and trust boundaries.
+- Defined deterministic dependency resolution: SemVer constraints, transitive graph solving, conflict reporting, source overrides, and a versioned lockfile contract.
+- Defined the Language Server Protocol architecture: JSON-RPC stdio transport, shared parser/diagnostics, capability tiers, incremental documents, UTF-16 range conversion, and editor security boundaries.
+- Added a debugging and diagnostics handbook covering reproducible reports, subsystem triage, source-position correctness, and regression-first fixes.
+- Added a regression/release process and an explicit shipped-versus-specified ecosystem status matrix.
+- Synchronized current release metadata to 2.0.7 across the version file, CMake project, CLI/runtime version output, standard-library manifest, and core API contract.
+- No intentional language syntax, grammar, or runtime semantic expansion is part of this release.
+- Important: remote registry service/client, transitive dependency solver, and production LSP server are specified but not implemented in this source archive. Existing local-source package management remains the supported workflow.
+- Release verification is pending until the checklist in `docs/VERIFICATION_2_0_7.md` has been executed on clean supported platforms.
+
+## Unreleased — Lucy ecosystem expansion
+
+- Replaced the maintained Python repository utilities with Lucy-native standard-library documentation generation, manifest/version management, and documentation-example verification.
+- Added `system.exec(argv, options)` for direct child-process execution without a shell, separate stdout/stderr capture, exit status, PID, working-directory selection, and enforceable timeouts.
+- Added Lucy-native project scaffolding, local-source package management with add/update/remove operations and lockfile verification, native C++ extension scaffolding, a project test runner, and CMake/CTest orchestration.
+- Added project-root discovery from `lucy.toml`, automatic project-local package imports and native extension search paths, and package-aware REPL module completion.
+- Added process-execution and project-local package-resolution regression coverage; expanded ecosystem documentation.
+- Remote package registries, dependency solving, signed package metadata, native binary distribution, and an LSP/formatter/linter are still roadmap items and are not claimed as implemented.
+
 ## 2.0.6 — String semantics, interpolation, and documentation consistency
 
 - Fixed string range indexing: `text[0..4]` returns five UTF-8 code points, while `text[0...4]` returns four; negative endpoints and out-of-bounds clamping follow the documented range rules.
@@ -30,8 +53,6 @@
 - Clamped date month shifts to the last valid day of the target month.
 - Added validation for `Math.clamp`, `Math.average`, and `random.sample`.
 - See `docs/AUDIT_FOLLOWUP_2_0_4.md` for scope and unresolved audit items.
-
-# Lucy Changelog
 
 ## 2.0.3 — Core object-oriented APIs and diagnostics
 
@@ -165,3 +186,5 @@ Historical details and migration guidance are in `HISTORY_AND_MIGRATION.md`.
 ### Audit items still open
 
 This is a targeted hardening pass, not closure of the entire attached audit. Remaining high-priority work includes complete removal of all unchecked variant access (especially non-string map-key and non-callable initialization paths), closure-cycle ownership without shutdown-time cleanup, full checked numeric semantics including all casts and unary/power edge cases, iterator/range safety, `finally` correctness, typed exception objects and catch semantics, complete token spans, binary-safe file APIs, HTTP hardening/native TLS, module caching, and Windows/macOS execution evidence. See `docs/AUDIT_FOLLOWUP_2_0_3.md` for status.
+
+

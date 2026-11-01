@@ -1,4 +1,4 @@
-# `repl` standard library — Lucy 2.0.2
+# `repl` standard library — Lucy 2.0.7
 
 Plain-text REPL banner/prompt, command/topic metadata, and topic help.
 

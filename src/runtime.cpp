@@ -323,7 +323,7 @@ Interpreter::Interpreter(std::vector<std::string> argv)
 
     globals_->define("PI", 3.141592653589793, true);
     globals_->define("E", 2.718281828459045, true);
-    globals_->define("VERSION", "2.0.6", true);
+    globals_->define("VERSION", "2.0.7", true);
 
 #ifdef _WIN32
     globals_->define("PLATFORM", std::string("windows"), true);
@@ -565,6 +565,21 @@ void Interpreter::install_builtins()
     {need(a.size(),2,"File.copy");auto s=string_arg(a[0], 1),d=string_arg(a[1], 2);std::error_code ec;fs::copy_file(s,d,fs::copy_options::overwrite_existing,ec);if(ec)throw std::runtime_error("IOError: cannot copy file: "+ec.message());return Value(d); };
     builtins_["__file_move"] = [](const std::vector<Value> &a)
     {need(a.size(),2,"File.move");auto s=string_arg(a[0], 1),d=string_arg(a[1], 2);std::error_code ec;fs::rename(s,d,ec);if(ec)throw std::runtime_error("IOError: cannot move file: "+ec.message());return Value(d); };
+    builtins_["__file_replace"] = [](const std::vector<Value> &a)
+    {
+        need(a.size(), 2, "File.replace");
+        const fs::path source(string_arg(a[0], 1));
+        const fs::path destination(string_arg(a[1], 2));
+#ifdef _WIN32
+        if (!MoveFileExW(source.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+            throw std::runtime_error("IOError: cannot atomically replace file (Windows error " + std::to_string(GetLastError()) + ")");
+#else
+        std::error_code ec;
+        fs::rename(source, destination, ec);
+        if (ec) throw std::runtime_error("IOError: cannot atomically replace file: " + ec.message());
+#endif
+        return Value(destination.string());
+    };
     builtins_["__file_touch"] = [](const std::vector<Value> &a)
     {need(a.size(),1,"File.touch");auto p=string_arg(a[0], 1);if(!fs::exists(p)){std::ofstream f(p,std::ios::binary);if(!f)throw std::runtime_error("IOError: cannot create file '"+p+"'");}else{auto now=fs::file_time_type::clock::now();std::error_code ec;fs::last_write_time(p,now,ec);if(ec)throw std::runtime_error("IOError: cannot touch file: "+ec.message());}return Value(true); };
     builtins_["__file_write_lines"] = [this](const std::vector<Value> &a)
@@ -2116,7 +2131,10 @@ void Interpreter::import_module(const ImportStmt &x)
         }
         else
         {
-            const std::string alias = x.alias.empty() ? fs::path(path).stem().string() : x.alias;
+            const fs::path resolved_path(path);
+            const std::string default_alias = resolved_path.filename() == "init.lucy"
+                ? x.module : resolved_path.stem().string();
+            const std::string alias = x.alias.empty() ? default_alias : x.alias;
             auto object = std::make_shared<Instance>();
             auto klass = std::make_shared<Class>();
             klass->name = alias;
@@ -2146,6 +2164,28 @@ void Interpreter::import_module(const ImportStmt &x)
     }
 }
 
+static fs::path lucy_project_root(fs::path start)
+{
+    if (start.empty())
+        start = fs::current_path();
+    std::error_code ec;
+    start = fs::absolute(start, ec);
+    if (ec)
+        return {};
+    if (!fs::is_directory(start, ec))
+        start = start.parent_path();
+    while (!start.empty())
+    {
+        if (fs::is_regular_file(start / "lucy.toml", ec))
+            return start;
+        const fs::path parent = start.parent_path();
+        if (parent == start)
+            break;
+        start = parent;
+    }
+    return {};
+}
+
 std::vector<std::string> Interpreter::extension_search_paths() const
 {
     std::vector<std::string> paths;
@@ -2160,6 +2200,11 @@ std::vector<std::string> Interpreter::extension_search_paths() const
     // LUCY_PATH is the single Lucy installation/project root.
     if (const char *env = std::getenv("LUCY_PATH"))
         add_root(fs::path(env));
+
+    const fs::path project_root = lucy_project_root(
+        current_file_.empty() ? fs::current_path() : fs::path(current_file_));
+    if (!project_root.empty())
+        paths.push_back((project_root / "extensions").string());
 
     const auto exe = executable_path();
     if (!exe.empty()) {
@@ -2300,6 +2345,15 @@ std::string Interpreter::resolve_module(const std::string &m) const
     if (!current_file_.empty())
         c.push_back(fs::path(current_file_).parent_path() / p);
 
+    const fs::path project_root = lucy_project_root(
+        current_file_.empty() ? fs::current_path() : fs::path(current_file_));
+    if (!project_root.empty()) {
+        c.push_back(project_root / "packages" / p);
+        const fs::path project_package = project_root / "packages" / fs::path(m);
+        if (fs::exists(project_package / "src" / "init.lucy"))
+            c.push_back(project_package / "src" / "init.lucy");
+    }
+
     auto add_root = [&](const fs::path &root) {
         if (root.empty()) return;
         c.push_back(root / p);
@@ -2357,6 +2411,10 @@ std::vector<std::pair<std::string, std::string>> Interpreter::list_modules() con
 
     if (!interactive_mode_ && !current_file_.empty())
         search_paths.push_back(fs::path(current_file_).parent_path());
+    const fs::path project_root = lucy_project_root(
+        current_file_.empty() ? fs::current_path() : fs::path(current_file_));
+    if (!project_root.empty())
+        search_paths.push_back(project_root / "packages");
     if (const char *lp = std::getenv("LUCY_PATH"))
         add_root(fs::path(lp));
 
@@ -2387,13 +2445,23 @@ std::vector<std::pair<std::string, std::string>> Interpreter::list_modules() con
         if (!fs::is_directory(base))
             continue;
         for (const auto &entry : fs::directory_iterator(base)) {
-            if (!entry.is_regular_file() || entry.path().extension() != ".lucy")
+            std::string name;
+            fs::path module_path;
+            if (entry.is_regular_file() && entry.path().extension() == ".lucy") {
+                name = entry.path().stem().string();
+                module_path = entry.path();
+            } else if (entry.is_directory() &&
+                       fs::is_regular_file(entry.path() / "src" / "init.lucy")) {
+                // Project packages use packages/<name>/src/init.lucy.
+                name = entry.path().filename().string();
+                module_path = entry.path() / "src" / "init.lucy";
+            } else {
                 continue;
-            const std::string name = entry.path().stem().string();
+            }
             if (seen.count(name))
                 continue;
             seen.insert(name);
-            result.emplace_back(name, entry.path().lexically_normal().string());
+            result.emplace_back(name, module_path.lexically_normal().string());
         }
     }
 
@@ -2597,12 +2665,12 @@ void Interpreter::repl()
         }
         catch (const std::exception &)
         {
-            std::cout << "Lucy 2.0.6 Interactive REPL\n\n";
+            std::cout << "Lucy 2.0.7 Interactive REPL\n\n";
         }
     }
     else
     {
-        std::cout << "Lucy 2.0.6 Interactive REPL\n\n";
+        std::cout << "Lucy 2.0.7 Interactive REPL\n\n";
     }
 
     std::set<std::string> initial_global_names;
@@ -2853,7 +2921,7 @@ void Interpreter::repl()
         {
             try {
                 std::cout << eval_repl_library("repl.banner()\n").to_string() << "\n\n";
-            } catch (const std::exception &) { std::cout << "Lucy 2.0.6 interactive environment\n"; }
+            } catch (const std::exception &) { std::cout << "Lucy 2.0.7 interactive environment\n"; }
             continue;
         }
 
@@ -2868,12 +2936,12 @@ void Interpreter::repl()
                 }
                 catch (const std::exception &)
                 {
-                    std::cout << "2.0.6\n";
+                    std::cout << "2.0.7\n";
                 }
             }
             else
             {
-                std::cout << "2.0.6\n";
+                std::cout << "2.0.7\n";
             }
             continue;
         }

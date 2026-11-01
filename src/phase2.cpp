@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cstring>
 #include <ctime>
 #include <cctype>
 #include <cstdio>
@@ -16,10 +17,19 @@
 #include <stdexcept>
 #include <string_view>
 #include <vector>
+#include <thread>
+#include <atomic>
 
 #ifdef _WIN32
+#define NOMINMAX
+#include <windows.h>
 #include <process.h>
 #else
+#include <cerrno>
+#include <csignal>
+#include <fcntl.h>
+#include <poll.h>
+#include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #endif
@@ -143,6 +153,179 @@ CommandResult run_command(const std::string& command) {
 #endif
 
     return {output, status};
+}
+
+
+struct ProcessResult {
+    std::string stdout_text;
+    std::string stderr_text;
+    int status = -1;
+    bool timed_out = false;
+    long long pid = 0;
+};
+
+#ifdef _WIN32
+std::string quote_windows_argument(const std::string& value) {
+    std::string out = "\"";
+    std::size_t slashes = 0;
+    for (char c : value) {
+        if (c == '\\\\') { ++slashes; continue; }
+        if (c == '"') {
+            out.append(slashes * 2 + 1, '\\\\');
+            out += '"';
+        } else {
+            out.append(slashes, '\\\\');
+            out += c;
+        }
+        slashes = 0;
+    }
+    out.append(slashes * 2, '\\\\');
+    out += '"';
+    return out;
+}
+#endif
+
+ProcessResult execute_argv(const std::vector<std::string>& argv,
+                           const std::string& cwd,
+                           long long timeout_ms) {
+    if (argv.empty() || argv.front().empty())
+        throw std::runtime_error("ArgumentError: Process.exec requires a non-empty argv array");
+    if (timeout_ms < 0)
+        throw std::runtime_error("ArgumentError: timeout_ms cannot be negative");
+
+    ProcessResult result;
+#ifdef _WIN32
+    SECURITY_ATTRIBUTES security{sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};
+    HANDLE out_read = nullptr, out_write = nullptr, err_read = nullptr, err_write = nullptr;
+    if (!CreatePipe(&out_read, &out_write, &security, 0) ||
+        !CreatePipe(&err_read, &err_write, &security, 0)) {
+        if (out_read) CloseHandle(out_read); if (out_write) CloseHandle(out_write);
+        if (err_read) CloseHandle(err_read); if (err_write) CloseHandle(err_write);
+        throw std::runtime_error("ProcessError: cannot create capture pipes");
+    }
+    SetHandleInformation(out_read, HANDLE_FLAG_INHERIT, 0);
+    SetHandleInformation(err_read, HANDLE_FLAG_INHERIT, 0);
+
+    std::string command_line;
+    for (const auto& arg : argv) {
+        if (!command_line.empty()) command_line += ' ';
+        command_line += quote_windows_argument(arg);
+    }
+    std::vector<char> mutable_command(command_line.begin(), command_line.end());
+    mutable_command.push_back('\0');
+
+    STARTUPINFOA startup{};
+    startup.cb = sizeof(startup);
+    startup.dwFlags = STARTF_USESTDHANDLES;
+    startup.hStdOutput = out_write;
+    startup.hStdError = err_write;
+    startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+    PROCESS_INFORMATION process{};
+    const BOOL created = CreateProcessA(nullptr, mutable_command.data(), nullptr, nullptr, TRUE,
+        CREATE_NO_WINDOW, nullptr, cwd.empty() ? nullptr : cwd.c_str(), &startup, &process);
+    CloseHandle(out_write); CloseHandle(err_write);
+    if (!created) {
+        CloseHandle(out_read); CloseHandle(err_read);
+        throw std::runtime_error("ProcessError: CreateProcess failed with Windows error " +
+                                 std::to_string(GetLastError()));
+    }
+    result.pid = static_cast<long long>(process.dwProcessId);
+    auto reader = [](HANDLE pipe, std::string& target) {
+        char buffer[4096]; DWORD count = 0;
+        while (ReadFile(pipe, buffer, sizeof(buffer), &count, nullptr) && count)
+            target.append(buffer, count);
+        CloseHandle(pipe);
+    };
+    std::thread out_thread(reader, out_read, std::ref(result.stdout_text));
+    std::thread err_thread(reader, err_read, std::ref(result.stderr_text));
+    const DWORD wait_ms = timeout_ms == 0 ? INFINITE :
+        static_cast<DWORD>(std::min<long long>(timeout_ms, MAXDWORD - 1));
+    DWORD wait_result = WaitForSingleObject(process.hProcess, wait_ms);
+    if (wait_result == WAIT_TIMEOUT) {
+        result.timed_out = true;
+        TerminateProcess(process.hProcess, 124);
+        WaitForSingleObject(process.hProcess, INFINITE);
+    } else if (wait_result == WAIT_FAILED) {
+        TerminateProcess(process.hProcess, 1);
+    }
+    DWORD exit_code = 1;
+    GetExitCodeProcess(process.hProcess, &exit_code);
+    result.status = static_cast<int>(exit_code);
+    out_thread.join(); err_thread.join();
+    CloseHandle(process.hThread); CloseHandle(process.hProcess);
+#else
+    int out_pipe[2], err_pipe[2];
+    if (pipe(out_pipe) != 0)
+        throw std::runtime_error("ProcessError: cannot create stdout capture pipe");
+    if (pipe(err_pipe) != 0) {
+        close(out_pipe[0]); close(out_pipe[1]);
+        throw std::runtime_error("ProcessError: cannot create stderr capture pipe");
+    }
+    const pid_t child = fork();
+    if (child < 0) {
+        close(out_pipe[0]); close(out_pipe[1]); close(err_pipe[0]); close(err_pipe[1]);
+        throw std::runtime_error("ProcessError: fork failed: " + std::string(std::strerror(errno)));
+    }
+    if (child == 0) {
+        setpgid(0, 0);
+        close(out_pipe[0]); close(err_pipe[0]);
+        dup2(out_pipe[1], STDOUT_FILENO); dup2(err_pipe[1], STDERR_FILENO);
+        close(out_pipe[1]); close(err_pipe[1]);
+        if (!cwd.empty() && chdir(cwd.c_str()) != 0) _exit(126);
+        std::vector<char*> raw;
+        raw.reserve(argv.size() + 1);
+        for (const auto& arg : argv) raw.push_back(const_cast<char*>(arg.c_str()));
+        raw.push_back(nullptr);
+        execvp(raw[0], raw.data());
+        _exit(errno == ENOENT ? 127 : 126);
+    }
+    result.pid = static_cast<long long>(child);
+    setpgid(child, child);
+    close(out_pipe[1]); close(err_pipe[1]);
+    fcntl(out_pipe[0], F_SETFL, fcntl(out_pipe[0], F_GETFL) | O_NONBLOCK);
+    fcntl(err_pipe[0], F_SETFL, fcntl(err_pipe[0], F_GETFL) | O_NONBLOCK);
+    bool out_open = true, err_open = true, child_done = false;
+    int wait_status = 0;
+    const auto started = std::chrono::steady_clock::now();
+    auto drain = [](int fd, std::string& target, bool& open) {
+        char buffer[8192];
+        while (true) {
+            const ssize_t count = read(fd, buffer, sizeof(buffer));
+            if (count > 0) target.append(buffer, static_cast<std::size_t>(count));
+            else if (count == 0) { close(fd); open = false; break; }
+            else if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+            else if (errno == EINTR) continue;
+            else { close(fd); open = false; break; }
+        }
+    };
+    while (out_open || err_open || !child_done) {
+        if (timeout_ms > 0 && !child_done &&
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - started).count() >= timeout_ms) {
+            result.timed_out = true;
+            kill(-child, SIGTERM);
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            if (waitpid(child, &wait_status, WNOHANG) == 0) kill(-child, SIGKILL);
+        }
+        pollfd descriptors[2] = {
+            {out_pipe[0], static_cast<short>(out_open ? POLLIN | POLLHUP : 0), 0},
+            {err_pipe[0], static_cast<short>(err_open ? POLLIN | POLLHUP : 0), 0}
+        };
+        poll(descriptors, 2, 20);
+        if (out_open) drain(out_pipe[0], result.stdout_text, out_open);
+        if (err_open) drain(err_pipe[0], result.stderr_text, err_open);
+        if (!child_done) {
+            const pid_t waited = waitpid(child, &wait_status, WNOHANG);
+            if (waited == child) child_done = true;
+            else if (waited < 0 && errno != EINTR) child_done = true;
+        }
+    }
+    if (!child_done) waitpid(child, &wait_status, 0);
+    result.status = result.timed_out ? 124 :
+        (WIFEXITED(wait_status) ? WEXITSTATUS(wait_status) :
+         (WIFSIGNALED(wait_status) ? 128 + WTERMSIG(wait_status) : 1));
+#endif
+    return result;
 }
 
 // ------------------------------ JSON ------------------------------
@@ -1040,6 +1223,34 @@ void install_phase2_builtins(BuiltinMap& builtins) {
     };
 
     // Process -------------------------------------------------------
+    builtins["__process_exec"] = [](const std::vector<Value>& args) {
+        require_range(args, 1, 2, "Process.exec");
+        auto array = as_array(args[0], "Process.exec argv");
+        std::vector<std::string> argv;
+        argv.reserve(array->size());
+        for (const auto& value : *array) argv.push_back(string_arg(value, "Process.exec argv item"));
+        std::string cwd;
+        long long timeout_ms = 0;
+        if (args.size() == 2) {
+            auto options = std::get_if<Value::MapPtr>(&args[1].data);
+            if (!options || !*options) throw std::runtime_error("TypeError: Process.exec options must be a map");
+            auto cwd_it = (*options)->find("cwd");
+            if (cwd_it != (*options)->end() && !std::holds_alternative<Nil>(cwd_it->second.data))
+                cwd = string_arg(cwd_it->second, "Process.exec cwd");
+            auto timeout_it = (*options)->find("timeout_ms");
+            if (timeout_it != (*options)->end() && !std::holds_alternative<Nil>(timeout_it->second.data))
+                timeout_ms = integer_arg(timeout_it->second, "Process.exec timeout_ms");
+        }
+        ProcessResult result = execute_argv(argv, cwd, timeout_ms);
+        Map value;
+        value["stdout"] = result.stdout_text;
+        value["stderr"] = result.stderr_text;
+        value["status"] = static_cast<long long>(result.status);
+        value["success"] = result.status == 0 && !result.timed_out;
+        value["timed_out"] = result.timed_out;
+        value["pid"] = result.pid;
+        return Value(std::move(value));
+    };
     builtins["__process_run"] = [](const std::vector<Value>& args) {
         require_count(args, 1, "process.run");
         CommandResult result = run_command(string_arg(args[0], "process.run"));

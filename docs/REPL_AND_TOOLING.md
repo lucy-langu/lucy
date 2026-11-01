@@ -229,7 +229,7 @@ When adding a language feature, add a focused regression test and run the comple
 
 ## 10. Editor integration
 
-The repository contains editor-related files, but Lucy 2.0.3 does not ship a language server (LSP), formatter, or debugger protocol. Syntax highlighting/editor support should therefore be treated as editor configuration rather than an LSP contract.
+The repository contains editor-related files, but Lucy 2.0.7 still does not ship a production language server (LSP), formatter, or debugger protocol. The LSP architecture is specified in [LSP Specification](LSP_SPEC.md); editor syntax assets remain editor configuration, not an LSP implementation.
 
 ## 11. Troubleshooting by symptom
 
@@ -274,3 +274,11 @@ Application code should prefer `fs`, `system`, `text`, and other standard module
 - Completion is advisory and may not infer every dynamic expression.
 - Terminal cursor controls and display-cell widths vary by terminal; the REPL no longer emits ANSI color styling, but Windows behavior still needs native-console testing.
 - `Ctrl-C` cancels buffered source; it is not a general-purpose interrupt for a running Lucy program.
+
+
+## Lucy-native ecosystem commands
+
+The repository provides first-party Lucy scripts for project scaffolding, local package management, native extension scaffolding, build orchestration, and project test execution. REPL module completion includes project-local packages found beneath the nearest `lucy.toml` root. See [Ecosystem Tooling](ECOSYSTEM_TOOLING.md) for commands and limitations. For process automation, prefer `system.exec(argv, options)` over shell command strings; it keeps arguments separate, captures stdout/stderr independently, and enforces a timeout.
+
+
+For the 2.0.7 diagnostics and stabilization workflow, see [Debugging and Diagnostics](DEBUGGING_AND_DIAGNOSTICS.md) and [Regression and Release Process](REGRESSION_AND_RELEASE_PROCESS.md). The LSP specification is not an executable server.

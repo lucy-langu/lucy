@@ -1,0 +1,69 @@
+# Cross-platform CMake frontend for Lucy repositories.
+import fs
+import system
+
+var command = "all"
+var build_dir = "build"
+var sqlite = false
+var generator = ""
+var i = 0
+while i < ARGV.length() {
+    let arg = ARGV[i]
+    if arg == "configure" or arg == "build" or arg == "test" or arg == "all" {
+        command = arg
+    } else if arg == "--build-dir" and i + 1 < ARGV.length() {
+        i += 1
+        build_dir = ARGV[i]
+    } else if arg == "--generator" and i + 1 < ARGV.length() {
+        i += 1
+        generator = ARGV[i]
+    } else if arg == "--sqlite" {
+        sqlite = true
+    } else if arg == "--help" or arg == "-h" {
+        println "Usage: lucy tools/lucy_build.lucy [configure|build|test|all] [--build-dir DIR] [--generator NAME] [--sqlite]"
+        exit(0)
+    } else {
+        println "Unknown argument: " + arg
+        exit(2)
+    }
+    i += 1
+}
+
+let root = fs.absolute(".")
+let build_path = fs.absolute(build_dir)
+let configure_args = ["-S", root, "-B", build_path]
+if generator != "" {
+    configure_args.push("-G")
+    configure_args.push(generator)
+}
+configure_args.push("-DLUCY_ENABLE_SQLITE=" + (sqlite ? "ON" : "OFF"))
+
+func run_step(label, argv, timeout_ms) {
+    println "==> " + label
+    let result = system.exec(argv, {"cwd": root, "timeout_ms": timeout_ms})
+    if result.get("stdout") != "" { println result.get("stdout") }
+    if result.get("stderr") != "" { println result.get("stderr") }
+    if !result.get("success") {
+        println label + " failed (status " + str(result.get("status")) + ")"
+        exit(result.get("status") == 124 ? 124 : 1)
+    }
+}
+
+if command == "configure" or command == "all" {
+    run_step("CMake configure", ["cmake"] + configure_args, 120000)
+}
+if command == "build" or command == "all" {
+    if !fs.exists(build_path) {
+        println "Build directory is missing; run configure first."
+        exit(2)
+    }
+    run_step("Build", ["cmake", "--build", build_path, "--parallel"], 600000)
+}
+if command == "test" or command == "all" {
+    if !fs.exists(build_path) {
+        println "Build directory is missing; run configure and build first."
+        exit(2)
+    }
+    run_step("CTest", ["ctest", "--test-dir", build_path, "--output-on-failure"], 600000)
+}
+println "Lucy build workflow completed."

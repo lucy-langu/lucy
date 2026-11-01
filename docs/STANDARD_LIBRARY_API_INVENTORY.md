@@ -418,6 +418,7 @@ The inventory is source-oriented and should be regenerated whenever a standard-l
 - `command_exists(command)`
 - `pid()`
 - `ppid()`
+- `exec(argv, options = {})`
 - `run(command)`
 - `capture(command)`
 - `success(command)`

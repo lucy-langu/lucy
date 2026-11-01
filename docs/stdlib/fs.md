@@ -1,4 +1,4 @@
-# `fs` standard library — Lucy 2.0.2
+# `fs` standard library — Lucy 2.0.7
 
 Filesystem operations, path helpers, text/JSON convenience methods, and IO objects.
 
@@ -35,14 +35,16 @@ println fs.basename("src/lucy.cpp")
 | `remove` | `remove(path)` |
 | `copy` | `copy(source, destination)` |
 | `move` | `move(source, destination)` |
+| `replace` | `replace(source, destination)` |
 | `touch` | `touch(path)` |
 | `chmod` | `chmod(path, mode)` |
 | `chown` | `chown(path, uid, gid)` |
+| `chdir` | `chdir(path)` |
 | `entries` | `entries(path = ".")` |
 | `files` | `files(path = ".")` |
 | `dirs` | `dirs(path = ".")` |
 | `mkdir` | `mkdir(path, parents = false)` |
-| `rmdir` | `rmdir(path)` |
+| `rmdir` | `rmdir(path, recursive = false)` |
 | `empty` | `empty(path = ".")` |
 | `glob` | `glob(pattern)` |
 | `walk` | `walk(path = ".")` |

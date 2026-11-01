@@ -1,4 +1,4 @@
-# `time` standard library — Lucy 2.0.2
+# `time` standard library — Lucy 2.0.7
 
 Time/date/date-time objects, parsing, formatting, timestamps, and sleeping.
 
@@ -19,10 +19,6 @@ println time.now()
 println time.today()
 println time.format(time.timestamp())
 ```
-
-## Exported module-level objects
-
-`date`, `datetime`, `time`
 
 ## Module-level functions
 

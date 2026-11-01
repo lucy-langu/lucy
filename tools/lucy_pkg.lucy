@@ -1,0 +1,164 @@
+# Local-source package manager. Remote registries and dependency solving are not implied.
+import fs
+import data
+
+let LOCKFILE = "lucy.lock"
+
+func valid_name(value) {
+    return text.match("^[A-Za-z][A-Za-z0-9_-]*$", value)
+}
+
+func load_lock() {
+    if !fs.exists(LOCKFILE) {
+        return {"lockfile_version": 1, "packages": {}}
+    }
+    let lock = data.parse(fs.read(LOCKFILE))
+    if lock.get("lockfile_version") != 1 or type(lock.get("packages")) != "map" {
+        throw "unsupported lucy.lock format"
+    }
+    return lock
+}
+
+func save_lock(lock) {
+    let temporary = LOCKFILE + ".tmp-" + str(system.pid())
+    fs.write(temporary, data.json.pretty(lock) + "\n")
+    fs.replace(temporary, LOCKFILE)
+}
+
+func usage() {
+    println "Usage: lucy tools/lucy_pkg.lucy <init|add|remove|list|verify> ..."
+    println "  init"
+    println "  add <package-name> <source.lucy> [version]"
+    println "  update <package-name> <source.lucy> [version]"
+    println "  remove <package-name>"
+    println "  list"
+    println "  verify"
+}
+
+if ARGV.length() == 0 { usage(); exit(2) }
+let command = ARGV[0]
+let lock = load_lock()
+let packages = lock.get("packages")
+
+if command == "init" {
+    if fs.exists(LOCKFILE) { println "lucy.lock already exists"; exit(2) }
+    save_lock(lock)
+    println "Initialized local Lucy package lockfile."
+} else if command == "list" {
+    for name in packages.keys() {
+        let item = packages.get(name)
+        println name + " " + item.get("version") + " " + item.get("entry")
+    }
+} else if command == "verify" {
+    let failures = []
+    for name in packages.keys() {
+        let item = packages.get(name)
+        let entry = item.has("entry") ? item.get("entry") : ""
+        if !valid_name(name) { failures.push("invalid package name: " + name) }
+        let expected_entry = fs.join(["packages", name, "src", "init.lucy"])
+        if entry != expected_entry or !fs.exists(expected_entry) {
+            failures.push(name + ": missing or unsafe entry path " + entry)
+        }
+        let metadata_path = fs.join(["packages", name, "lucy.json"])
+        if !fs.exists(metadata_path) {
+            failures.push(name + ": missing lucy.json package metadata")
+        } else {
+            let metadata = data.parse(fs.read(metadata_path))
+            if metadata.get("name") != name or metadata.get("version") != item.get("version") {
+                failures.push(name + ": package metadata does not match lockfile")
+            }
+        }
+        if !text.match("^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$", (item.has("version") ? item.get("version") : "")) {
+            failures.push(name + ": invalid semantic version")
+        }
+    }
+    if failures.length() > 0 {
+        for failure in failures { println "ERROR " + failure }
+        exit(1)
+    }
+    println "Verified " + str(packages.length()) + " locked local package(s)."
+} else if command == "add" {
+    if ARGV.length() < 3 { usage(); exit(2) }
+    let name = ARGV[1]
+    let source = ARGV[2]
+    let version = ARGV.length() > 3 ? ARGV[3] : "0.1.0"
+    if !valid_name(name) { println "invalid package name"; exit(2) }
+    if !text.match("^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$", version) {
+        println "invalid semantic version: " + version
+        exit(2)
+    }
+    if !fs.exists(source) or !source.ends_with(".lucy") { println "source must be an existing .lucy file"; exit(2) }
+    if packages.has(name) { println "package already installed: " + name; exit(2) }
+    let package_root = fs.join(["packages", name, "src"])
+    fs.mkdir(package_root, true)
+    let entry = fs.join([package_root, "init.lucy"])
+    let temporary = entry + ".tmp-" + str(system.pid())
+    fs.write(temporary, fs.read(source))
+    fs.replace(temporary, entry)
+    let package_manifest = {"name": name, "version": version, "entry": "src/init.lucy"}
+    fs.write(fs.join(["packages", name, "lucy.json"]), data.json.pretty(package_manifest) + "\n")
+    packages.set(name, {"version": version, "source": source, "entry": entry})
+    try {
+        save_lock(lock)
+    } catch Exception as error {
+        fs.rmdir(fs.join(["packages", name]), true)
+        throw error
+    }
+    println "Installed local package " + name + " " + version
+} else if command == "update" {
+    if ARGV.length() < 3 { usage(); exit(2) }
+    let name = ARGV[1]
+    let source = ARGV[2]
+    if !packages.has(name) { println "package is not locked: " + name; exit(2) }
+    if !fs.exists(source) or !source.ends_with(".lucy") { println "source must be an existing .lucy file"; exit(2) }
+    let old_item = packages.get(name)
+    let version = ARGV.length() > 3 ? ARGV[3] : old_item.get("version")
+    if !text.match("^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$", version) {
+        println "invalid semantic version: " + version
+        exit(2)
+    }
+    let entry = fs.join(["packages", name, "src", "init.lucy"])
+    let metadata_path = fs.join(["packages", name, "lucy.json"])
+    let old_source = fs.read(entry)
+    let old_metadata = fs.read(metadata_path)
+    let package_metadata = {"name": name, "version": version, "entry": "src/init.lucy"}
+    let source_temp = entry + ".tmp-" + str(system.pid())
+    let metadata_temp = metadata_path + ".tmp-" + str(system.pid())
+    fs.write(source_temp, fs.read(source))
+    fs.write(metadata_temp, data.json.pretty(package_metadata) + "\n")
+    try {
+        fs.replace(source_temp, entry)
+        fs.replace(metadata_temp, metadata_path)
+        packages.set(name, {"version": version, "source": source, "entry": entry})
+        save_lock(lock)
+    } catch Exception as error {
+        if fs.exists(source_temp) { fs.remove(source_temp) }
+        if fs.exists(metadata_temp) { fs.remove(metadata_temp) }
+        let rollback_source = entry + ".rollback-" + str(system.pid())
+        let rollback_metadata = metadata_path + ".rollback-" + str(system.pid())
+        fs.write(rollback_source, old_source)
+        fs.write(rollback_metadata, old_metadata)
+        fs.replace(rollback_source, entry)
+        fs.replace(rollback_metadata, metadata_path)
+        packages.set(name, old_item)
+        throw error
+    }
+    println "Updated local package " + name + " " + version
+} else if command == "remove" {
+    if ARGV.length() < 2 { usage(); exit(2) }
+    let name = ARGV[1]
+    if !packages.has(name) { println "package is not locked: " + name; exit(2) }
+    let retained = {}
+    for package_name in packages.keys() {
+        if package_name != name {
+            retained.set(package_name, packages.get(package_name))
+        }
+    }
+    lock.set("packages", retained)
+    save_lock(lock)
+    fs.rmdir(fs.join(["packages", name]), true)
+    println "Removed package " + name
+} else {
+    usage()
+    exit(2)
+}
