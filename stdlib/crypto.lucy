@@ -1,0 +1,154 @@
+# Lucy cryptography library. Message digests and OpenSSL primitives are grouped by purpose.
+
+# Cryptographic digest helpers. The default algorithm is SHA-256.
+class Digest {
+    func digest(text) {
+        return __digest_digest(text)
+    }
+
+    func hexdigest(text) {
+        return __digest_hexdigest(text)
+    }
+
+    func base64digest(text) {
+        return __digest_base64digest(text)
+    }
+
+    func file(path) {
+        return __digest_file(path)
+    }
+}
+
+_digest = Digest.new()
+
+# OpenSSL-compatible high-level API. HMAC is available without an external OpenSSL build.
+class HMAC {
+    func digest(key, data) {
+        return __openssl_hmac(key, data)
+    }
+
+    func hexdigest(key, data) {
+        return __openssl_hmac(key, data)
+    }
+}
+
+class SSLContext {
+    func initialize(options = {}) {
+        self.options = options
+    }
+}
+
+class SSLSocket {
+    func initialize(socket = nil, context = nil) {
+        self.socket = socket
+        self.context = context
+    }
+
+    func connect(host, port) {
+        if self.socket == nil {
+            self.socket = Socket.new()
+        }
+        return self.socket.connect(host, port)
+    }
+
+    func close() {
+        if self.socket != nil {
+            return self.socket.close()
+        }
+        return true
+    }
+}
+
+class Certificate {
+    func initialize(data = "") {
+        self.data = data
+    }
+}
+
+class RSA {
+    func initialize(pem = "") {
+        self.pem = pem
+    }
+}
+
+class Cipher {
+    func initialize(name = "") {
+        self.name = name
+    }
+}
+
+class X509 {
+    func certificate(data = "") {
+        return Certificate.new(data)
+    }
+}
+
+class PKey {
+    func rsa(pem = "") {
+        return RSA.new(pem)
+    }
+}
+
+class OpenSSL {
+    func hmac() {
+        return HMAC.new()
+    }
+
+    func ssl_context(options = {}) {
+        return SSLContext.new(options)
+    }
+
+    func ssl_socket(socket = nil, context = nil) {
+        return SSLSocket.new(socket, context)
+    }
+
+    func certificate(data = "") {
+        return Certificate.new(data)
+    }
+
+    func rsa(pem = "") {
+        return RSA.new(pem)
+    }
+
+    func x509() {
+        return X509.new()
+    }
+
+    func pkey() {
+        return PKey.new()
+    }
+
+    func cipher(name = "") {
+        return Cipher.new(name)
+    }
+}
+
+openssl = OpenSSL.new()
+x509 = X509.new()
+pkey = PKey.new()
+
+# Flat public crypto API.
+func digest(text) {
+    return __digest_digest(text)
+}
+
+func hexdigest(text) {
+    return __digest_hexdigest(text)
+}
+
+func hash(text) {
+    return __digest_hexdigest(text)
+}
+
+func base64digest(text) {
+    return __digest_base64digest(text)
+}
+
+func file(path) {
+    return __digest_file(path)
+}
+
+func hmac(key, data) {
+    return __openssl_hmac(key, data)
+}
+

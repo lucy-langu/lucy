@@ -1,0 +1,73 @@
+# Object protocol is available consistently on primitive and reference values.
+assert(42.to_s() == "42")
+assert(42.to_string() == "42")
+assert(3.5.inspect() == "3.5")
+assert("Lucy".to_s() == "Lucy")
+assert("Lucy".inspect() == "\"Lucy\"")
+assert("a\nb".inspect() == "\"a\\nb\"")
+assert(true.to_s() == "true")
+assert(false.to_s() == "false")
+assert(true.is_a?(Bool))
+assert(nil.is_a?(Nil))
+assert(nil.to_s() == "nil")
+assert(nil.nil?() == true)
+assert(42.nil?() == false)
+assert(42.type() == "int")
+assert("x".type_name() == "string")
+assert(42.class_name() == "Int")
+assert(42.is_a?(Int))
+assert(42.is_a?("Number"))
+assert(3.5.is_a?(Number))
+assert("Lucy".is_a?(String))
+assert([1].is_a?(Array))
+assert({"x": 1}.is_a?(Map))
+assert(42.respond_to?("to_s"))
+assert(Int.respond_to?("new") == false)
+assert(!42.respond_to?("does_not_exist"))
+assert(!42.respond_to?("empty?"))
+assert([].respond_to?("empty?"))
+assert([1].respond_to?("reduce"))
+assert([].empty?())
+assert("".empty?())
+assert({}.empty?())
+assert(runtime.inspect([1, 2, 3]) == "[1, 2, 3]")
+assert(42.equals?(42))
+assert(!42.equals?(43))
+
+class Animal {}
+class Dog < Animal {
+    func initialize(name) { self.name = name }
+    func bark() { return "woof" }
+    func inspect() { return "Dog<" + self.name + ">" }
+}
+assert(Dog.is_a?(Class))
+assert(Dog.name() == "Dog")
+assert(Dog.respond_to?("new"))
+assert(Dog.superclass().name() == "Animal")
+assert(Dog.is_struct?() == false)
+assert(Dog.methods().contains("bark"))
+let dog = Dog.new("Rex")
+assert(dog.is_a?(Dog))
+assert(dog.is_a?(Animal))
+assert(dog.is_a?(Object))
+assert(dog.class_name() == "Dog")
+assert(dog.class_of().name() == "Dog")
+assert(dog.has_field?("name"))
+assert(dog.fields().get("name") == "Rex")
+assert(dog.methods().contains("bark"))
+assert(dog.to_s().contains("Dog"))
+assert(dog.inspect() == "Dog<Rex>")
+assert(!dog.respond_to?("name"))
+class ShadowObject {
+    func initialize() { self.to_s = "field wins" }
+}
+let shadow = ShadowObject.new()
+assert(shadow.to_s == "field wins")
+func multiply(x, y = 2) { return x * y }
+assert(multiply.name() == "multiply")
+assert(multiply.arity() == 2)
+assert(multiply.required_arity() == 1)
+assert(multiply.parameters() == ["x", "y"])
+assert(multiply.call(3, 4) == 12)
+assert(multiply.respond_to?("call"))
+println "object protocols passed"

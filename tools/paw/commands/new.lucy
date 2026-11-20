@@ -1,0 +1,40 @@
+import fs
+import system
+
+func valid_name(value) {
+    return text.match("^[A-Za-z][A-Za-z0-9_-]*$", value)
+}
+
+if ARGV.length() < 1 {
+    println "Usage: paw new <project-name> [directory]"
+    exit(2)
+}
+
+let name = ARGV[0]
+if !valid_name(name) {
+    println "Invalid project name. Start with a letter; use only letters, digits, '_' or '-'."
+    exit(2)
+}
+var caller_dir = system.env("LUCY_INVOKED_FROM")
+if caller_dir == nil or caller_dir == "" { caller_dir = fs.absolute(".") }
+let requested_destination = ARGV.length() > 1 ? ARGV[1] : name
+let destination = requested_destination.starts_with("/") or text.match("^[A-Za-z]:[\\\\/]", requested_destination) ? requested_destination : fs.join([caller_dir, requested_destination])
+if fs.exists(destination) {
+    println "Destination already exists: " + destination
+    exit(2)
+}
+
+for directory in ["src", "tests", "packages", "extensions", "docs"] {
+    fs.mkdir(fs.join([destination, directory]), true)
+}
+
+fs.write(fs.join([destination, "src", "main.lucy"]),
+    "# " + name + "\n\nprintln \"Hello from " + name + "\"\n")
+fs.write(fs.join([destination, "tests", "smoke.lucy"]),
+    "assert 1 + 1 == 2\nprintln \"smoke test passed\"\n")
+fs.write(fs.join([destination, "lucy.toml"]),
+    "[project]\nname = \"" + name + "\"\nversion = \"0.1.0\"\nentry = \"src/main.lucy\"\n\n[toolchain]\nlucy = \">=2.0.7\"\n\n[commands]\nstart = \"src/main.lucy\"\ntest = \"tests/smoke.lucy\"\n")
+fs.write(fs.join([destination, "README.md"]),
+    "# " + name + "\n\nA Lucy project.\n\n## Run\n\n```sh\npaw run start\n```\n\n## Test\n\n```sh\npaw run test\n```\n")
+println "Created Lucy project: " + fs.absolute(destination)
+println "Next: cd " + destination + " && paw run start"

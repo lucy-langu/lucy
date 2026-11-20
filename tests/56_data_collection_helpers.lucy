@@ -1,0 +1,26 @@
+import data
+let items = [1, nil, 2, 2, 3]
+assert(data.compact(items) == [1, 2, 2, 3])
+assert(data.unique(items) == [1, nil, 2, 3])
+assert(data.flatten_one([[1, 2], [3], 4]) == [1, 2, 3, 4])
+assert(data.chunk([1, 2, 3, 4, 5], 2) == [[1, 2], [3, 4], [5]])
+assert(data.first([], "empty") == "empty")
+assert(data.last([1, 2, 3]) == 3)
+assert(data.take([1, 2, 3], 2) == [1, 2])
+assert(data.drop([1, 2, 3], 2) == [3])
+assert(data.select([1, 2, 3, 4], lambda x => x.even?()) == [2, 4])
+assert(data.reject([1, 2, 3, 4], lambda x => x.even?()) == [1, 3])
+assert(data.any([1, 2, 3], lambda x => x == 2))
+assert(data.all([2, 4, 6], lambda x => x.even?()))
+assert(data.find_index(["a", "b", "c"], "b") == 1)
+let rows = [{"kind": "a", "n": 2}, {"kind": "b", "n": 3}, {"kind": "a", "n": 5}]
+assert(data.pluck(rows, "n") == [2, 3, 5])
+assert(data.index_by(rows, "kind").get("b").get("n") == 3)
+assert(data.group_by(rows, "kind").get("a").length() == 2)
+assert(data.count_by(rows, "kind").get("a") == 2)
+assert(data.sum_by(rows, "n") == 10)
+assert(data.invert({"a": "x", "b": "y"}).get("x") == "a")
+assert(data.defaults({"b": 2}, {"a": 1, "b": 0}).get("b") == 2)
+assert(data.sorted_keys({"z": 1, "a": 2}) == ["a", "z"])
+assert(data.values_for({"a": 1}, ["a", "b"], 0) == [1, 0])
+println "data collection helpers passed"

@@ -1,0 +1,33 @@
+let values = [1, nil, 2, 2, 3]
+assert(values.empty?() == false)
+assert(values.include?(2))
+assert(values.includes?(3))
+assert(values.compact() == [1, 2, 2, 3])
+assert(values.uniq() == [1, nil, 2, 3])
+assert(values.find(lambda x => x == 2) == 2)
+assert(values.reduce(lambda(a, b) => a + (b == nil ? 0 : b), 0) == 8)
+assert([4, 1, 3, 2].sort() == [1, 2, 3, 4])
+assert(["z", "a", "m"].sort() == ["a", "m", "z"])
+assert([1, 2, 3].sum() == 6)
+assert([1, 2, 3].min() == 1)
+assert([1, 2, 3].max() == 3)
+assert([1, 2, 3, 4].take(2) == [1, 2])
+assert([1, 2, 3, 4].drop(2) == [3, 4])
+let extended = [1]
+extended.append(2, 3)
+extended.prepend(0)
+assert(extended == [0, 1, 2, 3])
+extended.concat([4, 5])
+assert(extended == [0, 1, 2, 3, 4, 5])
+
+let data = {"name": "Lucy", "version": 2}
+assert(data.empty?() == false)
+assert(data.fetch("name") == "Lucy")
+assert(data.fetch("missing", "fallback") == "fallback")
+assert(data.has_key?("version"))
+let merged = data.merge({"version": 3, "stable": true})
+assert(merged.get("version") == 3)
+assert(merged.get("stable") == true)
+assert(data.get("version") == 2)
+assert(data.to_a().length() == 2)
+println "collection methods passed"

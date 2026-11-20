@@ -1,0 +1,9 @@
+import system
+
+print("Arguments:")
+for arg in system.argv() {
+    print(arg)
+}
+
+let output = `echo Lucy`
+print(output)

@@ -1,0 +1,32 @@
+let list = [10, 20, 30, 40, 50, 60]
+
+let inclusive = list[0..4]
+let exclusive = list[0...4]
+let negative = list[-3..-1]
+let stepped = list.slice 1, 5
+
+assert inclusive.length() == 5
+assert inclusive[0] == 10
+assert inclusive[4] == 50
+assert exclusive.length() == 4
+assert exclusive[3] == 40
+assert negative.length() == 3
+assert negative[0] == 40
+assert stepped.length() == 4
+
+var total = 0
+var last_index = -1
+for value, index in list {
+    total += value
+    last_index = index
+}
+assert total == 210
+assert last_index == 5
+
+var pair_sum = 0
+foreach value, index in list[1..3] {
+    pair_sum += value + index
+}
+assert pair_sum == 93
+
+println "array range and indexed loop tests passed"

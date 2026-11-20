@@ -1,0 +1,6 @@
+import system
+
+print system.platform()
+print system.cwd()
+print system.argv()
+print system.pid()

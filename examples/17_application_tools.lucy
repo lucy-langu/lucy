@@ -1,0 +1,7 @@
+import app
+
+parser = app.parser()
+parser.banner "lucy-demo [options]"
+parser.on "verbose", "Enable verbose output", false
+print parser.help()
+app.logger().info "application started"

@@ -1,0 +1,141 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Lucy",
+  "scopeName": "source.lucy",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#constants"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "match": "\\b(def|function)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": {
+          "name": "keyword.control.lucy"
+        },
+        "2": {
+          "name": "entity.name.function.lucy"
+        }
+      }
+    },
+    {
+      "match": "\\b(class)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": {
+          "name": "storage.type.class.lucy"
+        },
+        "2": {
+          "name": "entity.name.type.class.lucy"
+        }
+      }
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.number-sign.lucy",
+          "match": "#.*$"
+        },
+        {
+          "name": "comment.block.lucy",
+          "begin": "^=begin\\b",
+          "end": "^=end\\b"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.lucy",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.lucy",
+              "match": "\\\\."
+            },
+            {
+              "name": "variable.other.interpolation.lucy",
+              "match": "\\$[A-Za-z_][A-Za-z0-9_.]*"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.lucy",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.lucy",
+              "match": "\\\\."
+            },
+            {
+              "name": "variable.other.interpolation.lucy",
+              "match": "\\$[A-Za-z_][A-Za-z0-9_.]*"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.other.backtick.lucy",
+          "begin": "`",
+          "end": "`"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.lucy",
+          "match": "\\b(if|else|while|for|foreach|loop|end|return|break|continue|try|catch|finally|throw|import|from|as|in)\\b"
+        },
+        {
+          "name": "storage.type.lucy",
+          "match": "\\b(const|global|new|self|super)\\b"
+        },
+        {
+          "name": "constant.language.lucy",
+          "match": "\\b(true|false|nil)\\b"
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.lucy",
+          "match": "\\b(PI|E|VERSION|PLATFORM)\\b"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.lucy",
+          "match": "\\b(?:0[xX][0-9A-Fa-f]+|[0-9]+(?:\\.[0-9]+)?)\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.lucy",
+          "match": "(?:\\*\\*=?|===?|!==?|==?|!=|>=?|<=?|&&|\\|\\||<<=?|>>=?|[+*/%&|^~!?:=<>-]=?)"
+        }
+      ]
+    }
+  }
+}

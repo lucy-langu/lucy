@@ -1,0 +1,5 @@
+{
+  "service": "lucy-demo",
+  "port": 8080,
+  "enabled": true
+}

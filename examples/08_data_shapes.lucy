@@ -1,0 +1,7 @@
+import data
+
+user = {name: "Lucy", version: 1, internal: true}
+public = data.pick user, ["name", "version"]
+clean = data.omit user, ["internal"]
+print public
+print clean

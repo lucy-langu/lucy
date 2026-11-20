@@ -1,0 +1,15 @@
+# Built-in types can be extended directly; no import is required.
+class String {
+    func shout() {
+        return self.upper() + "!"
+    }
+}
+
+class Int {
+    func doubled() {
+        return self * 2
+    }
+}
+
+println "Lucy".shout()
+println 21.doubled()

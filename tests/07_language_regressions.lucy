@@ -1,0 +1,50 @@
+# Numeric literal normalization and validation.
+let decimal: Int = 255
+let hex: Int = 0xFF
+let binary: Int = 0b1111_1111
+if decimal == hex and hex == binary {
+    println "numeric literals ok"
+}
+
+# Quoted map keys use the same string-key representation as identifier keys.
+let map = {
+    "display-name": "Nima",
+    'nickname': "Lucy",
+    age: 20
+}
+println map["display-name"]
+println map['nickname']
+println map["age"]
+
+# Undefined and nil coalescing both fall back without hiding other errors.
+let missing = nickname ?? "nima"
+let empty = nil ?? "fallback"
+println missing
+println empty
+
+# Lambda syntax documented by Lucy.
+let twice = lambda value => value * 2
+let add = lambda(a, b) => a + b
+println twice(21)
+println add(2, 3)
+
+# Empty blocks and struct aggregates.
+func empty() {}
+if true {}
+struct Point {
+    x: Int
+    y: Int = 0
+    func sum() -> Int {
+        return self.x + self.y
+    }
+}
+let point = Point.new(4)
+println point.sum()
+point.y = 6
+println point.sum()
+
+# Precedence regression checks.
+println 2 ** 3 ** 2
+println 1 | 2 & 3
+println true or false and false
+println false ?? true ? "yes" : "no"

@@ -1,0 +1,62 @@
+{
+  "name": "lucy-language",
+  "displayName": "Lucy Language",
+  "description": "Syntax highlighting for the Lucy programming language",
+  "version": "1.1.1",
+  "repository": "https://github.com/yourusername/your-extension-repo",
+  "publisher": "nimacpp",
+  "license": "GPL-3.0-only",
+  "icon": "icon.png",
+  "engines": {
+    "vscode": ">=1.80.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "lucy",
+    "language",
+    "syntax",
+    "highlighting"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+  "onCommand:lucy.runFile"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "lucy",
+        "aliases": ["Lucy", "lucy"],
+        "extensions": [".lucy"],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/lucy-black.png",
+          "dark": "./icons/lucy-white.png"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "lucy",
+        "scopeName": "source.lucy",
+        "path": "./syntax/lucy.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "lucy.runFile",
+        "title": "Run Lucy File",
+        "icon": "$(play)"
+      }
+    ],
+    "menus": {
+      "editor/title/run": [
+        {
+          "command": "lucy.runFile",
+          "when": "resourceLangId == lucy"
+        }
+      ]
+    }
+  }
+}

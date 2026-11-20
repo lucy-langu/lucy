@@ -1,0 +1,7 @@
+func greet(name) {
+    return "Hello, " + name
+}
+
+let double = lambda x => x * 2
+print(greet("Nima"))
+print(double(21))

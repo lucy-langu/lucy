@@ -1,0 +1,5 @@
+import text
+
+print "lucy".upper()
+print text.match "l+", "hello lucy"
+print text.base64_encode "Lucy"

@@ -1,0 +1,5 @@
+import crypto
+import text
+
+print crypto.hexdigest "Lucy"
+print text.base64_encode "hello"

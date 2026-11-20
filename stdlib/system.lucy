@@ -1,0 +1,283 @@
+# Lucy system library.
+# One flat public API for the host environment, processes, signals, and accounts.
+
+func platform() {
+    return PLATFORM
+}
+
+func version() {
+    return VERSION
+}
+
+func argv() {
+    return ARGV
+}
+
+func cwd() {
+    return __dir_pwd()
+}
+
+func env(name) {
+    return __os_env(name)
+}
+
+func setenv(name, value) {
+    return __os_setenv(name, value)
+}
+
+func unsetenv(name) {
+    return __os_unsetenv(name)
+}
+
+func home() {
+    return __os_home()
+}
+
+func temp_dir() {
+    return __os_temp_dir()
+}
+
+func command_exists(command) {
+    return __os_command_exists(command)
+}
+
+
+func pid() {
+    return __os_pid()
+}
+
+func ppid() {
+    return __process_ppid()
+}
+
+# Execute argv directly (no shell parsing). Options: cwd, timeout_ms.
+# Returns stdout, stderr, status, success, timed_out, and pid.
+func exec(argv, options = {}) {
+    return __process_exec(argv, options)
+}
+
+func run(command) {
+    # Shell execution is retained for compatibility; prefer exec() for arguments.
+    return __process_run(command)
+}
+
+func capture(command) {
+    return __process_capture(command)
+}
+
+func success(command) {
+    return run(command).get("success")
+}
+
+func output(command) {
+    return run(command).get("stdout")
+}
+
+func spawn(command) {
+    return __process_spawn(command)
+}
+
+func wait(pid) {
+    return __process_wait(pid)
+}
+
+func waitpid(pid) {
+    return __process_waitpid(pid)
+}
+
+func kill(signal_number, pid) {
+    return __process_kill(signal_number, pid)
+}
+
+func uid() {
+    return __process_uid()
+}
+
+func gid() {
+    return __process_gid()
+}
+
+func euid() {
+    return __process_euid()
+}
+
+func egid() {
+    return __process_egid()
+}
+
+func groups() {
+    return __process_groups()
+}
+
+func clock_gettime(clock = "monotonic") {
+    return __process_clock_gettime(clock)
+}
+
+func trap(signal_number, callback) {
+    return __signal_trap(signal_number, callback)
+}
+
+func signals() {
+    return __signal_list()
+}
+
+func signal_name(signal_number) {
+    return __signal_signame(signal_number)
+}
+
+func login() {
+    return __etc_getlogin()
+}
+
+func user(name) {
+    return __etc_getpwnam(name)
+}
+
+func user_id(uid_value) {
+    return __etc_getpwuid(uid_value)
+}
+
+func shell_split(text) {
+    return __shellwords_split(text)
+}
+
+func shell_escape(text) {
+    return __shellwords_escape(text)
+}
+
+func shell_join(items) {
+    return __shellwords_join(items)
+}
+
+
+# Higher-level process and environment helpers.
+func env_present(name) {
+    let value = env(name)
+    return value != nil and value != ""
+}
+
+func env_or(name, fallback) {
+    let value = env(name)
+    if value == nil or value == "" { return fallback }
+    return value
+}
+
+func env_bool(name, fallback = false) {
+    let value = env(name)
+    if value == nil or value == "" { return fallback }
+    let normalized = value.lower()
+    if normalized == "1" or normalized == "true" or normalized == "yes" or normalized == "on" { return true }
+    if normalized == "0" or normalized == "false" or normalized == "no" or normalized == "off" { return false }
+    return fallback
+}
+
+func env_int(name, fallback = 0) {
+    let value = env(name)
+    if value == nil or value == "" { return fallback }
+    try { return value.to_i() } catch Exception as error { return fallback }
+}
+
+func env_float(name, fallback = 0.0) {
+    let value = env(name)
+    if value == nil or value == "" { return fallback }
+    try { return value.to_f() } catch Exception as error { return fallback }
+}
+
+func setenv_if_missing(name, value) {
+    if env_present(name) { return false }
+    setenv(name, str(value))
+    return true
+}
+
+func is_windows() {
+    return platform().lower().contains("windows")
+}
+
+func is_linux() {
+    return platform().lower().contains("linux")
+}
+
+func is_macos() {
+    let value = platform().lower()
+    return value.contains("darwin") or value.contains("mac")
+}
+
+func is_unix() {
+    return !is_windows()
+}
+
+func require_command(command) {
+    if !command_exists(command) {
+        throw "required executable not found on PATH: " + command
+    }
+    return true
+}
+
+func exec_success(argv, options = {}) {
+    return exec(argv, options).get("success")
+}
+
+func exec_status(argv, options = {}) {
+    return exec(argv, options).get("status")
+}
+
+func exec_stdout(argv, options = {}) {
+    return exec(argv, options).get("stdout")
+}
+
+func exec_stderr(argv, options = {}) {
+    return exec(argv, options).get("stderr")
+}
+
+func exec_checked(argv, options = {}) {
+    let result = exec(argv, options)
+    if !result.get("success") {
+        let detail = result.get("stderr")
+        if detail == "" { detail = result.get("stdout") }
+        throw "process failed with status " + str(result.get("status")) + ": " + detail
+    }
+    return result
+}
+
+func exec_text(argv, options = {}) {
+    return exec_stdout(argv, options)
+}
+
+func exec_first_line(argv, options = {}) {
+    let output_text = exec_stdout(argv, options)
+    let lines = output_text.split("\n")
+    if lines.length() == 0 { return "" }
+    return lines[0]
+}
+
+func exec_lines(argv, options = {}) {
+    let output_text = exec_stdout(argv, options)
+    let result = []
+    for line in output_text.split("\n") {
+        if line != "" { result.push(line) }
+    }
+    return result
+}
+
+func exec_json(argv, options = {}) {
+    import data
+    let result = exec_checked(argv, options)
+    return data.parse(result.get("stdout"))
+}
+
+func exec_or(argv, fallback, options = {}) {
+    let result = exec(argv, options)
+    if !result.get("success") { return fallback }
+    return result.get("stdout")
+}
+
+func process_info() {
+    return {
+        "pid": pid(),
+        "ppid": ppid(),
+        "uid": uid(),
+        "gid": gid(),
+        "platform": platform(),
+        "cwd": cwd()
+    }
+}

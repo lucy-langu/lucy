@@ -1,0 +1,43 @@
+if(NOT DEFINED LUCY_EXECUTABLE OR NOT DEFINED PAW_EXECUTABLE OR NOT DEFINED SOURCE_DIR OR NOT DEFINED WORK_DIR)
+  message(FATAL_ERROR "LUCY_EXECUTABLE, PAW_EXECUTABLE, SOURCE_DIR, and WORK_DIR are required")
+endif()
+file(REMOVE_RECURSE "${WORK_DIR}")
+file(MAKE_DIRECTORY "${WORK_DIR}")
+file(WRITE "${WORK_DIR}/hello.lucy" "func greeting() { return \"hello\" }\n")
+file(WRITE "${WORK_DIR}/hello-v2.lucy" "func greeting() { return \"hello v2\" }\n")
+
+function(run_pkg expected_status)
+  execute_process(
+    COMMAND "${PAW_EXECUTABLE}" ${ARGN}
+    WORKING_DIRECTORY "${WORK_DIR}"
+    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
+  if(NOT result EQUAL expected_status)
+    message(FATAL_ERROR "paw command ${ARGN} returned ${result}, expected ${expected_status}: ${output}${error}")
+  endif()
+  set(PKG_OUTPUT "${output}${error}" PARENT_SCOPE)
+endfunction()
+
+run_pkg(0 init)
+run_pkg(0 add sample_pkg hello.lucy 1.2.0)
+run_pkg(0 list)
+run_pkg(0 verify)
+run_pkg(0 update sample_pkg hello-v2.lucy 1.3.0)
+run_pkg(0 verify)
+if(NOT EXISTS "${WORK_DIR}/packages/sample_pkg/src/init.lucy")
+  message(FATAL_ERROR "package entry missing after update")
+endif()
+file(READ "${WORK_DIR}/packages/sample_pkg/src/init.lucy" updated_source)
+if(NOT updated_source MATCHES "hello v2")
+  message(FATAL_ERROR "package update did not replace source")
+endif()
+run_pkg(0 remove sample_pkg)
+if(EXISTS "${WORK_DIR}/packages/sample_pkg")
+  message(FATAL_ERROR "package directory remains after remove")
+endif()
+
+# A tampered lockfile must not allow a path-like package name to reach filesystem mutation.
+file(WRITE "${WORK_DIR}/lucy.lock" "{\"lockfile_version\":1,\"packages\":{\"../outside\":{\"version\":\"1.0.0\",\"entry\":\"packages/../outside/src/init.lucy\"}}}\n")
+run_pkg(2 remove ../outside)
+if(NOT PKG_OUTPUT MATCHES "invalid package name")
+  message(FATAL_ERROR "unsafe package name was not rejected: ${PKG_OUTPUT}")
+endif()

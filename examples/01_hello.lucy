@@ -1,0 +1,2 @@
+# A minimal Lucy program.
+print "Hello from Lucy"

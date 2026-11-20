@@ -1,0 +1,9 @@
+[project]
+name = "lucy"
+version = "2.0.7"
+entry = "src/main.cpp"
+description = "Lucy language runtime and first-party ecosystem"
+
+[toolchain]
+lucy = "2.0.7"
+paw = "0.1.0"

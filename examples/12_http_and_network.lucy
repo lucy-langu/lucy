@@ -1,0 +1,7 @@
+import http
+
+print http.resolve "localhost"
+
+let client = http.client "https://example.com"
+client.timeout 10
+print client

@@ -1,0 +1,5 @@
+import flow
+
+steps = [lambda x => x + 5, lambda x => x * 2, lambda x => x - 3]
+value = flow.pipe 5, steps
+print value

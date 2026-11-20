@@ -1,0 +1,57 @@
+# Scope, truthiness, switch, globals, variadics and named arguments.
+var outer = 10
+if true {
+    var outer = 20
+    assert outer == 20
+}
+assert outer == 10
+
+assert !nil
+assert !false
+assert !0
+assert !0.0
+assert !""
+assert ![]
+assert !{}
+assert !![1]
+assert !!{"x": 1}
+
+var global_before = 1
+func mutate_global() {
+    global global_before = 7
+}
+mutate_global()
+assert global_before == 7
+
+func collect(first, *rest) {
+    return rest.length()
+}
+assert collect(1) == 0
+assert collect(1, 2, 3) == 2
+
+func named(a, b = 2) {
+    return a + b
+}
+assert named(a: 3) == 5
+assert named(a: 3, b: 4) == 7
+
+var selected = 0
+switch 2 {
+    case 1:
+        selected = 1
+    case 2:
+        selected = 2
+    case 3:
+        selected = 3
+    default:
+        selected = 4
+}
+assert selected == 2
+
+var i = 0
+repeat {
+    i++
+} while i < 3
+assert i == 3
+
+println "semantics passed"

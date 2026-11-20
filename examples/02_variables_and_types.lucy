@@ -1,0 +1,5 @@
+name = "Lucy"
+version = 1.0
+ready = true
+items = ["compiler", "stdlib", "repl"]
+print name + " " + str(version)

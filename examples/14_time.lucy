@@ -1,0 +1,6 @@
+import time
+
+current = time.now()
+print current.format "%Y-%m-%d %H:%M:%S"
+print current.today().format()
+print time.today().format()

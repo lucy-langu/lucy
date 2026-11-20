@@ -1,0 +1,19 @@
+let text = "hello world"
+var result = ""
+for ch in text {
+    result = result + ch
+}
+assert result == text
+
+let unicode = "h é🙂"
+var unicode_result = ""
+var count = 0
+for ch, index in unicode {
+    unicode_result = unicode_result + ch
+    assert index == count
+    count = count + 1
+}
+assert unicode_result == unicode
+assert count == 4
+
+println "string iteration tests passed"

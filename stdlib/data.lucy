@@ -1,0 +1,350 @@
+# Lucy data library.
+# Collection literals and common scalar operations are language features.
+# This module focuses on structured data formats and map shaping.
+
+func pick(source, keys) {
+    result = {}
+    for key in keys {
+        if source.has(key) {
+            result.set(key, source.get(key))
+        }
+    }
+    return result
+}
+
+func omit(source, keys) {
+    result = {}
+    for key in source.keys() {
+        if !keys.contains(key) {
+            result.set(key, source.get(key))
+        }
+    }
+    return result
+}
+
+func merge(left, right) {
+    result = {}
+    for key in left.keys() {
+        result.set(key, left.get(key))
+    }
+    for key in right.keys() {
+        result.set(key, right.get(key))
+    }
+    return result
+}
+
+func values(source, keys) {
+    result = []
+    for key in keys {
+        result.push(source.get(key))
+    }
+    return result
+}
+
+func zip(keys, values) {
+    result = {}
+    i = 0
+    while i < keys.length() and i < values.length() {
+        result.set(keys[i], values[i])
+        i += 1
+    }
+    return result
+}
+
+class JSON {
+    func parse(text) {
+        return __json_parse(text)
+    }
+
+    func stringify(value) {
+        return __json_stringify(value)
+    }
+
+    func pretty(value) {
+        return __json_pretty(value)
+    }
+
+    func load(path) {
+        import fs
+        return self.parse(fs.read(path))
+    }
+
+    func dump(path, value) {
+        import fs
+        return fs.write(path, self.stringify(value))
+    }
+}
+
+json = JSON.new()
+
+func parse(text) {
+    return json.parse(text)
+}
+
+func stringify(value) {
+    return json.stringify(value)
+}
+
+func pretty(value) {
+    return json.pretty(value)
+}
+
+func json_read(path) {
+    return json.load(path)
+}
+
+func json_write(path, value) {
+    return json.dump(path, value)
+}
+
+class YAML {
+    func load(text) {
+        return __yaml_load(text)
+    }
+
+    func dump(value) {
+        return __yaml_dump(value)
+    }
+
+    func load_file(path) {
+        import fs
+        return self.load(fs.read(path))
+    }
+}
+
+yaml = YAML.new()
+
+func yaml_load(text) {
+    return yaml.load(text)
+}
+
+func yaml_dump(value) {
+    return yaml.dump(value)
+}
+
+class CSV {
+    func parse(text, delimiter = ",") {
+        return __csv_parse(text, delimiter)
+    }
+
+    func stringify(rows, delimiter = ",") {
+        return __csv_stringify(rows, delimiter)
+    }
+
+    func load(path, delimiter = ",") {
+        import fs
+        return self.parse(fs.read(path), delimiter)
+    }
+
+    func dump(path, rows, delimiter = ",") {
+        import fs
+        return fs.write(path, self.stringify(rows, delimiter))
+    }
+}
+
+csv = CSV.new()
+
+func csv_parse(text, delimiter = ",") {
+    return csv.parse(text, delimiter)
+}
+
+func csv_stringify(rows, delimiter = ",") {
+    return csv.stringify(rows, delimiter)
+}
+
+
+# Collection shaping helpers.
+func compact(items) {
+    result = []
+    for item in items {
+        if item != nil { result.push(item) }
+    }
+    return result
+}
+
+func unique(items) {
+    result = []
+    for item in items {
+        if !result.contains(item) { result.push(item) }
+    }
+    return result
+}
+
+func flatten_one(items) {
+    result = []
+    for item in items {
+        if type(item) == "array" {
+            for nested in item { result.push(nested) }
+        } else {
+            result.push(item)
+        }
+    }
+    return result
+}
+
+func chunk(items, chunk_size) {
+    if type(chunk_size) != "int" or chunk_size <= 0 {
+        throw "chunk size must be a positive integer"
+    }
+    result = []
+    current = []
+    for item in items {
+        current.push(item)
+        if current.length() == chunk_size {
+            result.push(current)
+            current = []
+        }
+    }
+    if current.length() > 0 { result.push(current) }
+    return result
+}
+
+func first(items, fallback = nil) {
+    if items.length() == 0 { return fallback }
+    return items[0]
+}
+
+func last(items, fallback = nil) {
+    if items.length() == 0 { return fallback }
+    return items[items.length() - 1]
+}
+
+func take(items, count) {
+    if type(count) != "int" or count < 0 { throw "take count must be a non-negative integer" }
+    result = []
+    var index = 0
+    while index < items.length() and index < count {
+        result.push(items[index])
+        index += 1
+    }
+    return result
+}
+
+func drop(items, count) {
+    if type(count) != "int" or count < 0 { throw "drop count must be a non-negative integer" }
+    result = []
+    var index = count
+    while index < items.length() {
+        result.push(items[index])
+        index += 1
+    }
+    return result
+}
+
+func select(items, predicate) {
+    result = []
+    for item in items {
+        if predicate(item) { result.push(item) }
+    }
+    return result
+}
+
+func reject(items, predicate) {
+    result = []
+    for item in items {
+        if !predicate(item) { result.push(item) }
+    }
+    return result
+}
+
+func any(items, predicate) {
+    for item in items {
+        if predicate(item) { return true }
+    }
+    return false
+}
+
+func all(items, predicate) {
+    for item in items {
+        if !predicate(item) { return false }
+    }
+    return true
+}
+
+func find_index(items, expected) {
+    var index = 0
+    for item in items {
+        if item == expected { return index }
+        index += 1
+    }
+    return nil
+}
+
+func pluck(items, key, fallback = nil) {
+    result = []
+    for item in items {
+        if type(item) != "map" { throw "pluck expects an array of maps" }
+        result.push(item.has(key) ? item.get(key) : fallback)
+    }
+    return result
+}
+
+func index_by(items, key) {
+    result = {}
+    for item in items {
+        if type(item) != "map" or !item.has(key) { continue }
+        result.set(str(item.get(key)), item)
+    }
+    return result
+}
+
+func group_by(items, key) {
+    result = {}
+    for item in items {
+        if type(item) != "map" { throw "group_by expects an array of maps" }
+        let group_key = item.has(key) ? str(item.get(key)) : "nil"
+        if !result.has(group_key) { result.set(group_key, []) }
+        result.get(group_key).push(item)
+    }
+    return result
+}
+
+func count_by(items, key) {
+    result = {}
+    for item in items {
+        if type(item) != "map" { throw "count_by expects an array of maps" }
+        let group_key = item.has(key) ? str(item.get(key)) : "nil"
+        result.set(group_key, (result.has(group_key) ? result.get(group_key) : 0) + 1)
+    }
+    return result
+}
+
+func sum_by(items, key) {
+    total = 0
+    for item in items {
+        if type(item) != "map" or !item.has(key) { continue }
+        let value = item.get(key)
+        if type(value) != "int" and type(value) != "double" {
+            throw "sum_by values must be numeric"
+        }
+        total += value
+    }
+    return total
+}
+
+func invert(source) {
+    result = {}
+    for key in source.keys() {
+        result.set(str(source.get(key)), key)
+    }
+    return result
+}
+
+func defaults(source, default_values) {
+    result = {}
+    for key in default_values.keys() { result.set(key, default_values.get(key)) }
+    for key in source.keys() { result.set(key, source.get(key)) }
+    return result
+}
+
+func sorted_keys(source) {
+    return source.keys().sort()
+}
+
+func values_for(source, keys, fallback = nil) {
+    result = []
+    for key in keys {
+        result.push(source.has(key) ? source.get(key) : fallback)
+    }
+    return result
+}

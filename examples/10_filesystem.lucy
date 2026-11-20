@@ -1,0 +1,7 @@
+import fs
+
+fs.write "example.txt", "Lucy filesystem\n"
+print fs.read "example.txt"
+print fs.absolute "example.txt"
+print fs.entries "."
+fs.remove "example.txt"

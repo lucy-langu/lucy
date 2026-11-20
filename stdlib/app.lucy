@@ -1,0 +1,286 @@
+# Lucy application toolkit. CLI configuration, logging, benchmarking, timeout helpers, and templates.
+
+# Simple command-line option parser.
+class OptionParser {
+    func initialize() {
+        self.options = {}
+        self.banner_text = "Usage:"
+        self.separator_text = ""
+        self.version_text = nil
+        self.program = ""
+    }
+
+    func new() {
+        return OptionParser.new()
+    }
+
+    func banner(text) {
+        self.banner_text = text
+        return self
+    }
+
+    func separator(text = "") {
+        self.separator_text = text
+        return self
+    }
+
+    func version(text) {
+        self.version_text = text
+        return self
+    }
+
+    func program_name(text) {
+        self.program = text
+        return self
+    }
+
+    func on(name, description = "", default = nil) {
+        self.options.set(name, {description: description, default: default})
+        return self
+    }
+
+    func parse(arguments = ARGV) {
+        result = {}
+        for key in self.options.keys() {
+            result.set(key, self.options.get(key).get("default"))
+        }
+        i = 0
+        while i < arguments.length() {
+            item = arguments[i]
+            if item == "--" {
+                if i + 1 < arguments.length() {
+                    self.abort("positional arguments after -- are not supported")
+                }
+                break
+            }
+            if item.starts_with("--") {
+                parts = item.slice(2).split("=")
+                key = parts[0]
+                inline_value = nil
+                has_inline_value = parts.length() > 1
+                if has_inline_value {
+                    inline_value = parts.slice(1).join("=")
+                }
+                if !self.options.has(key) {
+                    self.abort("unknown option --" + key)
+                }
+                spec = self.options.get(key)
+                default_value = spec.get("default")
+                if default_value == true or default_value == false {
+                    if has_inline_value {
+                        if inline_value == "true" {
+                            result.set(key, true)
+                        } else if inline_value == "false" {
+                            result.set(key, false)
+                        } else {
+                            self.abort("boolean option --" + key + " expects true or false")
+                        }
+                    } else {
+                        result.set(key, true)
+                    }
+                } else {
+                    if has_inline_value {
+                        result.set(key, inline_value)
+                    } else {
+                        if i + 1 >= arguments.length() or arguments[i + 1].starts_with("--") {
+                            self.abort("option --" + key + " requires a value")
+                        }
+                        i += 1
+                        result.set(key, arguments[i])
+                    }
+                }
+            } else {
+                self.abort("unexpected positional argument " + item)
+            }
+            i += 1
+        }
+        return result
+    }
+
+    func parse!(arguments = ARGV) {
+        return self.parse(arguments)
+    }
+
+    func help() {
+        text = self.banner_text + "\n"
+        if self.program != "" {
+            text += "Program: " + self.program + "\n"
+        }
+        if self.version_text != nil {
+            text += "Version: " + self.version_text + "\n"
+        }
+        if self.separator_text != nil and self.separator_text != "" {
+            text += self.separator_text + "\n"
+        }
+        for key in self.options.keys() {
+            text += "  --" + key + "  " + self.options.get(key).get("description") + "\n"
+        }
+        return text
+    }
+
+    func summarize() {
+        return self.help()
+    }
+
+    func abort(message) {
+        throw "OptionParserError: " + message
+    }
+}
+
+option_parser = OptionParser.new()
+
+# Small structured logger with structured levels.
+class Logger {
+    func initialize(output = nil, level = 0) {
+        self.output = output
+        self.level_value = level
+    }
+
+    func new(output = nil, level = 0) {
+        return Logger.new(output, level)
+    }
+
+    func level() {
+        return self.level_value
+    }
+
+    func set_level(value) {
+        self.level_value = value
+        return value
+    }
+
+    func level_set(value) {
+        return self.set_level(value)
+    }
+
+    func add(level, message) {
+        if level < self.level_value {
+            return false
+        }
+        line = str(message)
+        if self.output != nil {
+            return self.output.write(line + "\n")
+        }
+        return print(line)
+    }
+
+    func log(level, message) {
+        return self.add(level, message)
+    }
+
+    func debug(message) {
+        return self.add(0, "DEBUG: " + message)
+    }
+
+    func info(message) {
+        return self.add(1, "INFO: " + message)
+    }
+
+    func warn(message) {
+        return self.add(2, "WARN: " + message)
+    }
+
+    func error(message) {
+        return self.add(3, "ERROR: " + message)
+    }
+
+    func fatal(message) {
+        return self.add(4, "FATAL: " + message)
+    }
+
+    func debug?() {
+        return self.level_value <= 0
+    }
+
+    func info?() {
+        return self.level_value <= 1
+    }
+
+    func warn?() {
+        return self.level_value <= 2
+    }
+
+    func error?() {
+        return self.level_value <= 3
+    }
+
+    func fatal?() {
+        return self.level_value <= 4
+    }
+}
+
+logger = Logger.new()
+
+# Benchmark helpers.
+class Benchmark {
+    # Measures a callable and returns elapsed seconds. It does not execute shell text.
+    # Resolution is limited by the millisecond clock exposed by millis().
+    func realtime(callback) {
+        start = millis()
+        callback()
+        return (millis() - start) / 1000.0
+    }
+
+    func measure(callback) {
+        return self.realtime(callback)
+    }
+}
+
+benchmark = Benchmark.new()
+
+# Timeout facade. Cooperative timeout requires a callable runtime scheduler.
+class Timeout {
+    func timeout(seconds, callback) {
+        start = millis()
+        result = callback()
+        if millis() - start > seconds * 1000 {
+            throw "TimeoutError: operation exceeded timeout"
+        }
+        return result
+    }
+}
+
+timeout = Timeout.new()
+
+# Lightweight ERB-style template engine using {{ expression }} placeholders.
+class ERB {
+    func initialize(template) {
+        self.template = template
+    }
+
+    func src() {
+        return self.template
+    }
+
+    func result(values = {}) {
+        output = self.template
+        for key in values.keys() {
+            output = output.replace("{{" + key + "}}", str(values.get(key)))
+        }
+        return output
+    }
+
+    func run(values = {}) {
+        return self.result(values)
+    }
+}
+
+erb = ERB.new("")
+
+# Flat public application API.
+func parser() {
+    return OptionParser.new()
+}
+func logger(output = nil, level = 0) {
+    return Logger.new(output, level)
+}
+func benchmark() {
+    return Benchmark.new()
+}
+func timeout() {
+    return Timeout.new()
+}
+func template(source) {
+    return ERB.new(source)
+}
+

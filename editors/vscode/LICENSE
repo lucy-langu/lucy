@@ -1,0 +1,18 @@
+
+---
+
+## 2️⃣ `CHANGELOG.md`
+
+```markdown
+# Changelog
+
+All notable changes to the **Lucy Language** extension will be documented here.
+
+## [1.0.0] - 2025-01-01
+
+### Added
+- Initial release
+- Syntax highlighting for `.lucy` files
+- Support for comments, strings, keywords, constants, numbers and operators
+- Auto-closing pairs and surrounding pairs
+- Function and class name highlighting

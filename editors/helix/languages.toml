@@ -1,0 +1,9 @@
+[[language]]
+name = "lucy"
+scope = "source.lucy"
+injection-regex = "lucy"
+file-types = ["lucy"]
+comment-token = "#"
+block-comment-tokens = { start = "=begin", end = "=end" }
+indent = { tab-width = 4, unit = "    " }
+

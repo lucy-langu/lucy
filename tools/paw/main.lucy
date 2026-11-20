@@ -1,0 +1,99 @@
+# Paw: the official Lucy project and package workflow.
+# All command implementations are Lucy source files under commands/.
+import fs
+import system
+
+func usage() {
+    println "Paw - the Lucy package and project manager"
+    println ""
+    println "Usage: paw <command> [arguments...]"
+    println ""
+    println "Project:"
+    println "  new <name> [directory]       Create a Lucy project"
+    println "  run <name> [args...]         Run a project command from lucy.toml"
+    println "  build [configure|build|test|all] [options]"
+    println "  test [lucy-executable] [test-directory]"
+    println ""
+    println "Packages (local source packages in this release):"
+    println "  init                         Initialize lucy.lock for local packages"
+    println "  add <name> <source.lucy> [version]"
+    println "  install <name> <source.lucy> [version]  Alias for add"
+    println "  update <name> <source.lucy> [version]"
+    println "  remove <name>"
+    println "  list"
+    println "  verify"
+    println ""
+    println "Development:"
+    println "  extension <name>             Create a native extension scaffold"
+    println "  stdlib <verify|...>          Manage/verify the standard library"
+    println "  docs                         Generate standard-library docs"
+    println "  docs-check                   Verify documentation examples"
+    println "  help                         Show this help"
+    println "  --version                    Show Paw version"
+    println ""
+    println "Remote registry and transitive dependency resolution are not yet shipped."
+}
+
+if ARGV.length() == 0 {
+    usage()
+    exit(0)
+}
+let command = ARGV[0]
+if command == "help" or command == "--help" or command == "-h" {
+    usage()
+    exit(0)
+}
+if command == "--version" or command == "-v" {
+    println "Paw 0.1.0 (Lucy 2.0.7)"
+    exit(0)
+}
+
+let runtime = system.env("PAW_RUNTIME")
+let home = system.env("PAW_HOME")
+if runtime == nil or runtime == "" or home == nil or home == "" {
+    println "Paw bootstrap error: runtime or PAW_HOME was not configured."
+    exit(70)
+}
+
+var script_name = ""
+var start = 1
+if command == "new" { script_name = "new.lucy" }
+else if command == "build" { script_name = "build.lucy" }
+else if command == "test" { script_name = "test.lucy" }
+else if command == "extension" { script_name = "extension.lucy" }
+else if command == "stdlib" { script_name = "stdlib.lucy" }
+else if command == "docs" { script_name = "docs.lucy" }
+else if command == "docs-check" { script_name = "docs-check.lucy" }
+else if command == "init" or command == "add" or command == "install" or command == "update" or command == "remove" or command == "list" or command == "verify" {
+    script_name = "package.lucy"
+} else if command == "run" {
+    var forwarded = []
+    var i = 1
+    while i < ARGV.length() {
+        forwarded.push(ARGV[i])
+        i += 1
+    }
+    let result = system.exec([runtime, "run"] + forwarded, {"timeout_ms": 600000})
+    if result.get("stdout") != "" { println result.get("stdout") }
+    if result.get("stderr") != "" { println result.get("stderr") }
+    exit(result.get("status"))
+} else {
+    println "Unknown Paw command: " + command
+    println "Run 'paw help' to see available commands."
+    exit(2)
+}
+
+var forwarded = []
+var i = start
+while i < ARGV.length() {
+    forwarded.push(ARGV[i])
+    i += 1
+}
+if script_name == "package.lucy" {
+    forwarded = [command] + forwarded
+}
+let script = fs.join([home, "commands", script_name])
+let result = system.exec([runtime, script] + forwarded, {"timeout_ms": 600000})
+if result.get("stdout") != "" { println result.get("stdout") }
+if result.get("stderr") != "" { println result.get("stderr") }
+exit(result.get("status"))

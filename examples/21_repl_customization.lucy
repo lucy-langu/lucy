@@ -1,0 +1,6 @@
+import repl
+
+print repl.version()
+print repl.prompt()
+print repl.topics()
+print repl.help "lambda"

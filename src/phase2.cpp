@@ -1,0 +1,1514 @@
+#include "lucy/phase2.hpp"
+
+#include <algorithm>
+#include <array>
+#include <chrono>
+#include <cstring>
+#include <ctime>
+#include <cctype>
+#include <cstdio>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <random>
+#include <regex>
+#include <sstream>
+#include <stdexcept>
+#include <string_view>
+#include <vector>
+#include <thread>
+#include <atomic>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <process.h>
+#else
+#include <cerrno>
+#include <csignal>
+#include <fcntl.h>
+#include <poll.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
+
+#ifdef LUCY_HAS_SQLITE
+#include <sqlite3.h>
+#endif
+
+namespace lucy {
+namespace {
+
+namespace fs = std::filesystem;
+
+void require_count(const std::vector<Value>& args, std::size_t count, const std::string& name) {
+    if (args.size() != count) {
+        throw std::runtime_error(
+            "ArgumentError: " + name + " expects " + std::to_string(count) +
+            " argument(s), got " + std::to_string(args.size()));
+    }
+}
+
+void require_range(const std::vector<Value>& args, std::size_t min, std::size_t max,
+                   const std::string& name) {
+    if (args.size() < min || args.size() > max) {
+        throw std::runtime_error(
+            "ArgumentError: " + name + " expects " + std::to_string(min) +
+            " to " + std::to_string(max) + " argument(s), got " +
+            std::to_string(args.size()));
+    }
+}
+
+const std::string& string_arg(const Value& value, const std::string& name) {
+    auto text = std::get_if<std::string>(&value.data);
+    if (!text) {
+        throw std::runtime_error("TypeError: " + name + " expects a string");
+    }
+    return *text;
+}
+
+long long integer_arg(const Value& value, const std::string& name) {
+    if (auto integer = std::get_if<long long>(&value.data)) {
+        return *integer;
+    }
+    if (auto number = std::get_if<double>(&value.data)) {
+        return static_cast<long long>(*number);
+    }
+    throw std::runtime_error("TypeError: " + name + " expects an integer");
+}
+
+Value::ArrayPtr as_array(const Value& value, const std::string& name) {
+    auto array = std::get_if<Value::ArrayPtr>(&value.data);
+    if (!array) {
+        throw std::runtime_error("TypeError: " + name + " expects an array");
+    }
+    return *array;
+}
+
+std::string read_text_file(const fs::path& path) {
+    std::ifstream input(path, std::ios::binary);
+    if (!input) {
+        throw std::runtime_error("IOError: cannot read '" + path.string() + "'");
+    }
+
+    std::ostringstream content;
+    content << input.rdbuf();
+    return content.str();
+}
+
+std::string shell_quote(const std::string& value) {
+#ifdef _WIN32
+    std::string result = "\"";
+    for (char c : value) {
+        if (c == '"') {
+            result += "\\\"";
+        } else {
+            result += c;
+        }
+    }
+    result += "\"";
+    return result;
+#else
+    std::string result = "'";
+    for (char c : value) {
+        if (c == '\'') {
+            result += "'\\''";
+        } else {
+            result += c;
+        }
+    }
+    result += "'";
+    return result;
+#endif
+}
+
+struct CommandResult {
+    std::string output;
+    int status = 0;
+};
+
+CommandResult run_command(const std::string& command) {
+#ifdef _WIN32
+    FILE* pipe = _popen(command.c_str(), "r");
+#else
+    FILE* pipe = popen(command.c_str(), "r");
+#endif
+    if (!pipe) {
+        throw std::runtime_error("ProcessError: cannot start process");
+    }
+
+    std::string output;
+    char buffer[4096];
+    while (std::fgets(buffer, sizeof(buffer), pipe)) {
+        output += buffer;
+    }
+
+#ifdef _WIN32
+    const int status = _pclose(pipe);
+#else
+    const int raw_status = pclose(pipe);
+    const int status = WIFEXITED(raw_status) ? WEXITSTATUS(raw_status) : raw_status;
+#endif
+
+    return {output, status};
+}
+
+
+struct ProcessResult {
+    std::string stdout_text;
+    std::string stderr_text;
+    int status = -1;
+    bool timed_out = false;
+    long long pid = 0;
+};
+
+#ifdef _WIN32
+std::string quote_windows_argument(const std::string& value) {
+    std::string out = "\"";
+    std::size_t slashes = 0;
+    for (char c : value) {
+        if (c == '\\') { ++slashes; continue; }
+        if (c == '"') {
+            out.append(slashes * 2 + 1, '\\');
+            out += '"';
+        } else {
+            out.append(slashes, '\\');
+            out += c;
+        }
+        slashes = 0;
+    }
+    out.append(slashes * 2, '\\');
+    out += '"';
+    return out;
+}
+#endif
+
+ProcessResult execute_argv(const std::vector<std::string>& argv,
+                           const std::string& cwd,
+                           long long timeout_ms) {
+    if (argv.empty() || argv.front().empty())
+        throw std::runtime_error("ArgumentError: Process.exec requires a non-empty argv array");
+    if (timeout_ms < 0)
+        throw std::runtime_error("ArgumentError: timeout_ms cannot be negative");
+
+    ProcessResult result;
+#ifdef _WIN32
+    SECURITY_ATTRIBUTES security{sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};
+    HANDLE out_read = nullptr, out_write = nullptr, err_read = nullptr, err_write = nullptr;
+    if (!CreatePipe(&out_read, &out_write, &security, 0) ||
+        !CreatePipe(&err_read, &err_write, &security, 0)) {
+        if (out_read) CloseHandle(out_read);
+        if (out_write) CloseHandle(out_write);
+        if (err_read) CloseHandle(err_read);
+        if (err_write) CloseHandle(err_write);
+        throw std::runtime_error("ProcessError: cannot create capture pipes");
+    }
+    SetHandleInformation(out_read, HANDLE_FLAG_INHERIT, 0);
+    SetHandleInformation(err_read, HANDLE_FLAG_INHERIT, 0);
+
+    std::string command_line;
+    // cmd.exe is not a conventional argv/CRT program: its /c and /k
+    // operands are shell command text, not individually quoted argv tokens.
+    // Quoting that operand with quote_windows_argument() makes cmd.exe treat
+    // the leading quote as part of the command (for example: '"echo hello"').
+    const auto executable_basename = [](std::string value) {
+        const auto slash = value.find_last_of("/\\\\");
+        if (slash != std::string::npos) value.erase(0, slash + 1);
+        std::transform(value.begin(), value.end(), value.begin(),
+            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return value;
+    };
+    const bool is_cmd = executable_basename(argv.front()) == "cmd" ||
+                        executable_basename(argv.front()) == "cmd.exe";
+    std::string cmd_switch = argv.size() >= 2 ? argv[1] : std::string{};
+    std::transform(cmd_switch.begin(), cmd_switch.end(), cmd_switch.begin(),
+        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    const bool cmd_command_mode = is_cmd && argv.size() >= 3 &&
+        (cmd_switch == "/c" || cmd_switch == "/k");
+    if (cmd_command_mode) {
+        command_line = quote_windows_argument(argv.front());
+        command_line += " ";
+        command_line += argv[1];
+        command_line += " ";
+        // Everything following /c or /k is one raw cmd.exe command expression.
+        // Preserve spaces, redirections, pipes, and other shell operators.
+        for (std::size_t i = 2; i < argv.size(); ++i) {
+            if (i > 2) command_line += ' ';
+            command_line += argv[i];
+        }
+    } else {
+        for (const auto& arg : argv) {
+            if (!command_line.empty()) command_line += ' ';
+            command_line += quote_windows_argument(arg);
+        }
+    }
+    std::vector<char> mutable_command(command_line.begin(), command_line.end());
+    mutable_command.push_back('\0');
+
+    STARTUPINFOA startup{};
+    startup.cb = sizeof(startup);
+    startup.dwFlags = STARTF_USESTDHANDLES;
+    startup.hStdOutput = out_write;
+    startup.hStdError = err_write;
+    startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+    PROCESS_INFORMATION process{};
+    // Resolve bare executable names (for example cmd.exe) through PATH before
+    // passing lpApplicationName. CreateProcessA does not perform the same PATH
+    // lookup when lpApplicationName is non-null.
+    std::vector<char> executable_path(32768, '\0');
+    const DWORD resolved_length = SearchPathA(
+        nullptr, argv.front().c_str(), ".exe",
+        static_cast<DWORD>(executable_path.size()), executable_path.data(), nullptr);
+    if (resolved_length == 0 || resolved_length >= executable_path.size()) {
+        const DWORD search_error = GetLastError();
+        CloseHandle(out_write); CloseHandle(err_write);
+        CloseHandle(out_read); CloseHandle(err_read);
+        throw std::runtime_error("ProcessError: cannot resolve executable '" +
+            argv.front() + "' through PATH (Windows error " +
+            std::to_string(search_error) + ")");
+    }
+
+    const BOOL created = CreateProcessA(executable_path.data(), mutable_command.data(),
+        nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr,
+        cwd.empty() ? nullptr : cwd.c_str(), &startup, &process);
+    const DWORD create_error = created ? ERROR_SUCCESS : GetLastError();
+    CloseHandle(out_write); CloseHandle(err_write);
+    if (!created) {
+        CloseHandle(out_read); CloseHandle(err_read);
+        throw std::runtime_error("ProcessError: CreateProcess failed with Windows error " +
+                                 std::to_string(create_error));
+    }
+    result.pid = static_cast<long long>(process.dwProcessId);
+    auto reader = [](HANDLE pipe, std::string& target) {
+        char buffer[4096]; DWORD count = 0;
+        while (ReadFile(pipe, buffer, sizeof(buffer), &count, nullptr) && count)
+            target.append(buffer, count);
+        CloseHandle(pipe);
+    };
+    std::thread out_thread(reader, out_read, std::ref(result.stdout_text));
+    std::thread err_thread(reader, err_read, std::ref(result.stderr_text));
+    const DWORD wait_ms = timeout_ms == 0 ? INFINITE :
+        static_cast<DWORD>(std::min<long long>(timeout_ms, MAXDWORD - 1));
+    DWORD wait_result = WaitForSingleObject(process.hProcess, wait_ms);
+    if (wait_result == WAIT_TIMEOUT) {
+        result.timed_out = true;
+        TerminateProcess(process.hProcess, 124);
+        WaitForSingleObject(process.hProcess, INFINITE);
+    } else if (wait_result == WAIT_FAILED) {
+        TerminateProcess(process.hProcess, 1);
+    }
+    DWORD exit_code = 1;
+    GetExitCodeProcess(process.hProcess, &exit_code);
+    result.status = static_cast<int>(exit_code);
+    out_thread.join(); err_thread.join();
+    CloseHandle(process.hThread); CloseHandle(process.hProcess);
+#else
+    int out_pipe[2], err_pipe[2];
+    if (pipe(out_pipe) != 0)
+        throw std::runtime_error("ProcessError: cannot create stdout capture pipe");
+    if (pipe(err_pipe) != 0) {
+        close(out_pipe[0]); close(out_pipe[1]);
+        throw std::runtime_error("ProcessError: cannot create stderr capture pipe");
+    }
+    const pid_t child = fork();
+    if (child < 0) {
+        close(out_pipe[0]); close(out_pipe[1]); close(err_pipe[0]); close(err_pipe[1]);
+        throw std::runtime_error("ProcessError: fork failed: " + std::string(std::strerror(errno)));
+    }
+    if (child == 0) {
+        setpgid(0, 0);
+        close(out_pipe[0]); close(err_pipe[0]);
+        dup2(out_pipe[1], STDOUT_FILENO); dup2(err_pipe[1], STDERR_FILENO);
+        close(out_pipe[1]); close(err_pipe[1]);
+        if (!cwd.empty() && chdir(cwd.c_str()) != 0) _exit(126);
+        std::vector<char*> raw;
+        raw.reserve(argv.size() + 1);
+        for (const auto& arg : argv) raw.push_back(const_cast<char*>(arg.c_str()));
+        raw.push_back(nullptr);
+        execvp(raw[0], raw.data());
+        _exit(errno == ENOENT ? 127 : 126);
+    }
+    result.pid = static_cast<long long>(child);
+    setpgid(child, child);
+    close(out_pipe[1]); close(err_pipe[1]);
+    fcntl(out_pipe[0], F_SETFL, fcntl(out_pipe[0], F_GETFL) | O_NONBLOCK);
+    fcntl(err_pipe[0], F_SETFL, fcntl(err_pipe[0], F_GETFL) | O_NONBLOCK);
+    bool out_open = true, err_open = true, child_done = false;
+    int wait_status = 0;
+    const auto started = std::chrono::steady_clock::now();
+    auto drain = [](int fd, std::string& target, bool& open) {
+        char buffer[8192];
+        while (true) {
+            const ssize_t count = read(fd, buffer, sizeof(buffer));
+            if (count > 0) target.append(buffer, static_cast<std::size_t>(count));
+            else if (count == 0) { close(fd); open = false; break; }
+            else if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+            else if (errno == EINTR) continue;
+            else { close(fd); open = false; break; }
+        }
+    };
+    while (out_open || err_open || !child_done) {
+        if (timeout_ms > 0 && !child_done &&
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - started).count() >= timeout_ms) {
+            result.timed_out = true;
+            kill(-child, SIGTERM);
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            if (waitpid(child, &wait_status, WNOHANG) == 0) kill(-child, SIGKILL);
+        }
+        pollfd descriptors[2] = {
+            {out_pipe[0], static_cast<short>(out_open ? POLLIN | POLLHUP : 0), 0},
+            {err_pipe[0], static_cast<short>(err_open ? POLLIN | POLLHUP : 0), 0}
+        };
+        poll(descriptors, 2, 20);
+        if (out_open) drain(out_pipe[0], result.stdout_text, out_open);
+        if (err_open) drain(err_pipe[0], result.stderr_text, err_open);
+        if (!child_done) {
+            const pid_t waited = waitpid(child, &wait_status, WNOHANG);
+            if (waited == child) child_done = true;
+            else if (waited < 0 && errno != EINTR) child_done = true;
+        }
+    }
+    if (!child_done) waitpid(child, &wait_status, 0);
+    result.status = result.timed_out ? 124 :
+        (WIFEXITED(wait_status) ? WEXITSTATUS(wait_status) :
+         (WIFSIGNALED(wait_status) ? 128 + WTERMSIG(wait_status) : 1));
+#endif
+    return result;
+}
+
+// ------------------------------ JSON ------------------------------
+
+class JsonParser {
+public:
+    explicit JsonParser(std::string_view source) : source_(source) {}
+
+    Value parse() {
+        skip_space();
+        Value result = parse_value();
+        skip_space();
+        if (!at_end()) {
+            fail("unexpected characters after JSON value");
+        }
+        return result;
+    }
+
+private:
+    std::string_view source_;
+    std::size_t position_ = 0;
+
+    bool at_end() const { return position_ >= source_.size(); }
+
+    char peek() const {
+        return at_end() ? '\0' : source_[position_];
+    }
+
+    char advance() {
+        if (at_end()) {
+            fail("unexpected end of input");
+        }
+        return source_[position_++];
+    }
+
+    void fail(const std::string& message) const {
+        throw std::runtime_error(
+            "JSONDecodeError: " + message + " at position " + std::to_string(position_));
+    }
+
+    void skip_space() {
+        while (!at_end() && std::isspace(static_cast<unsigned char>(peek()))) {
+            ++position_;
+        }
+    }
+
+    bool consume(char expected) {
+        if (peek() == expected) {
+            ++position_;
+            return true;
+        }
+        return false;
+    }
+
+    void expect(char expected) {
+        if (!consume(expected)) {
+            fail(std::string("expected '") + expected + "'");
+        }
+    }
+
+    static constexpr std::size_t max_nesting_depth = 512;
+
+    Value parse_value(std::size_t depth = 0) {
+        if (depth > max_nesting_depth) fail("maximum nesting depth of 512 exceeded");
+        skip_space();
+        switch (peek()) {
+            case 'n': return parse_literal("null", Value{});
+            case 't': return parse_literal("true", Value(true));
+            case 'f': return parse_literal("false", Value(false));
+            case '"': return Value(parse_string());
+            case '[': return parse_array(depth);
+            case '{': return parse_object(depth);
+            default:
+                if (peek() == '-' || std::isdigit(static_cast<unsigned char>(peek()))) {
+                    return parse_number();
+                }
+                fail("invalid JSON value");
+        }
+        return Value{};
+    }
+
+    Value parse_literal(const std::string& literal, Value value) {
+        if (source_.substr(position_, literal.size()) != literal) {
+            fail("invalid literal");
+        }
+        position_ += literal.size();
+        return value;
+    }
+
+    std::string parse_string() {
+        expect('"');
+        std::string result;
+
+        while (!at_end()) {
+            char c = advance();
+            if (c == '"') {
+                return result;
+            }
+            if (c == '\\') {
+                if (at_end()) {
+                    fail("unfinished escape sequence");
+                }
+                char escaped = advance();
+                switch (escaped) {
+                    case '"': result += '"'; break;
+                    case '/': result += '/'; break;
+                    case '\\': result += '\\'; break;
+                    case 'b': result += '\b'; break;
+                    case 'f': result += '\f'; break;
+                    case 'n': result += '\n'; break;
+                    case 'r': result += '\r'; break;
+                    case 't': result += '\t'; break;
+                    case 'u': parse_unicode_escape(result); break;
+                    default: fail("invalid escape sequence");
+                }
+                continue;
+            }
+            if (static_cast<unsigned char>(c) < 0x20) {
+                fail("control character in string");
+            }
+            result += c;
+        }
+
+        fail("unterminated string");
+        return {};
+    }
+
+    unsigned int read_hex_quad() {
+        if (position_ + 4 > source_.size()) fail("incomplete unicode escape");
+        unsigned int value = 0;
+        for (int i=0; i<4; ++i) {
+            char c=source_[position_++]; value <<= 4;
+            if (c>='0'&&c<='9') value += c-'0';
+            else if (c>='a'&&c<='f') value += c-'a'+10;
+            else if (c>='A'&&c<='F') value += c-'A'+10;
+            else fail("invalid unicode escape");
+        }
+        return value;
+    }
+
+    void parse_unicode_escape(std::string& result) {
+        unsigned int cp=read_hex_quad();
+        if (cp>=0xD800 && cp<=0xDBFF) {
+            if (position_+2>source_.size() || source_[position_]!='\\' || source_[position_+1]!='u')
+                fail("high surrogate must be followed by a low surrogate");
+            position_ += 2;
+            unsigned int low=read_hex_quad();
+            if (low<0xDC00 || low>0xDFFF) fail("invalid low surrogate");
+            cp=0x10000 + ((cp-0xD800)<<10) + (low-0xDC00);
+        } else if (cp>=0xDC00 && cp<=0xDFFF) {
+            fail("unexpected low surrogate without high surrogate");
+        }
+        append_utf8(result, cp);
+    }
+
+    static void append_utf8(std::string& result, unsigned int cp) {
+        if (cp <= 0x7F) result += static_cast<char>(cp);
+        else if (cp <= 0x7FF) {
+            result += static_cast<char>(0xC0 | (cp >> 6));
+            result += static_cast<char>(0x80 | (cp & 0x3F));
+        } else if (cp <= 0xFFFF) {
+            if (cp>=0xD800 && cp<=0xDFFF) throw std::runtime_error("JSONDecodeError: surrogate is not a Unicode scalar value");
+            result += static_cast<char>(0xE0 | (cp >> 12));
+            result += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+            result += static_cast<char>(0x80 | (cp & 0x3F));
+        } else if (cp <= 0x10FFFF) {
+            result += static_cast<char>(0xF0 | (cp >> 18));
+            result += static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
+            result += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+            result += static_cast<char>(0x80 | (cp & 0x3F));
+        } else throw std::runtime_error("JSONDecodeError: Unicode code point out of range");
+    }
+
+    Value parse_number() {
+        const std::size_t start = position_;
+        if (peek() == '-') ++position_;
+
+        if (!std::isdigit(static_cast<unsigned char>(peek()))) {
+            fail("invalid number");
+        }
+
+        if (peek() == '0') {
+            ++position_;
+        } else {
+            while (std::isdigit(static_cast<unsigned char>(peek()))) ++position_;
+        }
+
+        bool is_double = false;
+        if (consume('.')) {
+            is_double = true;
+            if (!std::isdigit(static_cast<unsigned char>(peek()))) {
+                fail("invalid number fraction");
+            }
+            while (std::isdigit(static_cast<unsigned char>(peek()))) ++position_;
+        }
+
+        if (peek() == 'e' || peek() == 'E') {
+            is_double = true;
+            ++position_;
+            if (peek() == '+' || peek() == '-') ++position_;
+            if (!std::isdigit(static_cast<unsigned char>(peek()))) {
+                fail("invalid number exponent");
+            }
+            while (std::isdigit(static_cast<unsigned char>(peek()))) ++position_;
+        }
+
+        const std::string text(source_.substr(start, position_ - start));
+        try {
+            return is_double ? Value(std::stod(text)) : Value(std::stoll(text));
+        } catch (...) {
+            fail("invalid number");
+        }
+        return Value{};
+    }
+
+    Value parse_array(std::size_t depth) {
+        expect('[');
+        Array values;
+        skip_space();
+        if (consume(']')) return Value(std::move(values));
+
+        while (true) {
+            values.push_back(parse_value(depth + 1));
+            skip_space();
+            if (consume(']')) break;
+            expect(',');
+        }
+        return Value(std::move(values));
+    }
+
+    Value parse_object(std::size_t depth) {
+        expect('{');
+        Map values;
+        skip_space();
+        if (consume('}')) return Value(std::move(values));
+
+        while (true) {
+            skip_space();
+            if (peek() != '"') fail("object keys must be strings");
+            std::string key = parse_string();
+            skip_space();
+            expect(':');
+            values[key] = parse_value(depth + 1);
+            skip_space();
+            if (consume('}')) break;
+            expect(',');
+        }
+        return Value(std::move(values));
+    }
+};
+
+std::string json_escape(const std::string& text) {
+    std::ostringstream out;
+    for (unsigned char c : text) {
+        switch (c) {
+            case '"': out << "\\\""; break;
+            case '\\': out << "\\\\"; break;
+            case '\a': out << "\\a"; break;
+            case '\b': out << "\\b"; break;
+            case '\f': out << "\\f"; break;
+            case '\n': out << "\\n"; break;
+            case '\r': out << "\\r"; break;
+            case '\t': out << "\\t"; break;
+            default:
+                if (c < 0x20) {
+                    out << "\\u" << std::hex << std::setw(4) << std::setfill('0')
+                        << static_cast<int>(c) << std::dec;
+                } else {
+                    out << static_cast<char>(c);
+                }
+        }
+    }
+    return out.str();
+}
+
+std::string json_stringify(const Value& value) {
+    if (std::holds_alternative<Nil>(value.data)) return "null";
+    if (auto boolean = std::get_if<bool>(&value.data)) return *boolean ? "true" : "false";
+    if (auto integer = std::get_if<long long>(&value.data)) return std::to_string(*integer);
+    if (auto number = std::get_if<double>(&value.data)) {
+        if (!std::isfinite(*number)) {
+            throw std::runtime_error("ValueError: JSON cannot represent non-finite numbers");
+        }
+        std::ostringstream out;
+        out << std::setprecision(15) << *number;
+        return out.str();
+    }
+    if (auto text = std::get_if<std::string>(&value.data)) {
+        return "\"" + json_escape(*text) + "\"";
+    }
+    if (auto array = std::get_if<Value::ArrayPtr>(&value.data)) {
+        std::string result = "[";
+        for (std::size_t i = 0; i < (*array)->size(); ++i) {
+            if (i) result += ",";
+            result += json_stringify((*array)->at(i));
+        }
+        result += "]";
+        return result;
+    }
+    if (auto map = std::get_if<Value::MapPtr>(&value.data)) {
+        std::string result = "{";
+        bool first = true;
+        for (const auto& [key, item] : **map) {
+            if (!first) result += ",";
+            first = false;
+            result += "\"" + json_escape(key) + "\":" + json_stringify(item);
+        }
+        result += "}";
+        return result;
+    }
+
+    throw std::runtime_error("TypeError: value is not JSON serializable");
+}
+
+std::string json_pretty(const Value& value, int depth = 0) {
+    const std::string indent(static_cast<std::size_t>(depth) * 2, ' ');
+    const std::string child_indent(static_cast<std::size_t>(depth + 1) * 2, ' ');
+    if (auto array = std::get_if<Value::ArrayPtr>(&value.data)) {
+        if ((*array)->empty()) return "[]";
+        std::string result = "[\n";
+        for (std::size_t i = 0; i < (*array)->size(); ++i) {
+            if (i) result += ",\n";
+            result += child_indent + json_pretty((*array)->at(i), depth + 1);
+        }
+        result += "\n" + indent + "]";
+        return result;
+    }
+    if (auto map = std::get_if<Value::MapPtr>(&value.data)) {
+        if ((*map)->empty()) return "{}";
+        std::string result = "{\n";
+        bool first = true;
+        for (const auto& [key, item] : **map) {
+            if (!first) result += ",\n";
+            first = false;
+            result += child_indent + "\"" + json_escape(key) + "\": " + json_pretty(item, depth + 1);
+        }
+        result += "\n" + indent + "}";
+        return result;
+    }
+    return json_stringify(value);
+}
+
+// ------------------------------ Encoding ------------------------------
+
+const char* base64_table =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+std::string base64_encode(const std::string& input) {
+    std::string result;
+    int value = 0;
+    int bits = -6;
+
+    for (unsigned char c : input) {
+        value = (value << 8) + c;
+        bits += 8;
+        while (bits >= 0) {
+            result.push_back(base64_table[(value >> bits) & 0x3F]);
+            bits -= 6;
+        }
+    }
+
+    if (bits > -6) result.push_back(base64_table[((value << 8) >> (bits + 8)) & 0x3F]);
+    while (result.size() % 4) result.push_back('=');
+    return result;
+}
+
+std::string base64_decode(const std::string& input) {
+    std::array<int, 256> table{};
+    table.fill(-1);
+    for (int i = 0; base64_table[i]; ++i) table[static_cast<unsigned char>(base64_table[i])] = i;
+
+    std::string result;
+    int value = 0;
+    int bits = -8;
+
+    for (unsigned char c : input) {
+        if (c == '=') break;
+        if (table[c] < 0) {
+            if (std::isspace(c)) continue;
+            throw std::runtime_error("ValueError: invalid base64 input");
+        }
+        value = (value << 6) + table[c];
+        bits += 6;
+        if (bits >= 0) {
+            result.push_back(static_cast<char>((value >> bits) & 0xFF));
+            bits -= 8;
+        }
+    }
+    return result;
+}
+
+std::string hex_encode(const std::string& input) {
+    std::ostringstream out;
+    out << std::hex << std::setfill('0');
+    for (unsigned char c : input) out << std::setw(2) << static_cast<int>(c);
+    return out.str();
+}
+
+std::string hex_decode(const std::string& input) {
+    if (input.size() % 2 != 0) {
+        throw std::runtime_error("ValueError: hex input must contain an even number of digits");
+    }
+
+    auto digit = [](char c) -> int {
+        if (c >= '0' && c <= '9') return c - '0';
+        if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+        if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+        return -1;
+    };
+
+    std::string result;
+    for (std::size_t i = 0; i < input.size(); i += 2) {
+        int high = digit(input[i]);
+        int low = digit(input[i + 1]);
+        if (high < 0 || low < 0) throw std::runtime_error("ValueError: invalid hex input");
+        result.push_back(static_cast<char>((high << 4) | low));
+    }
+    return result;
+}
+
+bool is_url_safe(unsigned char c) {
+    return std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~';
+}
+
+std::string url_encode(const std::string& input) {
+    std::ostringstream out;
+    out << std::uppercase << std::hex;
+    for (unsigned char c : input) {
+        if (is_url_safe(c)) out << static_cast<char>(c);
+        else out << '%' << std::setw(2) << std::setfill('0') << static_cast<int>(c);
+    }
+    return out.str();
+}
+
+std::string url_decode(const std::string& input) {
+    auto hex = [](char c) -> int {
+        if (c >= '0' && c <= '9') return c - '0';
+        if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+        if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+        return -1;
+    };
+
+    std::string result;
+    for (std::size_t i = 0; i < input.size(); ++i) {
+        if (input[i] != '%') {
+            result += input[i] == '+' ? ' ' : input[i];
+            continue;
+        }
+        if (i + 2 >= input.size()) throw std::runtime_error("ValueError: invalid URL escape");
+        int high = hex(input[i + 1]);
+        int low = hex(input[i + 2]);
+        if (high < 0 || low < 0) throw std::runtime_error("ValueError: invalid URL escape");
+        result.push_back(static_cast<char>((high << 4) | low));
+        i += 2;
+    }
+    return result;
+}
+
+// ------------------------------ CSV ------------------------------
+
+Array parse_csv(const std::string& text, char delimiter) {
+    if (delimiter == '\0' || delimiter == '"' || delimiter == '\r' || delimiter == '\n')
+        throw std::runtime_error("CSVError: delimiter must be a single non-quote, non-newline character");
+    Array rows;
+    if (text.empty()) return rows;
+    Array row;
+    std::string field;
+    bool quoted = false, after_quote = false, field_started = false;
+    bool row_touched = false;
+    auto finish_field = [&]() { row.emplace_back(field); field.clear(); field_started=false; after_quote=false; };
+    auto finish_row = [&]() { finish_field(); rows.emplace_back(std::move(row)); row=Array{}; row_touched=false; };
+    for (std::size_t i=0; i<text.size(); ++i) {
+        char c=text[i];
+        if (quoted) {
+            if (c=='"') {
+                if (i+1<text.size() && text[i+1]=='"') { field+='"'; ++i; }
+                else { quoted=false; after_quote=true; }
+            } else field+=c;
+            row_touched=true;
+            continue;
+        }
+        if (after_quote && c!=delimiter && c!='\r' && c!='\n')
+            throw std::runtime_error("CSVError: unexpected character after closing quote at position "+std::to_string(i));
+        if (c=='"') {
+            if (field_started || !field.empty())
+                throw std::runtime_error("CSVError: quote inside unquoted field at position "+std::to_string(i));
+            quoted=true; field_started=true; row_touched=true;
+        } else if (c==delimiter) {
+            finish_field(); row_touched=true;
+        } else if (c=='\r' || c=='\n') {
+            if (c=='\r' && i+1<text.size() && text[i+1]=='\n') ++i;
+            finish_row();
+        } else {
+            field+=c; field_started=true; row_touched=true;
+        }
+    }
+    if (quoted) throw std::runtime_error("CSVError: unterminated quoted field");
+    // A final newline terminates the preceding record; it does not create another one.
+    if (row_touched || !row.empty() || !field.empty() || field_started || after_quote)
+        finish_row();
+    return rows;
+}
+std::string csv_escape(const std::string& value, char delimiter) {
+    const bool needs_quotes = value.find_first_of(std::string("\"\r\n") + delimiter) != std::string::npos;
+    if (!needs_quotes) return value;
+
+    std::string result = "\"";
+    for (char c : value) result += c == '"' ? "\"\"" : std::string(1, c);
+    result += '"';
+    return result;
+}
+
+std::string stringify_csv(const Value& value, char delimiter) {
+    auto rows = as_array(value, "csv.stringify");
+    std::string result;
+
+    for (std::size_t r = 0; r < rows->size(); ++r) {
+        auto row = as_array(rows->at(r), "csv.stringify");
+        for (std::size_t c = 0; c < row->size(); ++c) {
+            if (c) result += delimiter;
+            result += csv_escape(row->at(c).to_string(), delimiter);
+        }
+        if (r + 1 < rows->size()) result += '\n';
+    }
+    return result;
+}
+// ------------------------------ HTTP Headers Helper ------------------------------
+
+std::vector<std::pair<std::string, std::string>> extract_headers(
+    const Value& value, const std::string& name) {
+    std::vector<std::pair<std::string, std::string>> headers;
+
+    auto map = std::get_if<Value::MapPtr>(&value.data);
+    if (!map) {
+        throw std::runtime_error("TypeError: " + name + " expects a map for headers");
+    }
+
+    for (const auto& [key, item] : **map) {
+        std::string header_value;
+        if (auto text = std::get_if<std::string>(&item.data)) {
+            header_value = *text;
+        } else if (auto integer = std::get_if<long long>(&item.data)) {
+            header_value = std::to_string(*integer);
+        } else if (auto number = std::get_if<double>(&item.data)) {
+            header_value = std::to_string(*number);
+        } else if (auto boolean = std::get_if<bool>(&item.data)) {
+            header_value = *boolean ? "true" : "false";
+        } else {
+            throw std::runtime_error(
+                "TypeError: " + name + " header '" + key + "' must be a scalar value");
+        }
+        headers.emplace_back(key, header_value);
+    }
+
+    return headers;
+}
+
+// ------------------------------ HTTP ------------------------------
+Value http_request(const std::vector<Value>& args, const std::string& method) {
+    require_range(args, 1, 5, "http." + method);
+    const std::string url = string_arg(args[0], "http." + method);
+
+    std::string body;
+    std::vector<std::pair<std::string, std::string>> headers;
+    Value::MapPtr options;
+
+    // arg 2: body or headers
+    if (args.size() >= 2) {
+        if (std::holds_alternative<Nil>(args[1].data)) {
+            // nil = no body
+        } else if (std::holds_alternative<Value::MapPtr>(args[1].data)) {
+            headers = extract_headers(args[1], "http." + method);
+        } else {
+            body = string_arg(args[1], "http." + method);
+        }
+    }
+
+    // arg 3: headers when arg 2 is the body
+    if (args.size() >= 3 && std::holds_alternative<Value::MapPtr>(args[2].data)) {
+        headers = extract_headers(args[2], "http." + method);
+    }
+
+    // arg 4: explicit headers (kept for compatibility with the existing API)
+    if (args.size() >= 4 && !std::holds_alternative<Nil>(args[3].data)) {
+        headers = extract_headers(args[3], "http." + method);
+    }
+
+    // arg 5: request options
+    if (args.size() >= 5) {
+        auto map = std::get_if<Value::MapPtr>(&args[4].data);
+        if (!map) throw std::runtime_error("TypeError: http.request options must be a map");
+        options = *map;
+    }
+
+    int timeout = 30;
+    int connect_timeout = 0;
+    std::string proxy;
+    std::string user_agent;
+    bool follow_redirects = true;
+    bool insecure = false;
+
+    if (options) {
+        if (auto it = options->find("timeout"); it != options->end())
+            timeout = static_cast<int>(integer_arg(it->second, "http.timeout"));
+        if (auto it = options->find("connect_timeout"); it != options->end())
+            connect_timeout = static_cast<int>(integer_arg(it->second, "http.connect_timeout"));
+        if (auto it = options->find("proxy"); it != options->end())
+            proxy = string_arg(it->second, "http.proxy");
+        if (auto it = options->find("user_agent"); it != options->end())
+            user_agent = string_arg(it->second, "http.user_agent");
+        if (auto it = options->find("follow_redirects"); it != options->end()) {
+            if (auto value = std::get_if<bool>(&it->second.data)) follow_redirects = *value;
+            else throw std::runtime_error("TypeError: http.follow_redirects expects a boolean");
+        }
+        if (auto it = options->find("insecure"); it != options->end()) {
+            if (auto value = std::get_if<bool>(&it->second.data)) insecure = *value;
+            else throw std::runtime_error("TypeError: http.insecure expects a boolean");
+        }
+    }
+
+    if (timeout <= 0) throw std::runtime_error("ValueError: http.timeout must be greater than zero");
+    if (connect_timeout < 0) throw std::runtime_error("ValueError: http.connect_timeout cannot be negative");
+
+    fs::path temp = fs::temp_directory_path() /
+        ("lucy-http-" + std::to_string(std::random_device{}()));
+    fs::path output_path = temp.string() + ".body";
+    fs::path header_path = temp.string() + ".headers";
+    fs::path data_path = temp.string() + ".data";
+
+    struct Cleanup {
+        fs::path a, b, c;
+        ~Cleanup() {
+            std::error_code ec;
+            fs::remove(a, ec);
+            fs::remove(b, ec);
+            fs::remove(c, ec);
+        }
+    } cleanup{output_path, header_path, data_path};
+
+    if (!body.empty()) {
+        std::ofstream data(data_path, std::ios::binary);
+        if (!data) throw std::runtime_error("HTTPError: cannot create temporary request body");
+        data << body;
+    }
+
+    std::string command = "curl --silent --show-error --max-time " + std::to_string(timeout);
+    command += " --request " + shell_quote(method);
+    if (follow_redirects) command += " --location";
+    if (connect_timeout > 0) command += " --connect-timeout " + std::to_string(connect_timeout);
+    if (!proxy.empty()) command += " --proxy " + shell_quote(proxy);
+    if (!user_agent.empty()) command += " --user-agent " + shell_quote(user_agent);
+    if (insecure) command += " --insecure";
+
+    for (const auto& [key, value] : headers)
+        command += " --header " + shell_quote(key + ": " + value);
+
+    command += " --dump-header " + shell_quote(header_path.string());
+    command += " --output " + shell_quote(output_path.string());
+    if (!body.empty()) command += " --data-binary " + shell_quote("@" + data_path.string());
+    command += " --write-out " + shell_quote("%{http_code}");
+    command += " " + shell_quote(url);
+
+    CommandResult result = run_command(command);
+    if (result.status != 0)
+        throw std::runtime_error("HTTPError: curl failed with status " + std::to_string(result.status));
+
+    int status_code = 0;
+    try {
+        status_code = std::stoi(result.output);
+    } catch (...) {
+        throw std::runtime_error("HTTPError: invalid HTTP status from curl");
+    }
+
+    Map response;
+    response["status"] = static_cast<long long>(status_code);
+    response["body"] = read_text_file(output_path);
+    response["headers"] = Map{};
+
+    auto response_headers = std::get<Value::MapPtr>(response["headers"].data);
+    std::ifstream header_file(header_path);
+    std::string line;
+    while (std::getline(header_file, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        const auto colon = line.find(':');
+        if (colon == std::string::npos) continue;
+        std::string key = line.substr(0, colon);
+        std::string value = line.substr(colon + 1);
+        while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) value.erase(value.begin());
+        std::transform(key.begin(), key.end(), key.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        (*response_headers)[key] = value;
+    }
+
+    response["ok"] = status_code >= 200 && status_code < 300;
+    return Value(std::move(response));
+}
+
+#ifdef LUCY_HAS_SQLITE
+struct SQLiteConnection : NativeObject {
+    sqlite3* db = nullptr;
+    explicit SQLiteConnection(sqlite3* handle) : db(handle) {}
+    ~SQLiteConnection() override { if (db) sqlite3_close(db); }
+};
+
+struct SQLiteStatement : NativeObject {
+    std::shared_ptr<SQLiteConnection> connection;
+    sqlite3_stmt* stmt = nullptr;
+    SQLiteStatement(std::shared_ptr<SQLiteConnection> c, sqlite3_stmt* s)
+        : connection(std::move(c)), stmt(s) {}
+    ~SQLiteStatement() override { if (stmt) sqlite3_finalize(stmt); }
+};
+
+std::shared_ptr<SQLiteConnection> sqlite_connection(const Value& value, const std::string& name) {
+    auto native = std::get_if<Value::NativePtr>(&value.data);
+    if (!native || !*native) throw std::runtime_error("TypeError: " + name + " expects a SQLite database");
+    auto connection = std::dynamic_pointer_cast<SQLiteConnection>(*native);
+    if (!connection || !connection->db) throw std::runtime_error("SQLiteError: database is closed");
+    return connection;
+}
+
+std::shared_ptr<SQLiteStatement> sqlite_statement(const Value& value, const std::string& name) {
+    auto native = std::get_if<Value::NativePtr>(&value.data);
+    if (!native || !*native) throw std::runtime_error("TypeError: " + name + " expects a SQLite statement");
+    auto statement = std::dynamic_pointer_cast<SQLiteStatement>(*native);
+    if (!statement || !statement->stmt) throw std::runtime_error("SQLiteError: statement is closed");
+    return statement;
+}
+
+void sqlite_bind_value(sqlite3_stmt* stmt, int index, const Value& value, const std::string& name) {
+    int rc = SQLITE_ERROR;
+    if (std::holds_alternative<Nil>(value.data)) rc = sqlite3_bind_null(stmt, index);
+    else if (auto p = std::get_if<long long>(&value.data)) rc = sqlite3_bind_int64(stmt, index, *p);
+    else if (auto p = std::get_if<double>(&value.data)) rc = sqlite3_bind_double(stmt, index, *p);
+    else if (auto p = std::get_if<bool>(&value.data)) rc = sqlite3_bind_int(stmt, index, *p ? 1 : 0);
+    else if (auto p = std::get_if<std::string>(&value.data)) rc = sqlite3_bind_text(stmt, index, p->c_str(), static_cast<int>(p->size()), SQLITE_TRANSIENT);
+    else throw std::runtime_error("TypeError: " + name + " supports nil, bool, int, double, and string parameters");
+    if (rc != SQLITE_OK) throw std::runtime_error(std::string("SQLiteError: ") + sqlite3_errmsg(sqlite3_db_handle(stmt)));
+}
+
+void sqlite_bind_array(sqlite3_stmt* stmt, const Value& value, const std::string& name) {
+    if (std::holds_alternative<Nil>(value.data)) return;
+    auto array = std::get_if<Value::ArrayPtr>(&value.data);
+    if (!array) throw std::runtime_error("TypeError: " + name + " expects an array of parameters");
+    sqlite3_clear_bindings(stmt);
+    for (size_t i = 0; i < (*array)->size(); ++i)
+        sqlite_bind_value(stmt, static_cast<int>(i + 1), (*array)->at(i), name);
+}
+
+Value sqlite_row(sqlite3_stmt* stmt, int columns) {
+    Map row;
+    for (int i = 0; i < columns; ++i) {
+        const char* name = sqlite3_column_name(stmt, i);
+        switch (sqlite3_column_type(stmt, i)) {
+            case SQLITE_INTEGER: row[name] = static_cast<long long>(sqlite3_column_int64(stmt, i)); break;
+            case SQLITE_FLOAT: row[name] = sqlite3_column_double(stmt, i); break;
+            case SQLITE_TEXT: row[name] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, i))); break;
+            case SQLITE_NULL: row[name] = Value{}; break;
+            case SQLITE_BLOB: {
+                const auto* data = static_cast<const unsigned char*>(sqlite3_column_blob(stmt, i));
+                const int size = sqlite3_column_bytes(stmt, i);
+                row[name] = hex_encode(std::string(reinterpret_cast<const char*>(data), size));
+                break;
+            }
+        }
+    }
+    return Value(std::move(row));
+}
+
+Value sqlite_statement_query(const std::shared_ptr<SQLiteStatement>& statement) {
+    sqlite3_reset(statement->stmt);
+    Array rows;
+    const int columns = sqlite3_column_count(statement->stmt);
+    while (true) {
+        int rc = sqlite3_step(statement->stmt);
+        if (rc == SQLITE_DONE) break;
+        if (rc != SQLITE_ROW) throw std::runtime_error(std::string("SQLiteError: ") + sqlite3_errmsg(statement->connection->db));
+        rows.push_back(sqlite_row(statement->stmt, columns));
+    }
+    sqlite3_reset(statement->stmt);
+    return Value(std::move(rows));
+}
+#endif
+
+
+} // namespace
+
+void install_phase2_builtins(BuiltinMap& builtins) {
+    // Regex ---------------------------------------------------------
+    builtins["__regex_match"] = [](const std::vector<Value>& args) {
+        require_count(args, 2, "regex.match");
+        try {
+            return Value(std::regex_match(string_arg(args[1], "regex.match"),
+                                          std::regex(string_arg(args[0], "regex.match"))));
+        } catch (const std::regex_error& error) {
+            throw std::runtime_error(std::string("RegexError: ") + error.what());
+        }
+    };
+
+    builtins["__regex_search"] = [](const std::vector<Value>& args) {
+        require_count(args, 2, "regex.search");
+        try {
+            return Value(std::regex_search(string_arg(args[1], "regex.search"),
+                                           std::regex(string_arg(args[0], "regex.search"))));
+        } catch (const std::regex_error& error) {
+            throw std::runtime_error(std::string("RegexError: ") + error.what());
+        }
+    };
+
+    builtins["__regex_find_all"] = [](const std::vector<Value>& args) {
+        require_count(args, 2, "regex.find_all");
+        try {
+            std::regex pattern(string_arg(args[0], "regex.find_all"));
+            std::string text = string_arg(args[1], "regex.find_all");
+            Array result;
+            for (std::sregex_iterator it(text.begin(), text.end(), pattern), end; it != end; ++it) {
+                result.emplace_back(it->str());
+            }
+            return Value(std::move(result));
+        } catch (const std::regex_error& error) {
+            throw std::runtime_error(std::string("RegexError: ") + error.what());
+        }
+    };
+
+    builtins["__regex_replace"] = [](const std::vector<Value>& args) {
+        require_count(args, 3, "regex.replace");
+        try {
+            return Value(std::regex_replace(string_arg(args[2], "regex.replace"),
+                                             std::regex(string_arg(args[0], "regex.replace")),
+                                             string_arg(args[1], "regex.replace")));
+        } catch (const std::regex_error& error) {
+            throw std::runtime_error(std::string("RegexError: ") + error.what());
+        }
+    };
+
+    // JSON ----------------------------------------------------------
+    builtins["__json_parse"] = [](const std::vector<Value>& args) {
+        require_count(args, 1, "json.parse");
+        return JsonParser(string_arg(args[0], "json.parse")).parse();
+    };
+
+    builtins["__json_stringify"] = [](const std::vector<Value>& args) {
+        require_count(args, 1, "json.stringify");
+        return Value(json_stringify(args[0]));
+    };
+
+    // Date and time -------------------------------------------------
+    builtins["__datetime_now"] = [](const std::vector<Value>& args) {
+        require_count(args, 0, "datetime.now");
+        const auto now = std::chrono::system_clock::now();
+        const auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now.time_since_epoch()).count();
+        return Value(static_cast<long long>(milliseconds));
+    };
+
+    builtins["__datetime_from_timestamp"] = [](const std::vector<Value>& args) {
+        require_count(args, 1, "datetime.from_timestamp");
+        return Value(integer_arg(args[0], "datetime.from_timestamp"));
+    };
+
+    builtins["__datetime_format"] = [](const std::vector<Value>& args) {
+        require_count(args, 2, "datetime.format");
+        const auto milliseconds = integer_arg(args[0], "datetime.format");
+        const std::string format = string_arg(args[1], "datetime.format");
+        const auto time = std::chrono::system_clock::time_point(std::chrono::milliseconds(milliseconds));
+        const std::time_t raw = std::chrono::system_clock::to_time_t(time);
+        std::tm local{};
+#ifdef _WIN32
+        localtime_s(&local, &raw);
+#else
+        localtime_r(&raw, &local);
+#endif
+        std::ostringstream output;
+        output << std::put_time(&local, format.c_str());
+        return Value(output.str());
+    };
+
+    builtins["__datetime_parts"] = [](const std::vector<Value>& args) {
+        require_count(args, 1, "datetime.parts");
+        const auto milliseconds = integer_arg(args[0], "datetime.parts");
+        const auto time = std::chrono::system_clock::time_point(std::chrono::milliseconds(milliseconds));
+        const std::time_t raw = std::chrono::system_clock::to_time_t(time);
+        std::tm local{};
+#ifdef _WIN32
+        localtime_s(&local, &raw);
+#else
+        localtime_r(&raw, &local);
+#endif
+        Map parts;
+        parts["year"] = static_cast<long long>(local.tm_year + 1900);
+        parts["month"] = static_cast<long long>(local.tm_mon + 1);
+        parts["day"] = static_cast<long long>(local.tm_mday);
+        parts["hour"] = static_cast<long long>(local.tm_hour);
+        parts["minute"] = static_cast<long long>(local.tm_min);
+        parts["second"] = static_cast<long long>(local.tm_sec);
+        parts["weekday"] = static_cast<long long>(local.tm_wday);
+        return Value(std::move(parts));
+    };
+
+    // Process -------------------------------------------------------
+    builtins["__process_exec"] = [](const std::vector<Value>& args) {
+        require_range(args, 1, 2, "Process.exec");
+        auto array = as_array(args[0], "Process.exec argv");
+        std::vector<std::string> argv;
+        argv.reserve(array->size());
+        for (const auto& value : *array) argv.push_back(string_arg(value, "Process.exec argv item"));
+        std::string cwd;
+        long long timeout_ms = 0;
+        if (args.size() == 2) {
+            auto options = std::get_if<Value::MapPtr>(&args[1].data);
+            if (!options || !*options) throw std::runtime_error("TypeError: Process.exec options must be a map");
+            auto cwd_it = (*options)->find("cwd");
+            if (cwd_it != (*options)->end() && !std::holds_alternative<Nil>(cwd_it->second.data))
+                cwd = string_arg(cwd_it->second, "Process.exec cwd");
+            auto timeout_it = (*options)->find("timeout_ms");
+            if (timeout_it != (*options)->end() && !std::holds_alternative<Nil>(timeout_it->second.data))
+                timeout_ms = integer_arg(timeout_it->second, "Process.exec timeout_ms");
+        }
+        ProcessResult result = execute_argv(argv, cwd, timeout_ms);
+        Map value;
+        value["stdout"] = result.stdout_text;
+        value["stderr"] = result.stderr_text;
+        value["status"] = static_cast<long long>(result.status);
+        value["success"] = result.status == 0 && !result.timed_out;
+        value["timed_out"] = result.timed_out;
+        value["pid"] = result.pid;
+        return Value(std::move(value));
+    };
+    builtins["__process_run"] = [](const std::vector<Value>& args) {
+        require_count(args, 1, "process.run");
+        CommandResult result = run_command(string_arg(args[0], "process.run"));
+        Map value;
+        value["stdout"] = result.output;
+        value["status"] = static_cast<long long>(result.status);
+        value["success"] = result.status == 0;
+        return Value(std::move(value));
+    };
+
+    builtins["__process_capture"] = [](const std::vector<Value>& args) {
+        require_count(args, 1, "process.capture");
+        CommandResult result = run_command(string_arg(args[0], "process.capture"));
+        if (result.status != 0) {
+            throw std::runtime_error("ProcessError: process exited with status " + std::to_string(result.status));
+        }
+        return Value(result.output);
+    };
+
+    // Encoding ------------------------------------------------------
+    builtins["__encoding_base64_encode"] = [](const std::vector<Value>& args) {
+        require_count(args, 1, "encoding.base64_encode");
+        return Value(base64_encode(string_arg(args[0], "encoding.base64_encode")));
+    };
+
+    builtins["__encoding_base64_decode"] = [](const std::vector<Value>& args) {
+        require_count(args, 1, "encoding.base64_decode");
+        return Value(base64_decode(string_arg(args[0], "encoding.base64_decode")));
+    };
+
+    builtins["__encoding_hex_encode"] = [](const std::vector<Value>& args) {
+        require_count(args, 1, "encoding.hex_encode");
+        return Value(hex_encode(string_arg(args[0], "encoding.hex_encode")));
+    };
+
+    builtins["__encoding_hex_decode"] = [](const std::vector<Value>& args) {
+        require_count(args, 1, "encoding.hex_decode");
+        return Value(hex_decode(string_arg(args[0], "encoding.hex_decode")));
+    };
+
+    builtins["__encoding_url_encode"] = [](const std::vector<Value>& args) {
+        require_count(args, 1, "encoding.url_encode");
+        return Value(url_encode(string_arg(args[0], "encoding.url_encode")));
+    };
+
+    builtins["__encoding_url_decode"] = [](const std::vector<Value>& args) {
+        require_count(args, 1, "encoding.url_decode");
+        return Value(url_decode(string_arg(args[0], "encoding.url_decode")));
+    };
+
+    // CSV -----------------------------------------------------------
+    builtins["__csv_parse"] = [](const std::vector<Value>& args) {
+        require_range(args, 1, 2, "csv.parse");
+        const std::string delimiter_text = args.size() == 2 ? string_arg(args[1], "csv.parse") : ",";
+        if (delimiter_text.size() != 1) throw std::runtime_error("CSVError: delimiter must be exactly one byte");
+        const char delimiter = delimiter_text[0];
+        return Value(parse_csv(string_arg(args[0], "csv.parse"), delimiter));
+    };
+
+    builtins["__csv_stringify"] = [](const std::vector<Value>& args) {
+        require_range(args, 1, 2, "csv.stringify");
+        const std::string delimiter_text = args.size() == 2 ? string_arg(args[1], "csv.stringify") : ",";
+        if (delimiter_text.size() != 1) throw std::runtime_error("CSVError: delimiter must be exactly one byte");
+        const char delimiter = delimiter_text[0];
+        return Value(stringify_csv(args[0], delimiter));
+    };
+
+    // HTTP ----------------------------------------------------------
+    builtins["__http_get"] = [](const std::vector<Value>& args) {
+        return http_request(args, "GET");
+    };
+
+    builtins["__http_post"] = [](const std::vector<Value>& args) {
+        return http_request(args, "POST");
+    };
+    builtins["__http_put"] = [](const std::vector<Value>& args) {
+        return http_request(args, "PUT");
+    };
+    builtins["__http_delete"] = [](const std::vector<Value>& args) {
+        return http_request(args, "DELETE");
+    };
+    builtins["__http_head"] = [](const std::vector<Value>& args) {
+        return http_request(args, "HEAD");
+    };
+    builtins["__http_patch"] = [](const std::vector<Value>& args) {
+        return http_request(args, "PATCH");
+    };
+
+    builtins["__http_request"] = [](const std::vector<Value>& args) {
+        require_range(args, 2, 5, "http.request");
+        const std::string method = string_arg(args[0], "http.request");
+        std::vector<Value> request_args;
+        request_args.push_back(args[1]);
+        if (args.size() >= 3) request_args.push_back(args[2]);
+        if (args.size() >= 4) request_args.push_back(args[3]);
+        if (args.size() >= 5) request_args.push_back(args[4]);
+        return http_request(request_args, method);
+    };
+
+    builtins["__json_pretty"] = [](const std::vector<Value>& args) {
+        require_count(args, 1, "json.pretty_generate");
+        return Value(json_pretty(args[0]));
+    };
+
+    // SQLite --------------------------------------------------------
+#ifdef LUCY_HAS_SQLITE
+    builtins["__sqlite_open"] = [](const std::vector<Value>& args) -> Value {
+        require_count(args, 1, "sqlite.open");
+        sqlite3* raw = nullptr;
+        const auto path = string_arg(args[0], "sqlite.open");
+        if (sqlite3_open(path.c_str(), &raw) != SQLITE_OK) {
+            std::string message = raw ? sqlite3_errmsg(raw) : "cannot open database";
+            if (raw) sqlite3_close(raw);
+            throw std::runtime_error("SQLiteError: " + message);
+        }
+        sqlite3_extended_result_codes(raw, 1);
+        return Value(std::static_pointer_cast<NativeObject>(std::make_shared<SQLiteConnection>(raw)));
+    };
+    builtins["__sqlite_close"] = [](const std::vector<Value>& args) -> Value {
+        require_count(args, 1, "sqlite.close");
+        auto connection = sqlite_connection(args[0], "sqlite.close");
+        if (sqlite3_close(connection->db) != SQLITE_OK) throw std::runtime_error(std::string("SQLiteError: ") + sqlite3_errmsg(connection->db));
+        connection->db = nullptr;
+        return Value(true);
+    };
+    builtins["__sqlite_prepare"] = [](const std::vector<Value>& args) -> Value {
+        require_count(args, 2, "sqlite.prepare");
+        auto connection = sqlite_connection(args[0], "sqlite.prepare");
+        sqlite3_stmt* raw = nullptr;
+        if (sqlite3_prepare_v2(connection->db, string_arg(args[1], "sqlite.prepare").c_str(), -1, &raw, nullptr) != SQLITE_OK)
+            throw std::runtime_error(std::string("SQLiteError: ") + sqlite3_errmsg(connection->db));
+        return Value(std::static_pointer_cast<NativeObject>(std::make_shared<SQLiteStatement>(connection, raw)));
+    };
+    builtins["__sqlite_bind"] = [](const std::vector<Value>& args) -> Value {
+        require_count(args, 2, "sqlite.bind");
+        auto statement = sqlite_statement(args[0], "sqlite.bind");
+        sqlite_bind_array(statement->stmt, args[1], "sqlite.bind");
+        return args[0];
+    };
+    builtins["__sqlite_execute"] = [](const std::vector<Value>& args) -> Value {
+        require_range(args, 2, 3, "sqlite.execute");
+        auto connection = sqlite_connection(args[0], "sqlite.execute");
+        sqlite3_stmt* raw = nullptr;
+        if (sqlite3_prepare_v2(connection->db, string_arg(args[1], "sqlite.execute").c_str(), -1, &raw, nullptr) != SQLITE_OK)
+            throw std::runtime_error(std::string("SQLiteError: ") + sqlite3_errmsg(connection->db));
+        std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)> statement(raw, sqlite3_finalize);
+        if (args.size() == 3) sqlite_bind_array(statement.get(), args[2], "sqlite.execute");
+        int rc = sqlite3_step(statement.get());
+        if (rc != SQLITE_DONE) throw std::runtime_error(std::string("SQLiteError: ") + sqlite3_errmsg(connection->db));
+        Map result;
+        result["changes"] = static_cast<long long>(sqlite3_changes64(connection->db));
+        result["last_insert_id"] = static_cast<long long>(sqlite3_last_insert_rowid(connection->db));
+        return Value(std::move(result));
+    };
+    builtins["__sqlite_query"] = [](const std::vector<Value>& args) -> Value {
+        require_range(args, 2, 3, "sqlite.query");
+        auto connection = sqlite_connection(args[0], "sqlite.query");
+        sqlite3_stmt* raw = nullptr;
+        if (sqlite3_prepare_v2(connection->db, string_arg(args[1], "sqlite.query").c_str(), -1, &raw, nullptr) != SQLITE_OK)
+            throw std::runtime_error(std::string("SQLiteError: ") + sqlite3_errmsg(connection->db));
+        std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)> statement(raw, sqlite3_finalize);
+        if (args.size() == 3) sqlite_bind_array(statement.get(), args[2], "sqlite.query");
+        Array rows;
+        const int columns = sqlite3_column_count(statement.get());
+        while (true) {
+            int rc = sqlite3_step(statement.get());
+            if (rc == SQLITE_DONE) break;
+            if (rc != SQLITE_ROW) throw std::runtime_error(std::string("SQLiteError: ") + sqlite3_errmsg(connection->db));
+            rows.push_back(sqlite_row(statement.get(), columns));
+        }
+        return Value(std::move(rows));
+    };
+    builtins["__sqlite_statement_execute"] = [](const std::vector<Value>& args) -> Value {
+        require_count(args, 1, "sqlite.statement.execute");
+        auto statement = sqlite_statement(args[0], "sqlite.statement.execute");
+        sqlite3_reset(statement->stmt);
+        int rc = sqlite3_step(statement->stmt);
+        if (rc != SQLITE_DONE) throw std::runtime_error(std::string("SQLiteError: ") + sqlite3_errmsg(statement->connection->db));
+        Map result;
+        result["changes"] = static_cast<long long>(sqlite3_changes64(statement->connection->db));
+        result["last_insert_id"] = static_cast<long long>(sqlite3_last_insert_rowid(statement->connection->db));
+        sqlite3_reset(statement->stmt);
+        return Value(std::move(result));
+    };
+    builtins["__sqlite_statement_query"] = [](const std::vector<Value>& args) -> Value {
+        require_count(args, 1, "sqlite.statement.query");
+        return sqlite_statement_query(sqlite_statement(args[0], "sqlite.statement.query"));
+    };
+    builtins["__sqlite_statement_close"] = [](const std::vector<Value>& args) -> Value {
+        require_count(args, 1, "sqlite.statement.close");
+        auto statement = sqlite_statement(args[0], "sqlite.statement.close");
+        sqlite3_finalize(statement->stmt);
+        statement->stmt = nullptr;
+        return Value(true);
+    };
+    builtins["__sqlite_begin"] = [](const std::vector<Value>& args) -> Value { require_count(args,1,"sqlite.begin"); auto c=sqlite_connection(args[0],"sqlite.begin"); if(sqlite3_exec(c->db,"BEGIN",nullptr,nullptr,nullptr)!=SQLITE_OK) throw std::runtime_error(std::string("SQLiteError: ")+sqlite3_errmsg(c->db)); return Value(true); };
+    builtins["__sqlite_commit"] = [](const std::vector<Value>& args) -> Value { require_count(args,1,"sqlite.commit"); auto c=sqlite_connection(args[0],"sqlite.commit"); if(sqlite3_exec(c->db,"COMMIT",nullptr,nullptr,nullptr)!=SQLITE_OK) throw std::runtime_error(std::string("SQLiteError: ")+sqlite3_errmsg(c->db)); return Value(true); };
+    builtins["__sqlite_rollback"] = [](const std::vector<Value>& args) -> Value { require_count(args,1,"sqlite.rollback"); auto c=sqlite_connection(args[0],"sqlite.rollback"); if(sqlite3_exec(c->db,"ROLLBACK",nullptr,nullptr,nullptr)!=SQLITE_OK) throw std::runtime_error(std::string("SQLiteError: ")+sqlite3_errmsg(c->db)); return Value(true); };
+    builtins["__sqlite_changes"] = [](const std::vector<Value>& args) -> Value { require_count(args,1,"sqlite.changes"); auto c=sqlite_connection(args[0],"sqlite.changes"); return Value((long long)sqlite3_changes64(c->db)); };
+    builtins["__sqlite_last_insert_id"] = [](const std::vector<Value>& args) -> Value { require_count(args,1,"sqlite.last_insert_id"); auto c=sqlite_connection(args[0],"sqlite.last_insert_id"); return Value((long long)sqlite3_last_insert_rowid(c->db)); };
+#else
+    for (const char* name : {"__sqlite_open","__sqlite_close","__sqlite_prepare","__sqlite_bind","__sqlite_execute","__sqlite_query","__sqlite_statement_execute","__sqlite_statement_query","__sqlite_statement_close","__sqlite_begin","__sqlite_commit","__sqlite_rollback","__sqlite_changes","__sqlite_last_insert_id"})
+        builtins[name] = [](const std::vector<Value>&) -> Value { throw std::runtime_error("SQLiteError: Lucy was built without SQLite support"); };
+#endif
+}
+
+} // namespace lucy

@@ -1,0 +1,14 @@
+let decimal: Int = 255
+let hex: Int = 0xFF
+let binary: Int = 0b1111_1111
+
+if decimal == hex and hex == binary {
+    print "integer literals ok"
+}
+
+func add(a: Int, b: Int) -> Int {
+    return a + b
+}
+
+let result: Int = add(20, 22)
+print result

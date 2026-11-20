@@ -1,0 +1,6 @@
+import data
+
+let value = {name: "Lucy", features: ["lambda", "switch", "repl"]}
+let json_text = data.stringify value
+print json_text
+print data.parse json_text

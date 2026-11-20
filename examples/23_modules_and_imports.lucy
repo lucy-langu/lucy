@@ -1,0 +1,4 @@
+import math
+
+print pow 2, 8
+print sqrt 81

@@ -1,0 +1,129 @@
+# Generate source-derived API documentation using Lucy itself.
+import fs
+import data
+import text
+
+let VERSION = fs.read("VERSION").strip()
+
+func get_or(source, key, fallback) {
+    return source.has(key) ? source.get(key) : fallback
+}
+let MANIFEST = data.parse(fs.read("stdlib/manifest.json"))
+let DESCRIPTIONS = {
+    "app": "Command-line option parsing, logging facade, callable benchmarking, post-hoc duration checks, and templates.",
+    "crypto": "Digest/HMAC utilities and cryptographic object facades. Verify backend availability before relying on a primitive.",
+    "data": "Map transformations plus JSON, YAML, and CSV serialization/parsing.",
+    "flow": "Small functional composition helpers for callbacks and transformations.",
+    "fs": "Filesystem operations, path helpers, text/JSON convenience methods, and IO objects.",
+    "http": "HTTP request helpers, client objects, sockets, DNS resolution, and reverse lookup.",
+    "math": "Mathematical constants/functions and common numeric helpers.",
+    "random": "Random scalar values and array selection/shuffling helpers.",
+    "repl": "Plain-text REPL banner/prompt, command/topic metadata, and topic help.",
+    "result": "Small success/error value conventions and unwrap helpers.",
+    "runtime": "Kernel/collection facades, formatting, guarded callback helpers, and reflection/dynamic invocation.",
+    "set": "Set construction, membership, and set algebra operations.",
+    "sqlite": "SQLite database and prepared-statement wrappers; requires a build with SQLite enabled.",
+    "system": "Platform/environment inspection, argv-based process execution, identity, signals, clocks, and shell helpers.",
+    "text": "Regular expressions, Base64/hex/URL encoding, shell escaping, and string scanner.",
+    "time": "Time/date/date-time objects, parsing, formatting, timestamps, and sleeping."
+}
+let EXAMPLES = {
+    "app": "let parser = app.parser()\nparser.on(\"output\", \"output path\", \"report.csv\")\nlet options = parser.parse(ARGV)\nprintln options.get(\"output\")\n\nlet elapsed = app.benchmark().realtime(lambda() => 1 + 1)\nprintln elapsed",
+    "crypto": "println crypto.hexdigest(\"hello\")\nprintln crypto.base64digest(\"hello\")\nprintln crypto.hmac(\"secret\", \"message\")",
+    "data": "let value = data.json.parse(\"{\\\"name\\\":\\\"Lucy\\\"}\")\nprintln data.json.pretty(value)\nlet rows = data.csv_parse(\"name,age\\nLucy,2\")\nprintln data.csv_stringify(rows)",
+    "flow": "let answer = flow.pipe(5, [lambda x => x * 2, lambda x => x + 1])\nprintln answer\nflow.tap(answer, lambda x => println x)",
+    "fs": "fs.write(\"example.txt\", \"hello\\n\")\nfs.append(\"example.txt\", \"Lucy\\n\")\nprintln fs.read(\"example.txt\")\nprintln fs.basename(\"src/lucy.cpp\")",
+    "http": "let response = http.get(\"https://example.com\")\nprintln response.status\nprintln response.ok",
+    "math": "println math.square(9)\nprintln math.clamp(12, 0, 10)\nprintln math.gcd(24, 18)",
+    "random": "println random.int(1, 6)\nprintln random.choice([\"red\", \"green\", \"blue\"])",
+    "repl": "println repl.version()\nprintln repl.commands()\nprintln repl.topics()",
+    "result": "let outcome = result.ok(42)\nif result.success(outcome) {\n    println result.unwrap(outcome)\n}",
+    "runtime": "println runtime.inspect([1, 2, 3])\nprintln runtime.methods(\"Lucy\")\nprintln runtime.responds(\"Lucy\", \"upper\")",
+    "set": "let left = set.from_values([1, 2, 3])\nlet right = set.from_values([3, 4])\nprintln set.union(left, right)",
+    "sqlite": "let db = sqlite.open(\"example.db\")\ndb.execute(\"CREATE TABLE IF NOT EXISTS items (id INTEGER PRIMARY KEY, name TEXT)\")\ndb.execute(\"INSERT INTO items (name) VALUES (?)\", [\"Lucy\"])\nprintln db.query(\"SELECT id, name FROM items\")\ndb.close()",
+    "system": "println system.platform()\nprintln system.cwd()\nlet result = system.exec([\"cmake\", \"--version\"], {\"timeout_ms\": 5000})\nprintln result.get(\"stdout\")",
+    "text": "println text.match(\"^lucy\", \"lucy-lang\")\nprintln text.hex_encode(\"Lucy\")\nprintln text.url_encode(\"hello world\")",
+    "time": "println time.now()\nprintln time.today()\nprintln time.format(time.timestamp())"
+}
+
+func parse_api(source) {
+    classes = []
+    functions = []
+    exports = []
+    current = nil
+    for line in source.split("\n") {
+        clean = line.strip()
+        if clean.starts_with("class ") and clean.ends_with("{") {
+            class_name = clean.slice(6).split(" ")[0].replace("{", "").strip()
+            current = {"name": class_name, "methods": []}
+            classes.push(current)
+        } else if clean.starts_with("func ") {
+            signature = clean.slice(5).strip()
+            if signature.ends_with("{") {
+                signature = signature.slice(0, signature.length() - 1).strip()
+            }
+            if line.starts_with("    func ") and current != nil {
+                current.get("methods").push(signature)
+            } else {
+                functions.push(signature)
+                current = nil
+            }
+        } else if current == nil and text.match("^[A-Za-z_][A-Za-z0-9_]*\\s*=\\s*", line) {
+            exports.push(line.split("=")[0].strip())
+        }
+    }
+    return {"classes": classes, "functions": functions, "exports": exports}
+}
+
+for name in MANIFEST.get("modules").keys() {
+    item = MANIFEST.get("modules").get(name)
+    source_path = fs.join(["stdlib", item.get("entry")])
+    source = fs.read(source_path)
+    api = parse_api(source)
+    output = ["# `" + name + "` standard library — Lucy " + VERSION, "", get_or(DESCRIPTIONS, name, "Standard-library module."), "", "## Availability and imports", "", "The shipped module is loaded automatically in Lucy 2.x. Explicit `import` remains available when you want to make dependencies visible:", "", "```lucy", "import " + name, "```", "", "Names beginning with `_` or `__` are implementation details unless a public API explicitly documents them.", "", "## Quick example", "", "```lucy", get_or(EXAMPLES, name, "println " + name), "```", ""]
+    if api.get("exports").length() > 0 {
+        output.push("## Exported module-level objects", "", "`" + api.get("exports").join("`, `") + "`", "")
+    }
+    output.push("## Module-level functions", "")
+    if api.get("functions").length() > 0 {
+        output.push("| Function | Signature |", "|---|---|")
+        for signature in api.get("functions") {
+            function_name = signature.split("(")[0]
+            output.push("| `" + function_name + "` | `" + signature + "` |")
+        }
+    } else {
+        output.push("No top-level functions are declared in the pure-Lucy source. The module may export class instances or rely on native runtime operations.")
+    }
+    output.push("", "## Classes and methods", "")
+    if api.get("classes").length() > 0 {
+        for cls in api.get("classes") {
+            output.push("### `" + cls.get("name") + "`", "")
+            if cls.get("methods").length() > 0 {
+                output.push("| Method | Signature |", "|---|---|")
+                for signature in cls.get("methods") {
+                    method_name = signature.split("(")[0]
+                    output.push("| `" + method_name + "` | `" + signature + "` |")
+                }
+            } else {
+                output.push("No methods were found by the source indexer.")
+            }
+            output.push("")
+        }
+    } else {
+        output.push("No public class declarations were found in this module's pure-Lucy source.", "")
+    }
+    output.push("## Contract and error handling", "", "Validate inputs at the application boundary. Runtime errors are reported as Lucy exceptions or native errors; exact messages may vary by platform and build. Do not assume network access, process privileges, filesystem permissions, or optional native dependencies are available.", "")
+    if name == "sqlite" {
+        output.push("### Build requirement", "", "Configure with `-DLUCY_ENABLE_SQLITE=ON`. A build without this option cannot open databases. Use prepared-statement placeholders for values and close connections/statements explicitly.", "")
+    }
+    if name == "system" {
+        output.push("### Direct process execution", "", "`system.exec(argv, options = {})` starts a process without a command shell. Pass the executable and each argument as a separate string. Supported options are `cwd` and `timeout_ms`.", "", "```lucy", "let result = system.exec([\"cmake\", \"--build\", \"build\"], {\"cwd\": \".\", \"timeout_ms\": 120000})", "if !result.get(\"success\") {", "    println result.get(\"stderr\")", "    exit(1)", "}", "println result.get(\"stdout\")", "```", "", "The result map contains `stdout`, `stderr`, `status`, `success`, `timed_out`, and `pid`. Exit status `124` denotes a timeout. Prefer this API for package managers, build systems, test runners, and editor tooling. `system.run` remains available for compatibility and shell-specific workflows.", "")
+    }
+    if name == "http" {
+        output.push("### Network cautions", "", "HTTP, sockets, DNS, and TLS depend on the host environment. Set explicit request timeouts where supported, validate response status/content, and do not treat examples using public websites as deterministic tests.", "")
+    }
+    output.push("## Source of truth", "", "Implementation: [`stdlib/" + name + ".lucy`](../../stdlib/" + name + ".lucy). The signatures above are indexed from the current source file. Behavior is ultimately defined by implementation and regression tests; if you change the source API, regenerate this page and add tests for the new contract.", "")
+    fs.write(fs.join(["docs", "stdlib", name + ".md"]), output.join("\n"))
+    println "Generated docs/stdlib/" + name + ".md"
+}
+println "Generated standard-library documentation for " + str(MANIFEST.get("modules").length()) + " modules."

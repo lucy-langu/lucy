@@ -1,0 +1,49 @@
+import sqlite
+import fs
+
+let path = "lucy-test.sqlite"
+let db = sqlite.open path
+
+db.execute "DROP TABLE IF EXISTS users"
+db.execute "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)"
+
+let insert = db.execute(
+    "INSERT INTO users (name, age) VALUES (?, ?)",
+    ["Lucy", 1]
+)
+
+if insert.changes != 1 {
+    throw "SQLite test: insert changes mismatch"
+}
+
+let rows = db.query(
+    "SELECT name, age FROM users WHERE age >= ?",
+    [1]
+)
+
+if rows.length() != 1 {
+    throw "SQLite test: query mismatch"
+}
+
+let statement = db.prepare "SELECT name FROM users WHERE age = ?"
+statement.bind([1])
+let prepared = statement.query()
+
+if prepared.length() != 1 {
+    throw "SQLite test: prepared statement mismatch"
+}
+
+statement.close()
+
+db.begin()
+db.execute "INSERT INTO users (name, age) VALUES (?, ?)", ["rollback", 2]
+db.rollback()
+
+let after_rollback = db.query "SELECT COUNT(*) AS count FROM users"
+if after_rollback.length() != 1 {
+    throw "SQLite test: rollback mismatch"
+}
+
+db.close()
+fs.remove path
+print "sqlite ok"

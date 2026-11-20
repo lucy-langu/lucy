@@ -1,0 +1,10 @@
+build/
+build-install/
+*.o
+*.a
+*.so
+*.exe
+.vscode/
+.idea/
+build-ecosystem/
+build-*/

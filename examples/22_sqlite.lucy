@@ -1,0 +1,34 @@
+import fs
+import sqlite
+
+let db = sqlite.open "lucy-example.sqlite"
+
+db.execute(
+    "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)"
+)
+
+db.execute(
+    "INSERT INTO users (name, age) VALUES (?, ?)",
+    ["Lucy", 1]
+)
+
+let rows = db.query(
+    "SELECT id, name, age FROM users WHERE age >= ?",
+    [1]
+)
+
+print rows
+print db.last_insert_id()
+print db.changes()
+
+db.begin()
+db.execute("INSERT INTO users (name, age) VALUES (?, ?)", ["Nima", 20])
+db.rollback()
+
+let statement = db.prepare("SELECT name FROM users WHERE age >= ?")
+statement.bind([1])
+print statement.query()
+statement.close()
+db.close()
+
+fs.remove "lucy-example.sqlite"

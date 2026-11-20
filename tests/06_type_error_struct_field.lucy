@@ -1,0 +1,3 @@
+struct Point { x: Int }
+let p = Point.new(1)
+p.x = "wrong"

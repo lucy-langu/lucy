@@ -1,0 +1,53 @@
+# Lucy pseudo-random helpers.
+
+func int(low, high) {
+    return random_int(low, high)
+}
+
+func float() {
+    return random_float()
+}
+
+func bool() {
+    return random_int(0, 1) == 1
+}
+
+func choice(items) {
+    if items.length() == 0 {
+        return nil
+    }
+    return items[int(0, items.length() - 1)]
+}
+
+func shuffle(items) {
+    result = []
+    for item in items {
+        result.push(item)
+    }
+    i = result.length() - 1
+    while i > 0 {
+        j = int(0, i)
+        temp = result[i]
+        result[i] = result[j]
+        result[j] = temp
+        i -= 1
+    }
+    return result
+}
+
+func sample(items, count) {
+    if count < 0 {
+        throw "ValueError: random.sample count must be non-negative"
+    }
+    if count > items.length() {
+        throw "ValueError: random.sample count cannot exceed the number of items"
+    }
+    result = []
+    pool = shuffle(items)
+    i = 0
+    while i < count and i < pool.length() {
+        result.push(pool[i])
+        i += 1
+    }
+    return result
+}

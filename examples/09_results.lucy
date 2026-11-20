@@ -1,0 +1,6 @@
+import result
+
+answer = result.ok 42
+failure = result.err "not found"
+print result.unwrap answer
+print result.message failure

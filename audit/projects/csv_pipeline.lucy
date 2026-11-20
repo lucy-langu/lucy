@@ -1,0 +1,11 @@
+import data
+let csv_text = "name,score\nAda,98\nGrace,95\nNima,91\n"
+let rows = data.csv.parse(csv_text)
+println data.stringify(rows)
+let serialized = data.csv.stringify(rows)
+let roundtrip = data.csv.parse(serialized)
+println data.stringify(roundtrip)
+let config = data.parse("{\"app\":\"LucyAudit\",\"retries\":3,\"enabled\":true}")
+println config.get("app")
+println config.get("retries")
+println config.get("enabled")

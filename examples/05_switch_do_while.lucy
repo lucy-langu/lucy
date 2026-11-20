@@ -1,0 +1,15 @@
+let value = 3
+switch value {
+case 1:
+    print("one")
+case 3:
+    print("three")
+default:
+    print("other")
+}
+
+var i = 0
+repeat {
+    print(i)
+    i += 1
+} while i < 3

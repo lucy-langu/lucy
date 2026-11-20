@@ -1,0 +1,12 @@
+let Name = "Lucy"
+var value = nil
+func add(a: Int, b: Int) -> Int {
+    return a + b
+}
+unless Name == "other" {
+    value = add(1, 2)
+}
+let fallback = value ?? 99
+if fallback == 3 {
+    print("ok")
+}

@@ -1,0 +1,272 @@
+# Lucy text library.
+# Basic string transformations are native string methods.
+# This module exposes regex, encoding, scanning, and shell-word operations.
+
+func match(pattern, text) {
+    return __regex_match(pattern, text)
+}
+
+func search(pattern, text) {
+    return __regex_search(pattern, text)
+}
+
+func find_all(pattern, text) {
+    return __regex_find_all(pattern, text)
+}
+
+func replace_regex(pattern, replacement, text) {
+    return __regex_replace(pattern, replacement, text)
+}
+
+func base64_encode(text) {
+    return __encoding_base64_encode(text)
+}
+
+func base64_decode(text) {
+    return __encoding_base64_decode(text)
+}
+
+func hex_encode(text) {
+    return __encoding_hex_encode(text)
+}
+
+func hex_decode(text) {
+    return __encoding_hex_decode(text)
+}
+
+func url_encode(text) {
+    return __encoding_url_encode(text)
+}
+
+func url_decode(text) {
+    return __encoding_url_decode(text)
+}
+
+func scanner(text) {
+    return StringScanner.new(text)
+}
+
+func shell_split(text) {
+    return __shellwords_split(text)
+}
+
+func shell_escape(text) {
+    return __shellwords_escape(text)
+}
+
+func shell_join(items) {
+    return __shellwords_join(items)
+}
+
+class StringScanner {
+    func initialize(text) {
+        self.native = __stringscanner_new(text)
+    }
+
+    func scan(pattern) {
+        return __stringscanner_scan(self.native, pattern)
+    }
+
+    func scan_until(pattern) {
+        return __stringscanner_scan_until(self.native, pattern)
+    }
+
+    func skip(pattern) {
+        return __stringscanner_skip(self.native, pattern)
+    }
+
+    func skip_until(pattern) {
+        value = self.scan_until(pattern)
+        if value == nil {
+            return nil
+        }
+        return value.length()
+    }
+
+    func check(pattern) {
+        return __stringscanner_check(self.native, pattern)
+    }
+
+    func check_until(pattern) {
+        return __stringscanner_check_until(self.native, pattern)
+    }
+
+    func match?() {
+        return self.native.get("matched") != nil
+    }
+
+    func matched() {
+        return self.native.get("matched")
+    }
+
+    func matched_size() {
+        value = self.native.get("matched")
+        if value == nil {
+            return 0
+        }
+        return value.length()
+    }
+
+    func pre_match() {
+        return self.native.get("pre_match")
+    }
+
+    func post_match() {
+        return self.native.get("post_match")
+    }
+}
+
+
+# Common text normalization and formatting helpers.
+func blank(value) {
+    return value == nil or str(value).strip() == ""
+}
+
+func present(value) {
+    return !blank(value)
+}
+
+func truncate(value, max_length, suffix = "...") {
+    let source = str(value)
+    if max_length < 0 { throw "max_length cannot be negative" }
+    if source.length() <= max_length { return source }
+    if max_length == 0 { return "" }
+    if suffix.length() >= max_length { return suffix.slice(0, max_length) }
+    return source.slice(0, max_length - suffix.length()) + suffix
+}
+
+func pad_left(value, width, fill = " ") {
+    let source = str(value)
+    if fill.length() != 1 { throw "fill must be exactly one character" }
+    if width <= source.length() { return source }
+    return fill.repeat(width - source.length()) + source
+}
+
+func pad_right(value, width, fill = " ") {
+    let source = str(value)
+    if fill.length() != 1 { throw "fill must be exactly one character" }
+    if width <= source.length() { return source }
+    return source + fill.repeat(width - source.length())
+}
+
+func remove_prefix(value, prefix) {
+    let source = str(value)
+    if source.starts_with(prefix) { return source.slice(prefix.length()) }
+    return source
+}
+
+func remove_suffix(value, suffix) {
+    let source = str(value)
+    if source.ends_with(suffix) { return source.slice(0, source.length() - suffix.length()) }
+    return source
+}
+
+func before(value, delimiter) {
+    let source = str(value)
+    let index = source.index_of(delimiter)
+    if index == nil { return source }
+    return source.slice(0, index)
+}
+
+func after(value, delimiter) {
+    let source = str(value)
+    let index = source.index_of(delimiter)
+    if index == nil { return "" }
+    return source.slice(index + delimiter.length())
+}
+
+func count_occurrences(value, needle) {
+    if needle == "" { throw "needle cannot be empty" }
+    let source = str(value)
+    var remaining = source
+    var count = 0
+    while true {
+        let index = remaining.index_of(needle)
+        if index == nil { break }
+        count += 1
+        remaining = remaining.slice(index + needle.length())
+    }
+    return count
+}
+
+func equals_ignore_case(left, right) {
+    return str(left).lower() == str(right).lower()
+}
+
+func words(value) {
+    result = []
+    for item in str(value).strip().split(" ") {
+        if item != "" { result.push(item) }
+    }
+    return result
+}
+
+func join(items, separator = "") {
+    result = ""
+    var index = 0
+    for item in items {
+        if index > 0 { result += separator }
+        result += str(item)
+        index += 1
+    }
+    return result
+}
+
+func lines(value) {
+    return str(value).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+}
+
+func ensure_prefix(value, prefix) {
+    let source = str(value)
+    if source.starts_with(prefix) { return source }
+    return prefix + source
+}
+
+func ensure_suffix(value, suffix) {
+    let source = str(value)
+    if source.ends_with(suffix) { return source }
+    return source + suffix
+}
+
+func indent(value, prefix = "    ") {
+    let result = []
+    for line in lines(value) { result.push(prefix + line) }
+    return join(result, "\n")
+}
+
+func dedent(value) {
+    let source_lines = lines(value)
+    var minimum = nil
+    for line in source_lines {
+        if line.strip() == "" { continue }
+        let leading = line.length() - line.strip().length()
+        if minimum == nil or leading < minimum { minimum = leading }
+    }
+    if minimum == nil or minimum == 0 { return str(value) }
+    let result = []
+    for line in source_lines {
+        result.push(line.slice(min(minimum, line.length())))
+    }
+    return join(result, "\n")
+}
+
+func snake_case(value) {
+    let normalized = str(value).replace("-", " ").replace("_", " ").strip().lower()
+    return join(words(normalized), "_")
+}
+
+func kebab_case(value) {
+    let normalized = str(value).replace("_", " ").replace("-", " ").strip().lower()
+    return join(words(normalized), "-")
+}
+
+func title_case(value) {
+    let result = []
+    for word in words(value) { result.push(word.capitalize()) }
+    return join(result, " ")
+}
+
+func reverse_words(value) {
+    let items = words(value).reverse()
+    return join(items, " ")
+}

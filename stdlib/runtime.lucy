@@ -1,0 +1,290 @@
+# Lucy runtime utilities. Reflection, callable helpers, and collection algorithms.
+
+# Kernel-style convenience functions.
+class Kernel {
+    func printf(format_string, values = []) {
+        return __kernel_printf(format_string, values)
+    }
+
+    func p(value) {
+        return print(value)
+    }
+
+    func pp(value) {
+        return print(value)
+    }
+
+    func format(format_string, values = []) {
+        return __kernel_format(format_string, values)
+    }
+
+    func sprintf(format_string, values = []) {
+        return self.format(format_string, values)
+    }
+
+    func catch(callback) {
+        try {
+            return callback()
+        }
+        catch Exception as error {
+            return error
+        }
+    }
+
+    func rescue(callback, handler) {
+        try {
+            return callback()
+        }
+        catch Exception as error {
+            return handler(error)
+        }
+    }
+
+    func ensure(callback, cleanup) {
+        try {
+            return callback()
+        }
+        finally {
+            cleanup()
+        }
+    }
+
+    func system(command) {
+        return __kernel_system(command)
+    }
+
+    func spawn(command) {
+        return __process_spawn(command)
+    }
+
+    func trap(signal_number, callback) {
+        return __signal_trap(signal_number, callback)
+    }
+
+    func global_variables() {
+        return __kernel_global_variables()
+    }
+
+    func local_variables() {
+        return __kernel_local_variables()
+    }
+
+    func methods(value) {
+        return __kernel_methods(value)
+    }
+
+    func respond_to?(value, name) {
+        return __kernel_respond_to(value, name)
+    }
+
+    func send(value, name, args = []) {
+        return __kernel_send(value, name, args)
+    }
+
+    func inspect(value) {
+        return __kernel_inspect(value)
+    }
+
+    func to_a(value) {
+        return __kernel_to_a(value)
+    }
+
+    func to_h(value) {
+        return __kernel_to_h(value)
+    }
+
+    func to_sym(value) {
+        return __kernel_to_sym(value)
+    }
+
+    func ancestors(value) {
+        return __kernel_ancestors(value)
+    }
+
+    func superclass(value) {
+        return __kernel_superclass(value)
+    }
+
+    func singleton_class(value) {
+        return type(value)
+    }
+
+    func proc(callback) {
+        return callback
+    }
+
+    func lambda(callback) {
+        return callback
+    }
+}
+
+kernel = Kernel.new()
+
+# Collection helpers built from Lucy's array and map primitives.
+class Collections {
+    func first(items) {
+        return items.first()
+    }
+
+    func last(items) {
+        return items.last()
+    }
+
+    func reverse(items) {
+        result = []
+        i = items.length() - 1
+        while i >= 0 {
+            result.push(items[i])
+            i -= 1
+        }
+        return result
+    }
+
+    func contains(items, value) {
+        return items.contains(value)
+    }
+
+    func count(items, value) {
+        return items.count(value)
+    }
+
+    func index(items, value) {
+        return items.index(value)
+    }
+
+    func compact(items) {
+        result = []
+        for item in items {
+            if item {
+                result.push(item)
+            }
+        }
+        return result
+    }
+
+    func unique(items) {
+        result = []
+        for item in items {
+            if !result.contains(item) {
+                result.push(item)
+            }
+        }
+        return result
+    }
+
+    func flatten(items) {
+        result = []
+        for item in items {
+            if type(item) == "array" {
+                nested = self.flatten(item)
+                for value in nested {
+                    result.push(value)
+                }
+            } else {
+                result.push(item)
+            }
+        }
+        return result
+    }
+
+    func sum(items) {
+        return sum(items)
+    }
+
+    func min(items) {
+        if items.length() == 0 {
+            return nil
+        }
+        result = items[0]
+        for item in items {
+            if item < result {
+                result = item
+            }
+        }
+        return result
+    }
+
+    func max(items) {
+        if items.length() == 0 {
+            return nil
+        }
+        result = items[0]
+        for item in items {
+            if item > result {
+                result = item
+            }
+        }
+        return result
+    }
+}
+
+collections = Collections.new()
+
+# Flat public runtime API. Reflection and callable helpers are one level under `runtime`.
+func printf(format_string, values = []) {
+    return __kernel_printf(format_string, values)
+}
+
+func format(format_string, values = []) {
+    return __kernel_format(format_string, values)
+}
+
+func catch(callback) {
+    try {
+        return callback()
+    }
+    catch Exception as error {
+        return error
+    }
+}
+
+func rescue(callback, handler) {
+    try {
+        return callback()
+    }
+    catch Exception as error {
+        return handler(error)
+    }
+}
+
+func ensure(callback, cleanup) {
+    try {
+        return callback()
+    }
+    finally {
+        cleanup()
+    }
+}
+
+func methods(value) {
+    return __kernel_methods(value)
+}
+
+func responds(value, name) {
+    return __kernel_respond_to(value, name)
+}
+
+func call(value, name, args = []) {
+    return __kernel_send(value, name, args)
+}
+
+func inspect(value) {
+    return __kernel_inspect(value)
+}
+
+func variables() {
+    return __kernel_local_variables()
+}
+
+func globals() {
+    return __kernel_global_variables()
+}
+
+func ancestors(value) {
+    return __kernel_ancestors(value)
+}
+
+func superclass(value) {
+    return __kernel_superclass(value)
+}
+

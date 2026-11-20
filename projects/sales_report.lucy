@@ -1,0 +1,30 @@
+# End-to-end example: strict CSV parsing, validation, aggregation, report output.
+let rows = data.csv_parse(fs.read("projects/fixtures/sales.csv"))
+if rows.length() == 0 {
+    throw "DataError: sales.csv has no records"
+}
+let header = rows[0]
+if header.length() != 3 or header[0] != "product" or header[1] != "quantity" or header[2] != "unit_price" {
+    throw "DataError: unexpected CSV header"
+}
+let report = [["product", "quantity", "revenue"]]
+var total = 0.0
+var i = 1
+while i < rows.length() {
+    let row = rows[i]
+    if row.length() != 3 {
+        throw "DataError: malformed row " + i.to_string()
+    }
+    let quantity = row[1].to_int()
+    let price = row[2].to_float()
+    if quantity < 0 or price < 0 {
+        throw "DataError: negative quantity or price"
+    }
+    let revenue = quantity * price
+    total += revenue
+    report.push([row[0], quantity.to_string(), revenue.to_string()])
+    i += 1
+}
+report.push(["TOTAL", "", total.to_string()])
+fs.write("projects/fixtures/sales-report.csv", data.csv_stringify(report))
+println "sales report written; total=" + total.to_string()

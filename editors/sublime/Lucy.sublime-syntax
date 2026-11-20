@@ -1,0 +1,55 @@
+%YAML 1.2
+---
+name: Lucy
+file_extensions: [lucy]
+scope: source.lucy
+contexts:
+  main:
+    - match: '#.*$'
+      scope: comment.line.lucy
+    - match: '^=begin\b'
+      push: block-comment
+    - match: '"'
+      push: string
+    - match: "'"
+      push: string_single
+    - match: '`'
+      push: shell
+    - match: '\b(true|false|nil)\b'
+      scope: constant.language.lucy
+    - match: '\b(if|unless|else|while|repeat|for|foreach|loop|switch|case|default|return|break|continue|try|catch|finally|throw|import|from|as|in|let|var|const|global|new|self|super)\b'
+      scope: keyword.control.lucy
+    - match: '\b(const|global|new|self|super)\b'
+      scope: storage.type.lucy
+    - match: '\b(func|lambda|class|struct)\b'
+      scope: storage.type.lucy
+    - match: '\b(0[xX][0-9A-Fa-f]+|[0-9]+(?:\.[0-9]+)?)\b'
+      scope: constant.numeric.lucy
+    - match: '\$[A-Za-z_][A-Za-z0-9_.]*'
+      scope: variable.interpolation.lucy
+    - match: '(\*\*=?|===?|!==?|==?\|!=|>=?|<=?|&&|\|\||<<=?|>>=?|[+*/%&|^~!?:=<>-]=?)'
+      scope: keyword.operator.lucy
+  string:
+    - meta_scope: string.quoted.double.lucy
+    - match: '\\.'
+      scope: constant.character.escape.lucy
+    - match: '\$[A-Za-z_][A-Za-z0-9_.]*'
+      scope: variable.interpolation.lucy
+    - match: '"'
+      pop: true
+  string_single:
+    - meta_scope: string.quoted.single.lucy
+    - match: '\\.'
+      scope: constant.character.escape.lucy
+    - match: '\\$[A-Za-z_][A-Za-z0-9_.]*'
+      scope: variable.other.interpolation.lucy
+    - match: "'"
+      pop: true
+  shell:
+    - meta_scope: string.quoted.other.backtick.lucy
+    - match: '`'
+      pop: true
+  block-comment:
+    - meta_scope: comment.block.lucy
+    - match: '^=end\b'
+      pop: true

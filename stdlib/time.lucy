@@ -1,0 +1,284 @@
+# Lucy temporal library. Instant, calendar date, and date-time operations share one module.
+
+# Time helpers based on Unix epoch milliseconds.
+class Time {
+    func initialize(timestamp = nil) {
+        self.timestamp = timestamp == nil ? __datetime_now() : timestamp
+    }
+
+    func now() {
+        return Time.new(__datetime_now())
+    }
+
+    func today() {
+        return Date.new(__datetime_now())
+    }
+
+    func strptime(text, format) {
+        return Time.new(__time_strptime(text, format))
+    }
+
+    func format(format_string) {
+        return __datetime_format(self.timestamp, format_string)
+    }
+
+    func parts() {
+        return __time_parts(self.timestamp)
+    }
+
+    func year() {
+        return __time_parts(self.timestamp).get("year")
+    }
+
+    func month() {
+        return __time_parts(self.timestamp).get("month")
+    }
+
+    func day() {
+        return __time_parts(self.timestamp).get("day")
+    }
+
+    func hour() {
+        return __time_parts(self.timestamp).get("hour")
+    }
+
+    func minute() {
+        return __time_parts(self.timestamp).get("minute")
+    }
+
+    func second() {
+        return __time_parts(self.timestamp).get("second")
+    }
+
+    func add(milliseconds) {
+        return Time.new(self.timestamp + milliseconds)
+    }
+
+    func subtract(milliseconds) {
+        return Time.new(self.timestamp - milliseconds)
+    }
+
+    func plus(milliseconds) {
+        return self.add(milliseconds)
+    }
+
+    func minus(milliseconds) {
+        return self.subtract(milliseconds)
+    }
+
+    func compare(other) {
+        if self.timestamp < other.timestamp {
+            return -1
+        }
+        if self.timestamp > other.timestamp {
+            return 1
+        }
+        return 0
+    }
+
+    func succ() {
+        return self.add(1000)
+    }
+
+    func add_ms(milliseconds) {
+        return self.add(milliseconds)
+    }
+
+    func subtract_ms(milliseconds) {
+        return self.subtract(milliseconds)
+    }
+}
+
+
+# Calendar date helpers. Date values are represented by epoch milliseconds.
+class Date {
+    func initialize(timestamp = nil) {
+        self.timestamp = timestamp == nil ? __datetime_now() : timestamp
+    }
+
+    func parse(text) {
+        return Date.new(__date_parse(text))
+    }
+
+    func strptime(text, format) {
+        return Date.new(__date_strptime(text, format))
+    }
+
+    func format(format_string = "%Y-%m-%d") {
+        return __datetime_format(self.timestamp, format_string)
+    }
+
+    func add(days) {
+        return Date.new(self.timestamp + days * 86400000)
+    }
+
+    func subtract(days) {
+        return Date.new(self.timestamp - days * 86400000)
+    }
+
+    func next_day() {
+        return self.add(1)
+    }
+
+    func prev_day() {
+        return self.subtract(1)
+    }
+
+    func succ() {
+        return self.next_day()
+    }
+
+    func shift_months(months) {
+        parts = __time_parts(self.timestamp)
+        year = parts.get("year")
+        month = parts.get("month") + months
+        while month > 12 {
+            month -= 12
+            year += 1
+        }
+        while month < 1 {
+            month += 12
+            year -= 1
+        }
+        day = parts.get("day")
+        days_in_month = 31
+        if month == 4 or month == 6 or month == 9 or month == 11 {
+            days_in_month = 30
+        } else if month == 2 {
+            leap = (year % 4 == 0 and year % 100 != 0) or year % 400 == 0
+            days_in_month = leap ? 29 : 28
+        }
+        if day > days_in_month {
+            day = days_in_month
+        }
+        text = str(year) + "-" + str(month) + "-" + str(day)
+        return Date.new(__date_parse(text))
+    }
+
+    func add_months(months) {
+        return self.shift_months(months)
+    }
+
+    func subtract_months(months) {
+        return self.shift_months(-months)
+    }
+
+    func compare(other) {
+        if self.timestamp < other.timestamp {
+            return -1
+        }
+        if self.timestamp > other.timestamp {
+            return 1
+        }
+        return 0
+    }
+}
+
+date = Date.new()
+
+# Date and time helpers. Timestamps are Unix milliseconds.
+class DateTime {
+    func initialize(timestamp) {
+        self.timestamp = timestamp
+    }
+
+    func timestamp() {
+        return self.timestamp
+    }
+
+    func format(pattern) {
+        return __datetime_format(self.timestamp, pattern)
+    }
+
+    func parts() {
+        return __datetime_parts(self.timestamp)
+    }
+
+    func year() {
+        return self.parts().get("year")
+    }
+
+    func month() {
+        return self.parts().get("month")
+    }
+
+    func day() {
+        return self.parts().get("day")
+    }
+
+    func hour() {
+        return self.parts().get("hour")
+    }
+
+    func minute() {
+        return self.parts().get("minute")
+    }
+
+    func second() {
+        return self.parts().get("second")
+    }
+
+    func weekday() {
+        return self.parts().get("weekday")
+    }
+
+    func iso() {
+        return self.format("%Y-%m-%dT%H:%M:%S")
+    }
+}
+
+class DateTimeModule {
+    func now() {
+        return DateTime.new(__datetime_now())
+    }
+
+    func from_timestamp(milliseconds) {
+        return DateTime.new(__datetime_from_timestamp(milliseconds))
+    }
+
+    func format(milliseconds, pattern) {
+        return __datetime_format(milliseconds, pattern)
+    }
+}
+
+datetime = DateTimeModule.new()
+
+# Unified constructors and clock helpers.
+func now() {
+    return Time.now()
+}
+
+func today() {
+    return Date.new(__datetime_now())
+}
+
+func timestamp() {
+    return __datetime_now()
+}
+
+# Unified time facade. Instant, calendar date, and datetime APIs share one object.
+time = Time.new()
+time.date = Date
+# DateTimeModule is instantiated here so time.datetime.now() is directly usable.
+time.datetime = DateTimeModule.new()
+
+# Flat public time API.
+func parse(text) {
+    return Time.strptime(text, "%Y-%m-%d %H:%M:%S")
+}
+func date(text) {
+    return Date.parse(text)
+}
+func format(value, pattern = "%Y-%m-%d %H:%M:%S") {
+    if type(value) == "instance" {
+    return value.format(pattern)
+    }
+    return __datetime_format(value, pattern)
+}
+func _time_sleep(milliseconds) {
+    return sleep(milliseconds)
+}
+func sleep(milliseconds) {
+    return _time_sleep(milliseconds)
+}
+

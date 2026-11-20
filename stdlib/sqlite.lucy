@@ -1,0 +1,72 @@
+# Lucy SQLite library.
+# Connection-oriented API with prepared statements and transactions.
+
+class Database {
+    func initialize(path) {
+        self.handle = __sqlite_open(path)
+        self.path = path
+    }
+
+    func execute(sql, params = []) {
+        return __sqlite_execute(self.handle, sql, params)
+    }
+
+    func query(sql, params = []) {
+        return __sqlite_query(self.handle, sql, params)
+    }
+
+    func prepare(sql) {
+        return Statement.new(self.handle, sql)
+    }
+
+    func begin() {
+        return __sqlite_begin(self.handle)
+    }
+
+    func commit() {
+        return __sqlite_commit(self.handle)
+    }
+
+    func rollback() {
+        return __sqlite_rollback(self.handle)
+    }
+
+    func changes() {
+        return __sqlite_changes(self.handle)
+    }
+
+    func last_insert_id() {
+        return __sqlite_last_insert_id(self.handle)
+    }
+
+    func close() {
+        return __sqlite_close(self.handle)
+    }
+}
+
+class Statement {
+    func initialize(handle, sql) {
+        self.handle = __sqlite_prepare(handle, sql)
+    }
+
+    func bind(params = []) {
+        __sqlite_bind(self.handle, params)
+        return self
+    }
+
+    func execute() {
+        return __sqlite_statement_execute(self.handle)
+    }
+
+    func query() {
+        return __sqlite_statement_query(self.handle)
+    }
+
+    func close() {
+        return __sqlite_statement_close(self.handle)
+    }
+}
+
+func open(path) {
+    return Database.new(path)
+}
