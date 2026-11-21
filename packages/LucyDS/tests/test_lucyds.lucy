@@ -1,0 +1,210 @@
+import lucyds
+from lucyds import LinkedList, DoublyLinked
+
+func check(condition, message) {
+    if !condition {
+        throw "AssertionError: " + message
+    }
+}
+
+func check_array(actual, expected, message) {
+    check(actual.length() == expected.length(), message + " (length)")
+    var i = 0
+    while i < expected.length() {
+        check(actual[i] == expected[i], message + " (index " + i + ")")
+        i += 1
+    }
+}
+
+# Selective import compatibility with the original LucyDS usage.
+let selected_list = LinkedList.new()
+selected_list.append(99)
+check(selected_list.get(0) == 99, "selective LinkedList import")
+let selected_doubly = DoublyLinked.new()
+selected_doubly.append(100)
+check(selected_doubly.get(0) == 100, "DoublyLinked alias import")
+
+# Linked lists
+let list = lucyds.LinkedList.new()
+list.append(10)
+list.append(20)
+list.prepend(5)
+check_array(list.to_array(), [5, 10, 20], "LinkedList append/prepend")
+check(list.remove_at(1) == 10, "LinkedList remove_at")
+check(list.remove(20), "LinkedList remove")
+list.reverse()
+check_array(list.to_array(), [5], "LinkedList reverse")
+check(list.size() == 1, "LinkedList size")
+
+let doubly = lucyds.DoublyLinkedList.new()
+doubly.append(2)
+doubly.prepend(1)
+doubly.append(3)
+check_array(doubly.to_array(), [1, 2, 3], "DoublyLinkedList order")
+check_array(doubly.to_array_reverse(), [3, 2, 1], "DoublyLinkedList reverse order")
+check(doubly.remove_at(1) == 2, "DoublyLinkedList remove_at")
+
+# Stack, queue, deque
+let stack = lucyds.Stack.new()
+stack.push(1)
+stack.push(2)
+check(stack.pop() == 2, "Stack LIFO")
+check(stack.peek() == 1, "Stack peek")
+
+let queue = lucyds.Queue.new()
+queue.enqueue("a")
+queue.enqueue("b")
+check(queue.dequeue() == "a", "Queue FIFO")
+check(queue.peek() == "b", "Queue peek")
+
+let deque = lucyds.Deque.new()
+deque.push_front(2)
+deque.push_front(1)
+deque.push_back(3)
+check(deque.pop_front() == 1, "Deque front")
+check(deque.pop_back() == 3, "Deque back")
+
+# Hash table
+let table = lucyds.HashTable.new()
+check(table.set("name", "Lucy"), "HashTable set")
+check(table.get("name") == "Lucy", "HashTable get")
+check(table.has("name"), "HashTable has")
+check(table.delete("name"), "HashTable delete")
+check(!table.has("name"), "HashTable delete removes key")
+
+# Trees and heap
+let bst = lucyds.BinarySearchTree.new()
+bst.insert(8)
+bst.insert(4)
+bst.insert(12)
+bst.insert(10)
+check_array(bst.inorder(), [4, 8, 10, 12], "BST inorder")
+check(bst.remove(8), "BST remove root with two children")
+check_array(bst.inorder(), [4, 10, 12], "BST after removal")
+
+let avl = lucyds.AVLTree.new()
+avl.insert(30)
+avl.insert(20)
+avl.insert(10)
+check_array(avl.inorder(), [10, 20, 30], "AVL rotations")
+check(avl.height() == 2, "AVL height")
+
+let heap = lucyds.BinaryHeap.new()
+heap.push(5)
+heap.push(2)
+heap.push(8)
+check(heap.pop() == 2, "BinaryHeap min")
+check(heap.pop() == 5, "BinaryHeap second min")
+
+let trie = lucyds.Trie.new()
+check(trie.insert("lucy"), "Trie insert")
+check(trie.contains("lucy"), "Trie contains")
+check(trie.starts_with("luc"), "Trie prefix")
+
+# Graphs and algorithms
+let graph = lucyds.Graph.new()
+graph.add_edge("A", "B")
+graph.add_edge("B", "C")
+check_array(lucyds.breadth_first_search(graph, "A"), ["A", "B", "C"], "BFS")
+check_array(lucyds.depth_first_search(graph, "A"), ["A", "B", "C"], "DFS")
+let distances = lucyds.dijkstra(graph, "A")
+check(distances.get("C") == 2, "Dijkstra distance")
+
+let uf = lucyds.UnionFind.new()
+uf.add("x")
+uf.add("y")
+check(uf.union("x", "y"), "UnionFind union")
+check(uf.connected("x", "y"), "UnionFind connected")
+
+# Searching and sorting
+check(lucyds.linear_search([3, 5, 7], 5) == 1, "linear_search")
+check(lucyds.binary_search([3, 5, 7], 7) == 2, "binary_search")
+check(lucyds.lower_bound([1, 2, 2, 4], 2) == 1, "lower_bound")
+check_array(lucyds.bubble_sort([3, 1, 2]), [1, 2, 3], "bubble_sort")
+check_array(lucyds.selection_sort([3, 1, 2]), [1, 2, 3], "selection_sort")
+check_array(lucyds.insertion_sort([3, 1, 2]), [1, 2, 3], "insertion_sort")
+check_array(lucyds.merge_sort([3, 1, 2]), [1, 2, 3], "merge_sort")
+check_array(lucyds.quick_sort([3, 1, 2]), [1, 2, 3], "quick_sort")
+
+# Empty-state and boundary regressions
+let empty_list = lucyds.LinkedList.new()
+check(empty_list.is_empty(), "empty LinkedList")
+check(empty_list.get(0) == nil, "empty LinkedList get")
+check(empty_list.remove_at(0) == nil, "empty LinkedList remove_at")
+empty_list.append(1)
+empty_list.remove_at(0)
+check(empty_list.is_empty(), "LinkedList empty after removing last item")
+
+let empty_doubly = lucyds.DoublyLinkedList.new()
+empty_doubly.append(1)
+check(empty_doubly.remove_at(0) == 1, "DoublyLinkedList remove only item")
+check(empty_doubly.is_empty(), "DoublyLinkedList empty after removal")
+empty_doubly.prepend(2)
+check(empty_doubly.get(0) == 2, "DoublyLinkedList prepend after empty")
+
+let compact_queue = lucyds.Queue.new()
+var q = 0
+while q < 40 {
+    compact_queue.enqueue(q)
+    q += 1
+}
+q = 0
+while q < 35 {
+    check(compact_queue.dequeue() == q, "Queue compaction order")
+    q += 1
+}
+check(compact_queue.size() == 5, "Queue size after compaction")
+check(compact_queue.dequeue() == 35, "Queue after compaction")
+
+let collision_table = lucyds.HashTable.new(3)
+collision_table.set("alpha", 1)
+collision_table.set("beta", 2)
+collision_table.set("gamma", 3)
+collision_table.set("delta", 4)
+collision_table.set("epsilon", 5)
+check(collision_table.size() == 5, "HashTable size after resize")
+check(collision_table.get("epsilon") == 5, "HashTable lookup after resize")
+check(collision_table.set("alpha", 10), "HashTable update")
+check(collision_table.size() == 5, "HashTable update does not grow")
+check(collision_table.get("alpha") == 10, "HashTable updated value")
+check(collision_table.load_factor() > 0, "HashTable load factor")
+collision_table.set("🙂", "unicode")
+check(collision_table.get("🙂") == "unicode", "HashTable unicode key")
+
+let remove_bst = lucyds.BinarySearchTree.new()
+remove_bst.insert(10)
+remove_bst.insert(5)
+remove_bst.insert(15)
+remove_bst.insert(12)
+remove_bst.insert(20)
+check(remove_bst.remove(10), "BST remove root with successor deeper")
+check_array(remove_bst.inorder(), [5, 12, 15, 20], "BST deep successor removal")
+check(remove_bst.remove(5), "BST remove leaf")
+check(remove_bst.remove(15), "BST remove node with one child")
+check_array(remove_bst.inorder(), [12, 20], "BST after multiple removals")
+
+let directed = lucyds.Graph.new(true)
+directed.add_edge("A", "B")
+directed.add_edge("C", "B")
+check(directed.edges_count() == 2, "directed edge count")
+check(directed.remove_vertex("B"), "directed remove vertex")
+check(directed.edges_count() == 0, "directed edge count after vertex removal")
+
+let self_loop_graph = lucyds.Graph.new()
+self_loop_graph.add_edge("self", "self")
+check(self_loop_graph.edges_count() == 1, "undirected self-loop count")
+check(self_loop_graph.remove_vertex("self"), "remove self-loop vertex")
+check(self_loop_graph.edges_count() == 0, "self-loop count after vertex removal")
+
+let negative_graph = lucyds.Graph.new(true)
+negative_graph.add_edge("S", "T", -1)
+check(lucyds.dijkstra(negative_graph, "S") == nil, "Dijkstra rejects reachable negative edge")
+
+let empty_trie = lucyds.Trie.new()
+check(empty_trie.starts_with(""), "Trie empty prefix")
+check(!empty_trie.contains(""), "Trie empty word not inserted")
+
+check_array(lucyds.quick_sort([]), [], "quick_sort empty")
+check_array(lucyds.merge_sort([2, 1, 2, 1]), [1, 1, 2, 2], "merge_sort duplicates")
+
+println "LucyDS tests passed"

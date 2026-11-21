@@ -1,0 +1,72 @@
+# Min binary heap. Values must support numeric ordering.
+class BinaryHeap {
+    func initialize() {
+        self.items = []
+    }
+    func push(value) {
+        self.items.push(value)
+        var index = self.items.length() - 1
+        while index > 0 {
+            let parent = int((index - 1) / 2)
+            if self.items[parent] <= self.items[index] {
+                break
+            }
+            let temp = self.items[parent]
+            self.items[parent] = self.items[index]
+            self.items[index] = temp
+            index = parent
+        }
+        return self.items.length()
+    }
+    func peek() {
+        return self.items.first()
+    }
+    func pop() {
+        let n = self.items.length()
+        if n == 0 {
+            return nil
+        }
+        let result = self.items[0]
+        let last = self.items.pop()
+        if self.items.length() > 0 {
+            self.items[0] = last
+            var index = 0
+            while true {
+                let left = index * 2 + 1
+                let right = left + 1
+                var smallest = index
+                if left < self.items.length() and self.items[left] < self.items[smallest] {
+                    smallest = left
+                }
+                if right < self.items.length() and self.items[right] < self.items[smallest] {
+                    smallest = right
+                }
+                if smallest == index {
+                    break
+                }
+                let temp = self.items[index]
+                self.items[index] = self.items[smallest]
+                self.items[smallest] = temp
+                index = smallest
+            }
+        }
+        return result
+    }
+    func size() {
+        return self.items.length()
+    }
+    func is_empty() {
+        return self.items.length() == 0
+    }
+    func clear() {
+        self.items.clear()
+        return self
+    }
+    func to_array() {
+        let result = []
+        for value in self.items {
+            result.push(value)
+        }
+        return result
+    }
+}

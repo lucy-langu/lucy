@@ -1,0 +1,54 @@
+class Queue {
+    func initialize() {
+        self.items = []
+        self.front_index = 0
+    }
+    func enqueue(value) {
+        self.items.push(value)
+        return self.items.length() - self.front_index
+    }
+    func dequeue() {
+        if self.is_empty() {
+            return nil
+        }
+        let value = self.items[self.front_index]
+        self.front_index += 1
+        if self.front_index >= 32 and self.front_index * 2 >= self.items.length() {
+            let remaining = []
+            var i = self.front_index
+            while i < self.items.length() {
+                remaining.push(self.items[i])
+                i += 1
+            }
+            self.items = remaining
+            self.front_index = 0
+        }
+        return value
+    }
+    func peek() {
+        if self.is_empty() {
+            return nil
+        }
+        return self.items[self.front_index]
+    }
+    func size() {
+        return self.items.length() - self.front_index
+    }
+    func is_empty() {
+        return self.front_index >= self.items.length()
+    }
+    func clear() {
+        self.items = []
+        self.front_index = 0
+        return self
+    }
+    func to_array() {
+        let result = []
+        var i = self.front_index
+        while i < self.items.length() {
+            result.push(self.items[i])
+            i += 1
+        }
+        return result
+    }
+}

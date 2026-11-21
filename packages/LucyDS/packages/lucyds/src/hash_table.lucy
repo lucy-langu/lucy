@@ -1,0 +1,157 @@
+# Separate-chaining hash table for string keys.
+# Lucy maps only support string keys. The hash uses a polynomial rolling
+# calculation over a portable ASCII alphabet; unknown characters still work
+# correctly but may collide more often. Collisions are resolved by bucket chains.
+class _HTEntry {
+    func initialize(key, value) {
+        self.key = key
+        self.value = value
+    }
+}
+
+class HashTable {
+    func initialize(capacity = 17) {
+        if type(capacity) != "int" or capacity < 1 {
+            capacity = 17
+        }
+        self.capacity = capacity
+        self.buckets = []
+        var i = 0
+        while i < capacity {
+            self.buckets.push([])
+            i += 1
+        }
+        self.count = 0
+    }
+    private func _bucket_index(key) {
+        let alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        var hash = 0
+        var i = 0
+        while i < key.length() {
+            var code = alphabet.index_of(key.char_at(i))
+            if code == nil {
+                code = alphabet.length() + key.length()
+            }
+            hash = (hash * 31 + code + 1) % self.capacity
+            i += 1
+        }
+        return hash
+    }
+    func set(key, value) {
+        if type(key) != "string" {
+            return false
+        }
+        let index = self._bucket_index(key)
+        let bucket = self.buckets[index]
+        for entry in bucket {
+            if entry.key == key {
+                entry.value = value
+                return true
+            }
+        }
+        bucket.push(_HTEntry.new(key, value))
+        self.count += 1
+        if self.count > self.capacity * 3 {
+            self._resize(self.capacity * 2 + 1)
+        }
+        return true
+    }
+    func get(key) {
+        if type(key) != "string" {
+            return nil
+        }
+        let bucket = self.buckets[self._bucket_index(key)]
+        for entry in bucket {
+            if entry.key == key {
+                return entry.value
+            }
+        }
+        return nil
+    }
+    func has(key) {
+        if type(key) != "string" {
+            return false
+        }
+        let bucket = self.buckets[self._bucket_index(key)]
+        for entry in bucket {
+            if entry.key == key {
+                return true
+            }
+        }
+        return false
+    }
+    func delete(key) {
+        if type(key) != "string" {
+            return false
+        }
+        let index = self._bucket_index(key)
+        let bucket = self.buckets[index]
+        var i = 0
+        while i < bucket.length() {
+            if bucket[i].key == key {
+                bucket.remove_at(i)
+                self.count -= 1
+                return true
+            }
+            i += 1
+        }
+        return false
+    }
+    private func _resize(new_capacity) {
+        let old_buckets = self.buckets
+        self.capacity = new_capacity
+        self.buckets = []
+        var i = 0
+        while i < new_capacity {
+            self.buckets.push([])
+            i += 1
+        }
+        let old_count = self.count
+        self.count = 0
+        for bucket in old_buckets {
+            for entry in bucket {
+                let index = self._bucket_index(entry.key)
+                self.buckets[index].push(entry)
+                self.count += 1
+            }
+        }
+        return self.count == old_count
+    }
+    func keys() {
+        let result = []
+        for bucket in self.buckets {
+            for entry in bucket {
+                result.push(entry.key)
+            }
+        }
+        return result
+    }
+    func values() {
+        let result = []
+        for bucket in self.buckets {
+            for entry in bucket {
+                result.push(entry.value)
+            }
+        }
+        return result
+    }
+    func size() {
+        return self.count
+    }
+    func is_empty() {
+        return self.count == 0
+    }
+    func load_factor() {
+        return self.count / self.capacity
+    }
+    func clear() {
+        self.buckets = []
+        var i = 0
+        while i < self.capacity {
+            self.buckets.push([])
+            i += 1
+        }
+        self.count = 0
+        return self
+    }
+}

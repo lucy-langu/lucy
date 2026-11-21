@@ -1,0 +1,202 @@
+# Singly linked list. Indexes are zero-based.
+class _LLNode {
+    func initialize(value) {
+        self.value = value
+        self.next = nil
+    }
+}
+
+class LinkedList {
+    func initialize() {
+        self.head = nil
+        self.tail = nil
+        self.count = 0
+    }
+
+    func append(value) {
+        let node = _LLNode.new(value)
+        if self.head == nil {
+            self.head = node
+            self.tail = node
+        } else {
+            self.tail.next = node
+            self.tail = node
+        }
+        self.count += 1
+        return self
+    }
+
+    func prepend(value) {
+        let node = _LLNode.new(value)
+        if self.head == nil {
+            self.head = node
+            self.tail = node
+        } else {
+            node.next = self.head
+            self.head = node
+        }
+        self.count += 1
+        return self
+    }
+
+    func insert(index, value) {
+        if index < 0 or index > self.count {
+            return false
+        }
+        if index == 0 {
+            self.prepend(value)
+            return true
+        }
+        if index == self.count {
+            self.append(value)
+            return true
+        }
+        var previous = self.head
+        var i = 0
+        while i < index - 1 {
+            previous = previous.next
+            i += 1
+        }
+        let node = _LLNode.new(value)
+        node.next = previous.next
+        previous.next = node
+        self.count += 1
+        return true
+    }
+
+    func get(index) {
+        if index < 0 or index >= self.count {
+            return nil
+        }
+        var current = self.head
+        var i = 0
+        while i < index {
+            current = current.next
+            i += 1
+        }
+        return current.value
+    }
+
+    func set(index, value) {
+        if index < 0 or index >= self.count {
+            return false
+        }
+        var current = self.head
+        var i = 0
+        while i < index {
+            current = current.next
+            i += 1
+        }
+        current.value = value
+        return true
+    }
+
+    func remove_at(index) {
+        if index < 0 or index >= self.count {
+            return nil
+        }
+        if index == 0 {
+            let removed = self.head
+            self.head = self.head.next
+            self.count -= 1
+            if self.count == 0 {
+                self.tail = nil
+            }
+            return removed.value
+        }
+        var previous = self.head
+        var i = 0
+        while i < index - 1 {
+            previous = previous.next
+            i += 1
+        }
+        let removed = previous.next
+        previous.next = removed.next
+        if index == self.count - 1 {
+            self.tail = previous
+        }
+        self.count -= 1
+        return removed.value
+    }
+
+    func remove(value) {
+        if self.head == nil {
+            return false
+        }
+        if self.head.value == value {
+            self.remove_at(0)
+            return true
+        }
+        var previous = self.head
+        var current = self.head.next
+        while current != nil {
+            if current.value == value {
+                previous.next = current.next
+                if current.next == nil {
+                    self.tail = previous
+                }
+                self.count -= 1
+                return true
+            }
+            previous = current
+            current = current.next
+        }
+        return false
+    }
+
+    func contains(value) {
+        return self.index(value) != nil
+    }
+
+    func index(value) {
+        var current = self.head
+        var i = 0
+        while current != nil {
+            if current.value == value {
+                return i
+            }
+            current = current.next
+            i += 1
+        }
+        return nil
+    }
+
+    func size() {
+        return self.count
+    }
+
+    func is_empty() {
+        return self.count == 0
+    }
+
+    func clear() {
+        self.head = nil
+        self.tail = nil
+        self.count = 0
+        return self
+    }
+
+    func to_array() {
+        let result = []
+        var current = self.head
+        while current != nil {
+            result.push(current.value)
+            current = current.next
+        }
+        return result
+    }
+
+    func reverse() {
+        var previous = nil
+        var current = self.head
+        self.tail = self.head
+        while current != nil {
+            let following = current.next
+            current.next = previous
+            previous = current
+            current = following
+        }
+        self.head = previous
+        return self
+    }
+}
