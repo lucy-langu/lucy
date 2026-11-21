@@ -1,0 +1,6 @@
+from nested_modules.collections.linked import NestedImportProbe, nested_import_value
+
+let item = NestedImportProbe.new(207)
+assert(item.get_value() == 207)
+assert(nested_import_value() == "nested-import-ok")
+println("nested module imports: ok")

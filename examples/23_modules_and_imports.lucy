@@ -1,4 +1,4 @@
 import math
 
-print math.pow 2, 8
-print math.sqrt 81
+print pow 2, 8
+print sqrt 81

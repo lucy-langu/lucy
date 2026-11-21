@@ -1,5 +1,7 @@
 import runtime
+import set
 
-values = [5, 2, 9, 2]
-print data.unique values
+let values = [5, 2, 9, 2]
+let unique = set.new values
+print unique
 print runtime.inspect values

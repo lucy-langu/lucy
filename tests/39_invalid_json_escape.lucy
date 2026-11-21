@@ -1,0 +1,2 @@
+let invalid_json = "\"\\a\""
+data.json.parse(invalid_json)

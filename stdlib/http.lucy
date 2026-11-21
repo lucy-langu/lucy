@@ -1,220 +1,243 @@
-# Lucy network client. HTTP, sockets, and name resolution are grouped here so one network library covers the common stack.
-# HTTP client with Ruby-inspired method names.
-class HTTPRequest
-    def initialize(method, url, body = "")
+# Lucy network library.
+# HTTP client, TCP sockets, and DNS resolution share one flat public module.
+
+class HTTPRequest {
+    func initialize(method, url, body = "", headers = nil, options = nil) {
         self.method = method
         self.url = url
         self.body = body
-    end
+        self.headers = headers
+        self.options = options
+    }
 
-    def execute()
+    func execute() {
+        if self.options {
+            return __http_request(self.method, self.url, self.body, self.headers, self.options)
+        }
+        if self.headers {
+            return __http_request(self.method, self.url, self.body, self.headers)
+        }
         return __http_request(self.method, self.url, self.body)
-    end
-end
+    }
+}
 
-class HTTP
-    def initialize(url = "", proxy = nil)
+class HTTP {
+    func initialize(url = "", proxy = nil) {
         self.url = url
-        self.proxy_url = proxy
-    end
+        self.default_headers = nil
+        self.options = {}
+        if proxy {
+            self.options["proxy"] = proxy
+        }
+    }
 
-    def get(path = "")
-        return __http_request("GET", self.url + path, "")
-    end
-
-    def put(path = "", body = "")
-        return __http_request("PUT", self.url + path, body)
-    end
-
-    def delete(path = "")
-        return __http_request("DELETE", self.url + path, "")
-    end
-
-    def head(path = "")
-        return __http_request("HEAD", self.url + path, "")
-    end
-
-    def patch(path = "", body = "")
-        return __http_request("PATCH", self.url + path, body)
-    end
-
-    def post(path = "", body = "")
-        return __http_request("POST", self.url + path, body)
-    end
-
-    def request(method, path = "", body = "")
-        return __http_request(method, self.url + path, body)
-    end
-
-    def start()
+    func headers(value) {
+        self.default_headers = value
         return self
-    end
+    }
 
-    def proxy(proxy_url)
-        self.proxy_url = proxy_url
+    func timeout(seconds) {
+        self.options["timeout"] = seconds
         return self
-    end
-end
+    }
 
-# Simple top-level helpers for one-shot requests.
-def get(url)
-    return __http_request("GET", url, "")
-end
+    func connect_timeout(seconds) {
+        self.options["connect_timeout"] = seconds
+        return self
+    }
 
-def post(url, body = "")
-    return __http_request("POST", url, body)
-end
+    func proxy(proxy_url) {
+        self.options["proxy"] = proxy_url
+        return self
+    }
 
-def put(url, body = "")
-    return __http_request("PUT", url, body)
-end
+    func user_agent(value) {
+        self.options["user_agent"] = value
+        return self
+    }
 
-def delete(url)
-    return __http_request("DELETE", url, "")
-end
+    func follow_redirects(value) {
+        self.options["follow_redirects"] = value
+        return self
+    }
 
-def head(url)
-    return __http_request("HEAD", url, "")
-end
+    func insecure(value = true) {
+        self.options["insecure"] = value
+        return self
+    }
 
-def patch(url, body = "")
-    return __http_request("PATCH", url, body)
-end
+    func get(path = "") {
+        return self.request("GET", path)
+    }
 
+    func post(path = "", body = "") {
+        return self.request("POST", path, body)
+    }
 
-# Low-level TCP/UDP socket operations.
-# TCP socket API.
-class Socket
-    def initialize()
+    func put(path = "", body = "") {
+        return self.request("PUT", path, body)
+    }
+
+    func patch(path = "", body = "") {
+        return self.request("PATCH", path, body)
+    }
+
+    func delete(path = "") {
+        return self.request("DELETE", path)
+    }
+
+    func head(path = "") {
+        return self.request("HEAD", path)
+    }
+
+    func request(method, path = "", body = "", headers = nil) {
+        actual_headers = headers
+        if actual_headers == nil {
+            actual_headers = self.default_headers
+        }
+        if actual_headers {
+            return __http_request(method, self.url + path, body, actual_headers, self.options)
+        }
+        return __http_request(method, self.url + path, body, nil, self.options)
+    }
+}
+
+# One-shot HTTP helpers.
+func request(method, url, body = "", headers = nil, options = nil) {
+    if options {
+        return __http_request(method, url, body, headers, options)
+    }
+    if headers {
+        return __http_request(method, url, body, headers)
+    }
+    return __http_request(method, url, body)
+}
+
+func get(url, headers = nil, options = nil) {
+    return request("GET", url, "", headers, options)
+}
+
+func post(url, body = "", headers = nil, options = nil) {
+    return request("POST", url, body, headers, options)
+}
+
+func put(url, body = "", headers = nil, options = nil) {
+    return request("PUT", url, body, headers, options)
+}
+
+func patch(url, body = "", headers = nil, options = nil) {
+    return request("PATCH", url, body, headers, options)
+}
+
+func delete(url, headers = nil, options = nil) {
+    return request("DELETE", url, "", headers, options)
+}
+
+func head(url, headers = nil, options = nil) {
+    return request("HEAD", url, "", headers, options)
+}
+
+func client(url = "", proxy = nil) {
+    return HTTP.new(url, proxy)
+}
+
+# Low-level TCP socket API.
+class Socket {
+    func initialize() {
         self.native = __socket_new()
-    end
+    }
 
-    def connect(host, port)
+    func connect(host, port) {
         return __socket_connect(self.native, host, port)
-    end
+    }
 
-    def bind(host, port)
+    func bind(host, port) {
         return __socket_bind(self.native, host, port)
-    end
+    }
 
-    def listen(backlog = 16)
+    func listen(backlog = 16) {
         return __socket_listen(self.native, backlog)
-    end
+    }
 
-    def accept()
+    func accept() {
         client = Socket.new()
         client.native = __socket_accept(self.native)
         return client
-    end
+    }
 
-    def recv(size = 4096)
+    func recv(size = 4096) {
         return __socket_recv(self.native, size)
-    end
+    }
 
-    def send(data)
+    func send(data) {
         return __socket_send(self.native, data)
-    end
+    }
 
-    def close()
+    func close() {
         return __socket_close(self.native)
-    end
-end
+    }
+}
 
-class SocketAPI
-    def new()
+class SocketAPI {
+    func new() {
         return Socket.new()
-    end
-end
+    }
+}
 
 socket = SocketAPI.new()
 
-# Hostname and address lookup.
-# DNS resolution helpers.
-class Resolv
-    def getaddress(host)
+# DNS helpers.
+class Resolv {
+    func getaddress(host) {
         return __resolv_getaddress(host)
-    end
+    }
 
-    def getname(address)
+    func getname(address) {
         return __resolv_getname(address)
-    end
-end
+    }
+}
 
 resolv = Resolv.new()
 
-# Unified network facade. The same object exposes HTTP plus low-level networking.
-http = HTTP.new()
-
-# Flat public network API. HTTP, sockets and DNS are all one level under `http`.
-def request(method, url, body = "")
-    return __http_request(method, url, body)
-end
-
-def get(url)
-    return request("GET", url)
-end
-
-def post(url, body = "")
-    return request("POST", url, body)
-end
-
-def put(url, body = "")
-    return request("PUT", url, body)
-end
-
-def delete(url)
-    return request("DELETE", url)
-end
-
-def head(url)
-    return request("HEAD", url)
-end
-
-def patch(url, body = "")
-    return request("PATCH", url, body)
-end
-
-def client(url = "", proxy = nil)
-    return HTTP.new(url, proxy)
-end
-
-def connect(host, port)
+# Convenience aliases for the flat networking API.
+func connect(host, port) {
     s = Socket.new()
     s.connect(host, port)
     return s
-end
+}
 
-def bind(host, port)
+func bind(host, port) {
     s = Socket.new()
     s.bind(host, port)
     return s
-end
+}
 
-def listen(socket, backlog = 16)
+func listen(socket, backlog = 16) {
     return socket.listen(backlog)
-end
+}
 
-def accept(socket)
+func accept(socket) {
     return socket.accept()
-end
+}
 
-def recv(socket, size = 4096)
+func recv(socket, size = 4096) {
     return socket.recv(size)
-end
+}
 
-def send(socket, data)
+func send(socket, data) {
     return socket.send(data)
-end
+}
 
-def close(socket)
+func close(socket) {
     return socket.close()
-end
+}
 
-def resolve(host)
+func resolve(host) {
     return __resolv_getaddress(host)
-end
+}
 
-def reverse(address)
+func reverse(address) {
     return __resolv_getname(address)
-end
+}
 
+http = HTTP.new()

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "value.hpp"
+#include "extension.hpp"
 
 #include <functional>
 #include <string>

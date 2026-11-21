@@ -1,321 +1,350 @@
-# Lucy-native data shaping helpers for maps and arrays.
+# Lucy data library.
+# Collection literals and common scalar operations are language features.
+# This module focuses on structured data formats and map shaping.
 
-class Data
-    def encode(value, format = "json")
-        if format == "json"
-            return stringify(value)
-        end
-        if format == "yaml"
-            return yaml_dump(value)
-        end
-        throw "DataError: unsupported format"
-    end
+func pick(source, keys) {
+    result = {}
+    for key in keys {
+        if source.has(key) {
+            result.set(key, source.get(key))
+        }
+    }
+    return result
+}
 
-    def decode(text, format = "json")
-        if format == "json"
-            return parse(text)
-        end
-        if format == "yaml"
-            return yaml_load(text)
-        end
-        throw "DataError: unsupported format"
-    end
-    def pick(source, keys)
-        _data_result = {}
-        for key in keys
-            if source.has(key)
-                _data_result.set(key, source.get(key))
-            end
-        end
-        return _data_result
-    end
+func omit(source, keys) {
+    result = {}
+    for key in source.keys() {
+        if !keys.contains(key) {
+            result.set(key, source.get(key))
+        }
+    }
+    return result
+}
 
-    def omit(source, keys)
-        _data_result = {}
-        for key in source.keys()
-            if !keys.contains(key)
-                _data_result.set(key, source.get(key))
-            end
-        end
-        return _data_result
-    end
+func merge(left, right) {
+    result = {}
+    for key in left.keys() {
+        result.set(key, left.get(key))
+    }
+    for key in right.keys() {
+        result.set(key, right.get(key))
+    }
+    return result
+}
 
-    def merge(left, right)
-        _data_result = {}
-        for key in left.keys()
-            _data_result.set(key, left.get(key))
-        end
-        for key in right.keys()
-            _data_result.set(key, right.get(key))
-        end
-        return _data_result
-    end
+func values(source, keys) {
+    result = []
+    for key in keys {
+        result.push(source.get(key))
+    }
+    return result
+}
 
-    def values(source, keys)
-        _data_values = []
-        for key in keys
-            _data_values.push(source.get(key))
-        end
-        return _data_values
-    end
+func zip(keys, values) {
+    result = {}
+    i = 0
+    while i < keys.length() and i < values.length() {
+        result.set(keys[i], values[i])
+        i += 1
+    }
+    return result
+}
 
-    def zip(keys, values)
-        _data_result = {}
-        i = 0
-        while i < keys.length()
-            if i < values.length()
-                _data_result.set(keys[i], values[i])
-            end
-            i += 1
-        end
-        return _data_result
-    end
-end
-
-
-
-# JSON parsing and serialization.
-class JSON
-    def parse(text)
+class JSON {
+    func parse(text) {
         return __json_parse(text)
-    end
+    }
 
-    def stringify(value)
+    func stringify(value) {
         return __json_stringify(value)
-    end
+    }
 
-    def pretty_generate(value)
+    func pretty(value) {
         return __json_pretty(value)
-    end
+    }
 
-    def fast_generate(value)
-        return self.stringify(value)
-    end
-
-    def load(path)
+    func load(path) {
         import fs
-        return parse(fs.read(path))
-    end
+        return self.parse(fs.read(path))
+    }
 
-    def dump(path, value)
+    func dump(path, value) {
         import fs
         return fs.write(path, self.stringify(value))
-    end
-end
+    }
+}
 
 json = JSON.new()
 
-# YAML configuration helpers for the common YAML subset supported by Lucy.
-class YAML
-    def load(text)
-        return __yaml_load(text)
-    end
+func parse(text) {
+    return json.parse(text)
+}
 
-    def safe_load(text)
-        return __yaml_load(text)
-    end
+func stringify(value) {
+    return json.stringify(value)
+}
 
-    def dump(value)
+func pretty(value) {
+    return json.pretty(value)
+}
+
+func json_read(path) {
+    return json.load(path)
+}
+
+func json_write(path, value) {
+    return json.dump(path, value)
+}
+
+class YAML {
+    func load(text) {
+        return __yaml_load(text)
+    }
+
+    func dump(value) {
         return __yaml_dump(value)
-    end
+    }
 
-    def load_file(path)
-        return __yaml_load_file(path)
-    end
-end
+    func load_file(path) {
+        import fs
+        return self.load(fs.read(path))
+    }
+}
 
 yaml = YAML.new()
 
-# CSV parsing and serialization.
-class CSV
-    def parse(text, delimiter = ",")
+func yaml_load(text) {
+    return yaml.load(text)
+}
+
+func yaml_dump(value) {
+    return yaml.dump(value)
+}
+
+class CSV {
+    func parse(text, delimiter = ",") {
         return __csv_parse(text, delimiter)
-    end
+    }
 
-    def stringify(rows, delimiter = ",")
+    func stringify(rows, delimiter = ",") {
         return __csv_stringify(rows, delimiter)
-    end
+    }
 
-    def load(path, delimiter = ",")
+    func load(path, delimiter = ",") {
         import fs
         return self.parse(fs.read(path), delimiter)
-    end
+    }
 
-    def dump(path, rows, delimiter = ",")
+    func dump(path, rows, delimiter = ",") {
         import fs
         return fs.write(path, self.stringify(rows, delimiter))
-    end
-end
+    }
+}
 
 csv = CSV.new()
 
-# Unified serialization helpers.
-def encode(value, format = "json")
-    if format == "json"
-        return stringify(value)
-    end
-    if format == "yaml"
-        return yaml_dump(value)
-    end
-    throw "DataError: unsupported format"
-end
+func csv_parse(text, delimiter = ",") {
+    return csv.parse(text, delimiter)
+}
 
-def decode(text, format = "json")
-    if format == "json"
-        return parse(text)
-    end
-    if format == "yaml"
-        return yaml_load(text)
-    end
-    throw "DataError: unsupported format"
-end
+func csv_stringify(rows, delimiter = ",") {
+    return csv.stringify(rows, delimiter)
+}
 
-# Unified data facade. Shaping and serialization are available from one object.
-data = Data.new()
 
-# Flat aggregate helpers.
-def min(source)
-    if source.length() == 0
-        return nil
-    end
-    result = source[0]
-    for item in source
-        if item < result
-            result = item
-        end
-    end
-    return result
-end
-
-def max(source)
-    if source.length() == 0
-        return nil
-    end
-    result = source[0]
-    for item in source
-        if item > result
-            result = item
-        end
-    end
-    return result
-end
-
-# Flat public data API. Serialization and data shaping use one-level calls.
-def map(source, callback)
+# Collection shaping helpers.
+func compact(items) {
     result = []
-    for item in source
-        result.push(callback(item))
-    end
+    for item in items {
+        if item != nil { result.push(item) }
+    }
     return result
-end
+}
 
-def filter(source, callback)
+func unique(items) {
     result = []
-    for item in source
-        if callback(item)
+    for item in items {
+        if !result.contains(item) { result.push(item) }
+    }
+    return result
+}
+
+func flatten_one(items) {
+    result = []
+    for item in items {
+        if type(item) == "array" {
+            for nested in item { result.push(nested) }
+        } else {
             result.push(item)
-        end
-    end
+        }
+    }
     return result
-end
+}
 
-def reduce(source, callback, initial = nil)
-    if source.length() == 0
-        return initial
-    end
-    accumulator = initial
-    index = 0
-    if accumulator == nil
-        accumulator = source[0]
-        index = 1
-    end
-    while index < source.length()
-        accumulator = callback(accumulator, source[index])
+func chunk(items, chunk_size) {
+    if type(chunk_size) != "int" or chunk_size <= 0 {
+        throw "chunk size must be a positive integer"
+    }
+    result = []
+    current = []
+    for item in items {
+        current.push(item)
+        if current.length() == chunk_size {
+            result.push(current)
+            current = []
+        }
+    }
+    if current.length() > 0 { result.push(current) }
+    return result
+}
+
+func first(items, fallback = nil) {
+    if items.length() == 0 { return fallback }
+    return items[0]
+}
+
+func last(items, fallback = nil) {
+    if items.length() == 0 { return fallback }
+    return items[items.length() - 1]
+}
+
+func take(items, count) {
+    if type(count) != "int" or count < 0 { throw "take count must be a non-negative integer" }
+    result = []
+    var index = 0
+    while index < items.length() and index < count {
+        result.push(items[index])
         index += 1
-    end
-    return accumulator
-end
-
-def unique(source)
-    result = []
-    for item in source
-        if !result.contains(item)
-            result.push(item)
-        end
-    end
+    }
     return result
-end
+}
 
-def flatten(source)
+func drop(items, count) {
+    if type(count) != "int" or count < 0 { throw "drop count must be a non-negative integer" }
     result = []
-    for item in source
-        if type(item) == "array"
-            nested = flatten(item)
-            for value in nested
-                result.push(value)
-            end
-        else
-            result.push(item)
-        end
-    end
+    var index = count
+    while index < items.length() {
+        result.push(items[index])
+        index += 1
+    }
     return result
-end
+}
 
-def pick(source, keys)
-    return Data.new().pick(source, keys)
-end
+func select(items, predicate) {
+    result = []
+    for item in items {
+        if predicate(item) { result.push(item) }
+    }
+    return result
+}
 
-def omit(source, keys)
-    return Data.new().omit(source, keys)
-end
+func reject(items, predicate) {
+    result = []
+    for item in items {
+        if !predicate(item) { result.push(item) }
+    }
+    return result
+}
 
-def merge(left, right)
-    return Data.new().merge(left, right)
-end
+func any(items, predicate) {
+    for item in items {
+        if predicate(item) { return true }
+    }
+    return false
+}
 
-def values(source, keys)
-    return Data.new().values(source, keys)
-end
+func all(items, predicate) {
+    for item in items {
+        if !predicate(item) { return false }
+    }
+    return true
+}
 
-def zip(keys, values)
-    return Data.new().zip(keys, values)
-end
+func find_index(items, expected) {
+    var index = 0
+    for item in items {
+        if item == expected { return index }
+        index += 1
+    }
+    return nil
+}
 
-def parse(text)
-    return __json_parse(text)
-end
+func pluck(items, key, fallback = nil) {
+    result = []
+    for item in items {
+        if type(item) != "map" { throw "pluck expects an array of maps" }
+        result.push(item.has(key) ? item.get(key) : fallback)
+    }
+    return result
+}
 
-def stringify(value)
-    return __json_stringify(value)
-end
+func index_by(items, key) {
+    result = {}
+    for item in items {
+        if type(item) != "map" or !item.has(key) { continue }
+        result.set(str(item.get(key)), item)
+    }
+    return result
+}
 
-def pretty(value)
-    return __json_pretty(value)
-end
+func group_by(items, key) {
+    result = {}
+    for item in items {
+        if type(item) != "map" { throw "group_by expects an array of maps" }
+        let group_key = item.has(key) ? str(item.get(key)) : "nil"
+        if !result.has(group_key) { result.set(group_key, []) }
+        result.get(group_key).push(item)
+    }
+    return result
+}
 
-def json_read(path)
-    import fs
-    return parse(fs.read(path))
-end
+func count_by(items, key) {
+    result = {}
+    for item in items {
+        if type(item) != "map" { throw "count_by expects an array of maps" }
+        let group_key = item.has(key) ? str(item.get(key)) : "nil"
+        result.set(group_key, (result.has(group_key) ? result.get(group_key) : 0) + 1)
+    }
+    return result
+}
 
-def json_write(path, value)
-    import fs
-    return fs.write(path, stringify(value))
-end
+func sum_by(items, key) {
+    total = 0
+    for item in items {
+        if type(item) != "map" or !item.has(key) { continue }
+        let value = item.get(key)
+        if type(value) != "int" and type(value) != "double" {
+            throw "sum_by values must be numeric"
+        }
+        total += value
+    }
+    return total
+}
 
-def csv_parse(text, delimiter = ",")
-    return __csv_parse(text, delimiter)
-end
+func invert(source) {
+    result = {}
+    for key in source.keys() {
+        result.set(str(source.get(key)), key)
+    }
+    return result
+}
 
-def csv_stringify(rows, delimiter = ",")
-    return __csv_stringify(rows, delimiter)
-end
+func defaults(source, default_values) {
+    result = {}
+    for key in default_values.keys() { result.set(key, default_values.get(key)) }
+    for key in source.keys() { result.set(key, source.get(key)) }
+    return result
+}
 
-def yaml_load(text)
-    return __yaml_load(text)
-end
+func sorted_keys(source) {
+    return source.keys().sort()
+}
 
-def yaml_dump(value)
-    return __yaml_dump(value)
-end
-
+func values_for(source, keys, fallback = nil) {
+    result = []
+    for key in keys {
+        result.push(source.has(key) ? source.get(key) : fallback)
+    }
+    return result
+}

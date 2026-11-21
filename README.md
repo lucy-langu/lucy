@@ -1,130 +1,131 @@
-
-<div align="center">
-
-<img src="assets/lucy-logo.png" width="180" alt="Lucy">
-
 # Lucy
 
-### A lightweight, dynamic programming language built with C++17.
+**Version 2.0.7**
 
-[![Version](https://img.shields.io/badge/version-1.0.0-8b5cf6?style=flat-square)](...)
-[![Language](https://img.shields.io/badge/runtime-C%2B%2B17-orange?style=flat-square)](...)
+Lucy is a general-purpose programming language implemented in C++17 with runtime type contracts for annotated values and functions. It focuses on readable brace-delimited source, a compact expression system, a practical standard library, and an interactive REPL.
 
-**Simple syntax. Dynamic values. Classes. Modules. A small runtime.**
-
-</div>
-Lucy is a general-purpose, dynamically typed programming language implemented in C++17. It combines a small readable syntax, Ruby-like method calls, a Python-style REPL, and a standard library whose high-level API is written in Lucy itself.
-
-## What Lucy provides
-
-- Direct `.lucy` source execution
-- Interactive REPL
-- Dynamic values: `nil`, `bool`, `int`, `double`, `string`, `array`, `map`, functions, classes, and instances
-- Variables, constants, globals, interpolation, comments, and multiline comments
-- Arithmetic, comparison, logical, bitwise, ternary, and range operators
-- `if`, `else if`, `else`, `while`, `for`, `foreach`, `loop`, `break`, `continue`
-- Functions with default, named, and variadic arguments
-- Lexical block scoping and closures
-- Classes, constructors, fields, methods, and inheritance
-- Exceptions with `try`, `catch`, `finally`, and `throw`
-- Modules and selective imports
-- Backtick shell expressions
-- Phase 2 standard library: regex, JSON, datetime, process, encoding, CSV, HTTP, and SQLite
-- Script command-line arguments through `ARGV` / `argv`
-- GPL-licensed source distribution
-
-## Quick start
-
-```text
-lucy hello.lucy
-lucy
-lucy -i
-```
-
-Example:
+## Example
 
 ```lucy
-import json
-import regex
+let name = "Lucy"
+var count = 0
 
-user = json.parse("{\"name\":\"Nima\",\"age\":21}")
+func greet(value: String) -> String {
+    return "Hello $value"
+}
 
-if regex.match("^[A-Z]", user.name)
-    print "Hello $user.name"
-end
+for i in [1, 2, 3] {
+    count += i
+}
+
+unless name == "" {
+    print(greet(name))
+}
+
+print(count ?? 0)
 ```
 
-## Command-line arguments
+## Highlights
 
-When a source file is executed, every argument after the `.lucy` file is exposed as a string in `ARGV`. The lowercase `argv` name is an alias for the same array.
+- brace-delimited blocks
+- `let` and `var` bindings
+- case-sensitive identifiers
+- functions with defaults, variadics, named arguments, and type annotations
+- arrays and maps with multiline literals
+- multiline function calls
+- lambdas and closures
+- `switch` and `repeat ... while`
+- `unless` negative conditionals
+- `??` nil coalescing
+- classes and structs
+- exceptions with `try/catch/finally`
+- modules and selective imports
+- HTTP, TCP, DNS, filesystem, persistent SQLite connections and prepared statements, crypto, time, text, data, and process APIs
+- plain-text interactive REPL with live Tab completion, history, and runtime inspection commands
+- built-in type extensions such as `class String { ... }` without imports
+- module-path introspection through `:modules`, `:where`, and `modules_info()`
+- shared `lucy_runtime` for third-party C++ extensions
+- dynamic native module loading
+- project-local Pure-Lucy packages under `packages/`
 
-```bash
-lucy app.lucy one two 42
-```
+## Standard library
+
+Lucy 2.0.7 loads its standard modules automatically. The main modules (`app`, `crypto`, `data`, `flow`, `fs`, `http`, `math`, `random`, `repl`, `result`, `runtime`, `set`, `sqlite`, `system`, `text`, and `time`) are available without a user-written `import`. Explicit `import` remains supported for compatibility and for user modules/packages.
+
+## Extending built-in types
+
+Built-in values can be extended with normal class syntax:
 
 ```lucy
-print ARGV[0]
-print ARGV[1]
-print ARGV[2]
+class String {
+    func shout() -> String {
+        return self.upper() + "!"
+    }
+}
+
+println "hello".shout()
 ```
 
-The standard `sys` module also exposes `sys.argv()`.
-
-## Build
-
-Requirements:
-
-- C++17 compiler
-- CMake 3.16+
-- SQLite3 development package for the SQLite module (optional at build time)
-- `curl` executable for the HTTP module
-
-```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j2
-ctest --test-dir build --output-on-failure
-```
-
-## Install
-
-Use `./install.sh` on Linux/macOS or `install.bat` on Windows. Both installers build, test, and install Lucy.
+The same mechanism applies to `Int`, `Double`, `Bool`, `Array`, `Map`, and the other built-in types.
 
 ## Documentation
 
-- `docs/REFERENCE.md` — complete language and API reference
-- `docs/LANGUAGE.md` — language syntax and semantics
-- `docs/TUTORIAL.md` — guided examples
-- `docs/STDLIB.md` — standard library API
-- `docs/ARCHITECTURE.md` — interpreter architecture
-- `docs/ERRORS.md` — diagnostics and error categories
-- `docs/CLI.md` — command-line interface
-- `docs/HISTORY.md` — version-by-version additions
-- `docs/ROADMAP.md` — planned work
-- `editors/README.md` — editor integrations
+The documentation is intentionally consolidated into a small set of deep references:
 
-## Architecture
+- `docs/README.md` — documentation map and source-of-truth policy
+- `docs/GETTING_STARTED.md` — installation, tutorial, and first programs
+- `docs/LANGUAGE_REFERENCE.md` — complete language syntax and semantics
+- `docs/STANDARD_LIBRARY.md` — standard-library reference and API inventory
+- `docs/BUILTIN_REFERENCE.md` — global functions and native value methods
+- `docs/REPL_AND_TOOLING.md` — CLI, REPL, completion, packages, testing, and editor workflow
+- `docs/REAL_WORLD_WORKFLOWS.md` — end-to-end CSV, JSON, SQLite, CLI and performance patterns
+- `docs/stdlib/` — per-module API references generated from the shipped library source
+- `projects/` — runnable integration projects and fixtures
+- `scripts/verify_release.sh` — fresh build, regression suite, runnable examples, and documentation-example verification
+- `tools/paw/commands/docs-check.lucy` — execute per-module quick examples against the built runtime
+- `docs/TOOLS_AND_AUTOMATION.md` — repository and ecosystem tooling implemented in Lucy
+- `docs/ECOSYSTEM_TOOLING.md` — project scaffolding, package workflows, registry/resolver/LSP architecture, extension templates, build and test workflows
+- `docs/DEVELOPING_LUCY.md` — implementation architecture, extensions, testing, and releases
+- `docs/HISTORY_AND_MIGRATION.md` — historical migration context
+- `docs/CHANGELOG.md` — release history\n- `docs/RELEASE_2_0_7.md` — 2.0.7 scope and implementation boundaries\n- `docs/VERIFICATION_2_0_7.md` — pending release verification checklist\n- `docs/PACKAGE_REGISTRY_SPEC.md`, `docs/DEPENDENCY_RESOLVER_SPEC.md`, and `docs/LSP_SPEC.md` — ecosystem architecture contracts
+- `docs/VERIFICATION_2_0_7.md` — release scope, regression coverage, and verification status
 
-Lucy deliberately keeps the native boundary small:
 
-```text
-Lucy application
-      |
-      v
-stdlib/*.lucy
-      |
-      v
-small native C++ primitives
-      |
-      +-- OS
-      +-- filesystem
-      +-- SQLite
-      +-- regex
-      +-- process
-      +-- host curl
+## Core filesystem objects
+
+The filesystem APIs are available through import-free, Ruby-inspired core facades as well as the lowercase compatibility modules:
+
+```lucy
+println Dir.cwd()
+println Dir.entries(".")
+println File.read("README.md")
+println Path.basename("src/runtime.cpp")
 ```
 
-This means most standard-library behavior can be read and modified directly in Lucy without rebuilding the interpreter.
+`Dir`, `File`, and `Path` are core runtime objects. They delegate to the same filesystem implementation as `fs`, so there is no second implementation or behavior drift. Explicit imports remain supported for compatibility and user-defined modules, but are not required for these core objects.
 
-## Author
 
-Lucy is created and maintained by **Nima**.
+## Project commands and binstubs
+
+Declare project commands in `lucy.toml` under `[commands]`, then use `lucy commands` or `lucy run <name>`. To create terminal launchers for all declared commands, run `lucy install-binstubs`. See [Command Metadata and Binstubs](docs/COMMAND_METADATA_AND_BINSTUBS.md).
+
+
+## Official toolchain
+
+See [Paw](PAW.md) for the consolidated Lucy package and project manager.
+
+
+## Official toolchain: Paw
+
+Lucy 2.0.7 ships Paw as its single first-party project/package workflow CLI.
+Build and install Lucy and Paw together:
+
+```sh
+cmake -S . -B build -DLUCY_ENABLE_SQLITE=OFF
+cmake --build build --parallel
+cmake --install build --prefix "$HOME/.local"
+paw --help
+paw new hello
+```
+
+See [docs/PAW.md](docs/PAW.md) for commands, package workflow, installation layout, and feature boundaries.

@@ -1,5 +1,5 @@
 if exists("b:current_syntax") | finish | endif
-syntax keyword lucyKeyword if else while for foreach loop function def class return break continue end try catch finally throw import from as in
+syntax keyword lucyKeyword if unless else while repeat for foreach loop switch case default func lambda class struct return break continue try catch finally throw import from as in let var const global new self super
 syntax keyword lucyStorage const global new self super
 syntax keyword lucyBoolean true false nil
 syntax keyword lucyConstant PI E VERSION PLATFORM
@@ -11,7 +11,7 @@ syntax match lucyInterpolation /\$[A-Za-z_][A-Za-z0-9_.]*/ contained
 syntax region lucyShell start=/`/ end=/`/
 syntax match lucyNumber /\<\(0[xX][0-9A-Fa-f]\+\|[0-9]\+\%([.][0-9]\+\)\?\)\>/
 syntax match lucyOperator /\*\*=?\|===\?\|!==\?\|==\?\|!=\|>=\?\|<=\?\|&&\|||\|<<=?\|>>=?\|[+*/%&|^~!?:=<>-]=\?/
-syntax match lucyFunction /\<\(def\|function\)\s\+\zs[A-Za-z_][A-Za-z0-9_]*/
+syntax match lucyFunction /\<func\s\+\zs[A-Za-z_][A-Za-z0-9_]*/
 highlight default link lucyKeyword Keyword
 highlight default link lucyStorage StorageClass
 highlight default link lucyBoolean Boolean

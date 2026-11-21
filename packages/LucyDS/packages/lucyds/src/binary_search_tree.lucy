@@ -1,0 +1,175 @@
+class _BSTNode {
+    func initialize(value) {
+        self.value = value
+        self.left = nil
+        self.right = nil
+    }
+}
+
+class BinarySearchTree {
+    func initialize() {
+        self.root = nil
+        self.count = 0
+    }
+    func insert(value) {
+        if self.root == nil {
+            self.root = _BSTNode.new(value)
+            self.count += 1
+            return true
+        }
+        var current = self.root
+        while true {
+            if value == current.value {
+                return false
+            } else if value < current.value {
+                if current.left == nil {
+                    current.left = _BSTNode.new(value)
+                    self.count += 1
+                    return true
+                }
+                current = current.left
+            } else {
+                if current.right == nil {
+                    current.right = _BSTNode.new(value)
+                    self.count += 1
+                    return true
+                }
+                current = current.right
+            }
+        }
+        return false
+    }
+    func contains(value) {
+        var current = self.root
+        while current != nil {
+            if value == current.value {
+                return true
+            } else if value < current.value {
+                current = current.left
+            } else {
+                current = current.right
+            }
+        }
+        return false
+    }
+    func remove(value) {
+        var parent = nil
+        var current = self.root
+        while current != nil and current.value != value {
+            parent = current
+            if value < current.value {
+                current = current.left
+            } else {
+                current = current.right
+            }
+        }
+        if current == nil {
+            return false
+        }
+        if current.left != nil and current.right != nil {
+            var successor_parent = current
+            var successor = current.right
+            while successor.left != nil {
+                successor_parent = successor
+                successor = successor.left
+            }
+            current.value = successor.value
+            parent = successor_parent
+            current = successor
+        }
+        var replacement = nil
+        if current.left != nil {
+            replacement = current.left
+        } else {
+            replacement = current.right
+        }
+        if parent == nil {
+            self.root = replacement
+        } else if parent.left != nil and parent.left.value == current.value {
+            parent.left = replacement
+        } else {
+            parent.right = replacement
+        }
+        self.count -= 1
+        return true
+    }
+    func min() {
+        if self.root == nil {
+            return nil
+        }
+        var current = self.root
+        while current.left != nil {
+            current = current.left
+        }
+        return current.value
+    }
+    func max() {
+        if self.root == nil {
+            return nil
+        }
+        var current = self.root
+        while current.right != nil {
+            current = current.right
+        }
+        return current.value
+    }
+    func inorder() {
+        let result = []
+        self._inorder(self.root, result)
+        return result
+    }
+    private func _inorder(node, result) {
+        if node == nil {
+            return
+        }
+        self._inorder(node.left, result)
+        result.push(node.value)
+        self._inorder(node.right, result)
+    }
+    func preorder() {
+        let result = []
+        self._preorder(self.root, result)
+        return result
+    }
+    private func _preorder(node, result) {
+        if node == nil {
+            return
+        }
+        result.push(node.value)
+        self._preorder(node.left, result)
+        self._preorder(node.right, result)
+    }
+    func postorder() {
+        let result = []
+        self._postorder(self.root, result)
+        return result
+    }
+    private func _postorder(node, result) {
+        if node == nil {
+            return
+        }
+        self._postorder(node.left, result)
+        self._postorder(node.right, result)
+        result.push(node.value)
+    }
+    func size() {
+        return self.count
+    }
+    func is_empty() {
+        return self.count == 0
+    }
+    func height() {
+        return self._height(self.root)
+    }
+    private func _height(node) {
+        if node == nil {
+            return 0
+        }
+        let left_height = self._height(node.left)
+        let right_height = self._height(node.right)
+        if left_height > right_height {
+            return left_height + 1
+        }
+        return right_height + 1
+    }
+}

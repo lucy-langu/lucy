@@ -1,167 +1,191 @@
 # Set collection built on arrays with uniqueness guarantees.
-class Set
-    def initialize(values = [])
+class Set {
+    func initialize(values = []) {
         self.values = []
         self.merge(values)
-    end
+    }
 
-    def new(values = [])
+    func new(values = []) {
         return Set.new(values)
-    end
+    }
 
-    def add(value)
-        if !self.values.contains(value)
+    func add(value) {
+        if !self.values.contains(value) {
             self.values.push(value)
-        end
+        }
         return self
-    end
+    }
 
-    def delete(value)
+    func delete(value) {
         index = self.values.index(value)
-        if index == nil
+        if index == nil {
             return false
-        end
+        }
         self.values.remove_at(index)
         return true
-    end
+    }
 
-    def include?(value)
+    func include?(value) {
         return self.values.contains(value)
-    end
+    }
 
-    def member?(value)
+    func member?(value) {
         return self.include?(value)
-    end
+    }
 
-    def each(callback)
+    func each(callback) {
         return self.values.each(callback)
-    end
+    }
 
-    def size()
+    func size() {
         return self.values.length()
-    end
+    }
 
-    def length()
+    func length() {
         return self.size()
-    end
+    }
 
-    def empty?()
+    func empty?() {
         return self.size() == 0
-    end
+    }
 
-    def clear()
+    func clear() {
         self.values = []
         return self
-    end
+    }
 
-    def map(callback)
+    func map(callback) {
         return self.values.map(callback)
-    end
+    }
 
-    def select(callback)
+    func select(callback) {
         return self.values.filter(callback)
-    end
+    }
 
-    def reject(callback)
+    func reject(callback) {
         result = []
-        for value in self.values
-            if !callback(value)
+        for value in self.values {
+            if !callback(value) {
                 result.push(value)
-            end
-        end
+            }
+        }
         return result
-    end
+    }
 
-    def merge(other)
-        if type(other) == "array"
-            for value in other
+    func merge(other) {
+        if type(other) == "array" {
+            for value in other {
                 self.add(value)
-            end
-        else
-            for value in other.values
+            }
+        } else {
+            for value in other.values {
                 self.add(value)
-            end
-        end
+            }
+        }
         return self
-    end
+    }
 
-    def subset(other)
-        for value in self.values
-            if !other.include?(value)
+    func subset(other) {
+        for value in self.values {
+            if !other.include?(value) {
                 return false
-            end
-        end
+            }
+        }
         return true
-    end
+    }
 
-    def superset(other)
+    func superset(other) {
         return other.subset(self)
-    end
+    }
 
-    def intersect(other)
+    func intersect(other) {
         result = Set.new()
-        for value in self.values
-            if other.include?(value)
+        for value in self.values {
+            if other.include?(value) {
                 result.add(value)
-            end
-        end
+            }
+        }
         return result
-    end
+    }
 
-    def union(other)
+    func union(other) {
         result = Set.new(self.values)
         return result.merge(other.values)
-    end
+    }
 
-    def intersection(other)
+    func intersection(other) {
         return self.intersect(other)
-    end
+    }
 
-    def difference(other)
+    func difference(other) {
         result = Set.new()
-        for value in self.values
-            if !other.include?(value)
+        for value in self.values {
+            if !other.include?(value) {
                 result.add(value)
-            end
-        end
+            }
+        }
         return result
-    end
+    }
 
-    def subset?(other)
+    func subset?(other) {
         return self.subset(other)
-    end
+    }
 
-    def superset?(other)
+    func superset?(other) {
         return self.superset(other)
-    end
+    }
 
-    def intersect?(other)
-        for value in self.values
-            if other.include?(value)
+    func intersect?(other) {
+        for value in self.values {
+            if other.include?(value) {
                 return true
-            end
-        end
+            }
+        }
         return false
-    end
+    }
 
-    def symmetric_difference(other)
+    func symmetric_difference(other) {
         return self.difference(other).merge(other.difference(self))
-    end
-end
+    }
+}
 
 set = Set.new()
 
 # Flat public set API.
-def new(values = []); return Set.new(values); end
-def from_values(values); return Set.new(values); end
-def add(target, value); return target.add(value); end
-def delete(target, value); return target.delete(value); end
-def include?(target, value); return target.include?(value); end
-def union(left, right); return left.union(right); end
-def intersection(left, right); return left.intersection(right); end
-def difference(left, right); return left.difference(right); end
-def symmetric_difference(left, right); return left.symmetric_difference(right); end
-def subset?(left, right); return left.subset?(right); end
-def superset?(left, right); return left.superset?(right); end
-def intersect?(left, right); return left.intersect?(right); end
+func new(values = []) {
+    return Set.new(values)
+}
+func from_values(values) {
+    return Set.new(values)
+}
+func add(target, value) {
+    return target.add(value)
+}
+func delete(target, value) {
+    return target.delete(value)
+}
+func include?(target, value) {
+    return target.include?(value)
+}
+func union(left, right) {
+    return left.union(right)
+}
+func intersection(left, right) {
+    return left.intersection(right)
+}
+func difference(left, right) {
+    return left.difference(right)
+}
+func symmetric_difference(left, right) {
+    return left.symmetric_difference(right)
+}
+func subset?(left, right) {
+    return left.subset?(right)
+}
+func superset?(left, right) {
+    return left.superset?(right)
+}
+func intersect?(left, right) {
+    return left.intersect?(right)
+}
 

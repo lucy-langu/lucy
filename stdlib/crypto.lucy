@@ -1,154 +1,154 @@
 # Lucy cryptography library. Message digests and OpenSSL primitives are grouped by purpose.
 
 # Cryptographic digest helpers. The default algorithm is SHA-256.
-class Digest
-    def digest(text)
+class Digest {
+    func digest(text) {
         return __digest_digest(text)
-    end
+    }
 
-    def hexdigest(text)
+    func hexdigest(text) {
         return __digest_hexdigest(text)
-    end
+    }
 
-    def base64digest(text)
+    func base64digest(text) {
         return __digest_base64digest(text)
-    end
+    }
 
-    def file(path)
+    func file(path) {
         return __digest_file(path)
-    end
-end
+    }
+}
 
 _digest = Digest.new()
 
 # OpenSSL-compatible high-level API. HMAC is available without an external OpenSSL build.
-class HMAC
-    def digest(key, data)
+class HMAC {
+    func digest(key, data) {
         return __openssl_hmac(key, data)
-    end
+    }
 
-    def hexdigest(key, data)
+    func hexdigest(key, data) {
         return __openssl_hmac(key, data)
-    end
-end
+    }
+}
 
-class SSLContext
-    def initialize(options = {})
+class SSLContext {
+    func initialize(options = {}) {
         self.options = options
-    end
-end
+    }
+}
 
-class SSLSocket
-    def initialize(socket = nil, context = nil)
+class SSLSocket {
+    func initialize(socket = nil, context = nil) {
         self.socket = socket
         self.context = context
-    end
+    }
 
-    def connect(host, port)
-        if self.socket == nil
+    func connect(host, port) {
+        if self.socket == nil {
             self.socket = Socket.new()
-        end
+        }
         return self.socket.connect(host, port)
-    end
+    }
 
-    def close()
-        if self.socket != nil
+    func close() {
+        if self.socket != nil {
             return self.socket.close()
-        end
+        }
         return true
-    end
-end
+    }
+}
 
-class Certificate
-    def initialize(data = "")
+class Certificate {
+    func initialize(data = "") {
         self.data = data
-    end
-end
+    }
+}
 
-class RSA
-    def initialize(pem = "")
+class RSA {
+    func initialize(pem = "") {
         self.pem = pem
-    end
-end
+    }
+}
 
-class Cipher
-    def initialize(name = "")
+class Cipher {
+    func initialize(name = "") {
         self.name = name
-    end
-end
+    }
+}
 
-class X509
-    def certificate(data = "")
+class X509 {
+    func certificate(data = "") {
         return Certificate.new(data)
-    end
-end
+    }
+}
 
-class PKey
-    def rsa(pem = "")
+class PKey {
+    func rsa(pem = "") {
         return RSA.new(pem)
-    end
-end
+    }
+}
 
-class OpenSSL
-    def hmac()
+class OpenSSL {
+    func hmac() {
         return HMAC.new()
-    end
+    }
 
-    def ssl_context(options = {})
+    func ssl_context(options = {}) {
         return SSLContext.new(options)
-    end
+    }
 
-    def ssl_socket(socket = nil, context = nil)
+    func ssl_socket(socket = nil, context = nil) {
         return SSLSocket.new(socket, context)
-    end
+    }
 
-    def certificate(data = "")
+    func certificate(data = "") {
         return Certificate.new(data)
-    end
+    }
 
-    def rsa(pem = "")
+    func rsa(pem = "") {
         return RSA.new(pem)
-    end
+    }
 
-    def x509()
+    func x509() {
         return X509.new()
-    end
+    }
 
-    def pkey()
+    func pkey() {
         return PKey.new()
-    end
+    }
 
-    def cipher(name = "")
+    func cipher(name = "") {
         return Cipher.new(name)
-    end
-end
+    }
+}
 
 openssl = OpenSSL.new()
 x509 = X509.new()
 pkey = PKey.new()
 
 # Flat public crypto API.
-def digest(text)
+func digest(text) {
     return __digest_digest(text)
-end
+}
 
-def hexdigest(text)
+func hexdigest(text) {
     return __digest_hexdigest(text)
-end
+}
 
-def hash(text)
+func hash(text) {
     return __digest_hexdigest(text)
-end
+}
 
-def base64digest(text)
+func base64digest(text) {
     return __digest_base64digest(text)
-end
+}
 
-def file(path)
+func file(path) {
     return __digest_file(path)
-end
+}
 
-def hmac(key, data)
+func hmac(key, data) {
     return __openssl_hmac(key, data)
-end
+}
 

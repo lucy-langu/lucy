@@ -1,0 +1,12 @@
+# Lucy 2.0.3 core filesystem facades are available without import.
+assert(Dir.cwd() == system.cwd(), "Dir.cwd should delegate to system.cwd")
+assert(Dir.pwd() == Dir.cwd(), "Dir.pwd should alias current working directory")
+assert(Dir.entries(".").length() > 0, "Dir.entries should list the current directory")
+let probe = "lucy203_facade_test.tmp"
+File.write(probe, "lucy")
+assert(File.exists(probe), "File.exists should check filesystem entries")
+assert(File.size(probe) == 4, "File.size should return file size")
+File.delete(probe)
+assert(!File.exists(probe), "File.delete should remove files")
+assert(Path.basename("src/runtime.cpp") == "runtime.cpp", "Path.basename should return final component")
+assert(Path.dirname("src/runtime.cpp") == "src", "Path.dirname should return parent component")

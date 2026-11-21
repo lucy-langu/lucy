@@ -1,0 +1,7 @@
+let name = "Lucy"
+assert "hello $name" == "hello Lucy"
+assert "sum=${1 + 2}" == "sum=3"
+assert "upper=${name.upper()}" == "upper=LUCY"
+assert "platform=${system.platform()}" == "platform=" + system.platform()
+assert "map=${{answer: 42}[\"answer\"]}" == "map=42"
+println "expression interpolation tests passed"

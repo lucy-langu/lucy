@@ -1,13 +1,91 @@
-# Lucy Documentation
+# Lucy 2.0.7 Documentation
+- [Lucy 2.0.7 release scope and verification](RELEASE_2_0_7.md)
+- [Lucy 2.0.7 verification checklist](VERIFICATION_2_0_7.md)
 
-- `TUTORIAL.md` — beginner-to-intermediate tutorial
-- `LANGUAGE.md` — language features and syntax
-- `REFERENCE.md` — complete language reference
-- `API.md` — public flat standard-library API and import contract
-- `STDLIB.md` — standard-library guide and flat module API
-- `REPL.md` — interactive REPL and editable Lucy-level REPL library
-- `CLI.md` — command-line usage
-- `ERRORS.md` — runtime and syntax errors
-- `ARCHITECTURE.md` — implementation architecture
-- `HISTORY.md` — feature history
-- `ROADMAP.md` — development roadmap
+This directory documents the language, runtime, standard library, tools, extensions, build process, and known implementation limits. Treat the shipped source and regression tests as the executable contract; when prose disagrees with behavior, record the mismatch and correct the prose or implementation.
+
+## Start here
+
+1. [Getting Started](GETTING_STARTED.md) — installation, first programs, and initial workflow.
+2. [Language Specification](LANGUAGE_SPECIFICATION.md) — normative 2.0.7 language contract.
+3. [Language Reference](LANGUAGE_REFERENCE.md) — syntax, lexical rules, types, expressions, control flow, functions, OOP, imports, and known language limitations.
+4. [Programming Guide](PROGRAMMING_GUIDE.md) — idioms, common tasks, error handling, data, networking, reflection, and process control.
+5. [Standard Library](STANDARD_LIBRARY.md) — public module APIs, examples, caveats, and known defects.
+6. [Built-in Reference](BUILTIN_REFERENCE.md) — global runtime functions and native string/array/map/number methods.
+7. [REPL and Tooling](REPL_AND_TOOLING.md) — interactive use, completion, CLI, editor integration, and troubleshooting.
+8. [Real-world Workflows](REAL_WORLD_WORKFLOWS.md) — end-to-end CSV, JSON, SQLite, CLI, performance and security patterns.
+9. [Runnable Projects](../projects/README.md) — three integration examples with fixtures.
+10. [Command Metadata and Binstubs](COMMAND_METADATA_AND_BINSTUBS.md) — declarative CLI commands and global binstub generation.
+11. [Ecosystem Tooling](ECOSYSTEM_TOOLING.md) — project scaffolding, local packages, native extensions, build and test workflows.
+12. [Ecosystem Verification](ECOSYSTEM_VERIFICATION.md) — latest integration test results and remaining scope.
+
+## Reference and maintenance
+
+| Document | Coverage |
+|---|---|
+| [Environment and Installation](ENVIRONMENT_AND_INSTALLATION.md) | Build prerequisites, installation paths, environment variables, and platform notes. |
+| [Standard Library API Inventory](STANDARD_LIBRARY_API_INVENTORY.md) | Source-oriented listing of shipped library classes and methods; verify it against the source before release. |
+| [Core API Contract](contracts/core_api.json) | Machine-readable signatures, input descriptions, return contracts, errors, platform targets, and examples for the core filesystem facade. |
+| [Packages and Extensions](PACKAGES_AND_EXTENSIONS.md) | Import resolution, local packages, native extension boundary, and extension examples. |
+| [Ecosystem Tooling](ECOSYSTEM_TOOLING.md) | Lucy-native project, package, extension, build, and test tools. |
+| [Ecosystem Verification](ECOSYSTEM_VERIFICATION.md) | Integration results and explicitly unimplemented roadmap items. |
+| [Package Registry Specification](PACKAGE_REGISTRY_SPEC.md) | Remote registry API and publishing contract (specification). |
+| [Dependency Resolver Specification](DEPENDENCY_RESOLVER_SPEC.md) | Deterministic dependency resolution and lockfile design (specification). |
+| [LSP Specification](LSP_SPEC.md) | Language Server Protocol design and editor capability tiers (specification). |
+| [Debugging and Diagnostics](DEBUGGING_AND_DIAGNOSTICS.md) | Bug triage, diagnostic quality, and debugging workflow. |
+| [Regression and Release Process](REGRESSION_AND_RELEASE_PROCESS.md) | Regression discipline and release verification gates. |
+| [Ecosystem 2.0.7 Status](ECOSYSTEM_2_0_7_STATUS.md) | Shipped tooling versus future ecosystem components. |
+| [Runtime and Errors](RUNTIME_AND_ERRORS.md) | Runtime behavior, exception handling, and error categories. |
+| [Implementation Architecture](IMPLEMENTATION_ARCHITECTURE.md) | Lexer/parser/runtime architecture and value execution model. |
+| [Phase 1 and Phase 2 implementation report](PHASE_1_2_IMPLEMENTATION.md) | Delivered changes, Linux test evidence, and remaining verification gates. |
+| [Architecture Decision Records](adr/README.md) | Accepted decisions on subsystem boundaries, memory ownership, and compatibility. |
+| [Developing Lucy](DEVELOPING_LUCY.md) | Source layout, build, tests, native extension work, and release workflow. |
+| [History and Migration](HISTORY_AND_MIGRATION.md) | Compatibility changes and migration notes. |
+| [Changelog](CHANGELOG.md) | User-visible version history. |
+| [Real-world Workflows](REAL_WORLD_WORKFLOWS.md) | Complete application workflows and operational cautions. |
+| [Red-team Audit](RED_TEAM_AUDIT.md) | Historical 2.0.1 findings, dispositions, and remaining boundaries. |
+| [2.0.2 Verification Record](VERIFICATION_2_0_2.md) | Historical build/test environment and verification status. |
+| [2.0.6 Verification Record](VERIFICATION_2_0_6.md) | Release scope, regression coverage, and verified/unverified platforms. |
+| [Lucy-native Tooling](TOOLS_AND_AUTOMATION.md) | Repository tools, commands, and process API contracts. |
+
+## Per-module API pages
+
+These pages are source-indexed and list module-level functions, exported objects, classes, and methods. The consolidated [Standard Library](STANDARD_LIBRARY.md) remains the narrative reference; the [API Inventory](STANDARD_LIBRARY_API_INVENTORY.md) is the cross-module index.
+
+- [`app`](stdlib/app.md) · [`crypto`](stdlib/crypto.md) · [`data`](stdlib/data.md) · [`flow`](stdlib/flow.md)
+- [`fs`](stdlib/fs.md) · [`http`](stdlib/http.md) · [`math`](stdlib/math.md) · [`random`](stdlib/random.md)
+- [`repl`](stdlib/repl.md) · [`result`](stdlib/result.md) · [`runtime`](stdlib/runtime.md) · [`set`](stdlib/set.md)
+- [`sqlite`](stdlib/sqlite.md) · [`system`](stdlib/system.md) · [`text`](stdlib/text.md) · [`time`](stdlib/time.md)
+
+Regenerate the per-module pages after changing pure-Lucy APIs (after building Lucy):
+
+```sh
+./build/paw docs
+```
+
+## Canonicality and snippet policy
+
+The implementation and regression suite are the final authority for behavior in the corresponding release. A documented example should be one of: (1) a standalone executable example, (2) a fragment with its required context clearly identified, (3) an expected-error example, or (4) an environment-dependent example (network, filesystem permissions, external executable). The 2.x line adds dedicated integration examples and regression tests for previously observed edge cases; continue to label network- and platform-dependent examples explicitly.
+
+## Design principles stated by the project
+
+- Braces delimit blocks; normal 2.0 syntax does not use `end`.
+- Standard-library APIs favor shallow calls such as `fs.read(...)`.
+- String indexing and slicing operate on UTF-8 code points in 2.0.7, but grapheme-cluster segmentation and full Unicode case mapping are not implemented.
+- Type annotations are runtime contracts, not static compile-time type checking.
+- Pure Lucy libraries are preferred where possible; C++ extensions are available for native functionality.
+- Cross-platform support must be verified with clean platform-specific builds; a Linux result alone does not establish Windows/macOS correctness.
+
+| [2.0.3 Verification Record](VERIFICATION_2_0_3.md) | Scope and validation status of the Ruby-inspired core filesystem facades. |
+
+- [Object model and diagnostics](OBJECT_MODEL_AND_DIAGNOSTICS.md)
+
+
+## Command execution
+
+- [Command Metadata and Binstubs](COMMAND_METADATA_AND_BINSTUBS.md) — declarative project commands, CLI dispatch, generated launchers, and PATH setup.
+
+
+## Official toolchain
+
+See [Paw](PAW.md) for the consolidated Lucy package and project manager.

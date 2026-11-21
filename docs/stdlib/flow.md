@@ -1,0 +1,42 @@
+# `flow` standard library — Lucy 2.0.7
+
+Small functional composition helpers for callbacks and transformations.
+
+## Availability and imports
+
+The shipped module is loaded automatically in Lucy 2.x. Explicit `import` remains available when you want to make dependencies visible:
+
+```lucy
+import flow
+```
+
+Names beginning with `_` or `__` are implementation details unless a public API explicitly documents them.
+
+## Quick example
+
+```lucy
+let answer = flow.pipe(5, [lambda x => x * 2, lambda x => x + 1])
+println answer
+flow.tap(answer, lambda x => println x)
+```
+
+## Module-level functions
+
+| Function | Signature |
+|---|---|
+| `pipe` | `pipe(value, steps)` |
+| `tap` | `tap(value, action)` |
+| `branch` | `branch(value, predicate, yes, no = nil)` |
+| `repeat` | `repeat(value, count, step)` |
+
+## Classes and methods
+
+No public class declarations were found in this module's pure-Lucy source.
+
+## Contract and error handling
+
+Validate inputs at the application boundary. Runtime errors are reported as Lucy exceptions or native errors; exact messages may vary by platform and build. Do not assume network access, process privileges, filesystem permissions, or optional native dependencies are available.
+
+## Source of truth
+
+Implementation: [`stdlib/flow.lucy`](../../stdlib/flow.lucy). The signatures above are indexed from the current source file. Behavior is ultimately defined by implementation and regression tests; if you change the source API, regenerate this page and add tests for the new contract.

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Lucy
+Comment=Lucy Programming Language
+Exec=lucy
+Icon=lucy
+Terminal=true
+Categories=Development;Programming;

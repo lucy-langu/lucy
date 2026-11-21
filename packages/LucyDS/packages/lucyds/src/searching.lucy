@@ -1,0 +1,40 @@
+func linear_search(items, target) {
+    var i = 0
+    while i < items.length() {
+        if items[i] == target {
+            return i
+        }
+        i += 1
+    }
+    return nil
+}
+
+func binary_search(items, target) {
+    var low = 0
+    var high = items.length() - 1
+    while low <= high {
+        let middle = int((low + high) / 2)
+        if items[middle] == target {
+            return middle
+        } else if items[middle] < target {
+            low = middle + 1
+        } else {
+            high = middle - 1
+        }
+    }
+    return nil
+}
+
+func lower_bound(items, target) {
+    var low = 0
+    var high = items.length()
+    while low < high {
+        let middle = int((low + high) / 2)
+        if items[middle] < target {
+            low = middle + 1
+        } else {
+            high = middle
+        }
+    }
+    return low
+}

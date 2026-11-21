@@ -1,0 +1,60 @@
+class _TrieNode {
+    func initialize() {
+        self.children = {}
+        self.terminal = false
+    }
+}
+
+class Trie {
+    func initialize() {
+        self.root = _TrieNode.new()
+        self.count = 0
+    }
+    func insert(word) {
+        var current = self.root
+        var i = 0
+        while i < word.length() {
+            let character = word.char_at(i)
+            if !current.children.has(character) {
+                current.children.set(character, _TrieNode.new())
+            }
+            current = current.children.get(character)
+            i += 1
+        }
+        if current.terminal {
+            return false
+        }
+        current.terminal = true
+        self.count += 1
+        return true
+    }
+    func contains(word) {
+        let node = self._find(word)
+        if node == nil {
+            return false
+        }
+        return node.terminal
+    }
+    func starts_with(prefix) {
+        return self._find(prefix) != nil
+    }
+    private func _find(text) {
+        var current = self.root
+        var i = 0
+        while i < text.length() {
+            let character = text.char_at(i)
+            if !current.children.has(character) {
+                return nil
+            }
+            current = current.children.get(character)
+            i += 1
+        }
+        return current
+    }
+    func size() {
+        return self.count
+    }
+    func is_empty() {
+        return self.count == 0
+    }
+}

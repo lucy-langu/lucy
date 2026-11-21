@@ -1,0 +1,64 @@
+# Lucy-native project test runner. Mirrors CMake's expected-failure policy.
+import fs
+import system
+
+let ROOT = fs.absolute(".")
+let PAW_RUNTIME = system.env("PAW_RUNTIME")
+let DEFAULT_LUCY = PAW_RUNTIME == nil or PAW_RUNTIME == "" ? "lucy" : PAW_RUNTIME
+let LUCY = ARGV.length() > 0 ? fs.absolute(ARGV[0]) : DEFAULT_LUCY
+let TEST_DIR = ARGV.length() > 1 ? ARGV[1] : "tests"
+let RUN_SQLITE = system.env("LUCY_TEST_SQLITE") == "1"
+let expected_failures = [
+    "04_type_errors.lucy", "06_type_error_struct_field.lucy",
+    "08_invalid_hex_suffix.lucy", "09_invalid_hex_separator.lucy",
+    "10_invalid_hex_trailing_separator.lucy", "11_invalid_binary_digit.lucy",
+    "12_invalid_binary_separator.lucy", "13_invalid_binary_trailing_separator.lucy",
+    "14_invalid_decimal_separator.lucy", "23_invalid_csv_quotes.lucy",
+    "24_invalid_json_surrogate.lucy", "25_invalid_csv_delimiter.lucy",
+    "31_private_access_rejected.lucy", "39_invalid_json_escape.lucy",
+    "50_invalid_array_sort.lucy", "51_invalid_map_fetch.lucy",
+    "52_invalid_number_even.lucy", "53_invalid_array_reduce_arity.lucy"
+]
+
+if !fs.exists(TEST_DIR) {
+    println "Test directory does not exist: " + TEST_DIR
+    exit(2)
+}
+
+let old_path = system.env("LUCY_PATH")
+if old_path == nil or old_path == "" {
+    system.setenv("LUCY_PATH", fs.join([ROOT, "stdlib"]))
+}
+
+var passed = 0
+var failed = 0
+var skipped = 0
+let test_files = fs.files(TEST_DIR).sort()
+for filename in test_files {
+    if !filename.ends_with(".lucy") { continue }
+    if filename.contains("sqlite") and !RUN_SQLITE {
+        skipped += 1
+        println "SKIP " + filename + " (set LUCY_TEST_SQLITE=1 to enable)"
+        continue
+    }
+    let path = fs.absolute(fs.join([TEST_DIR, filename]))
+    let result = system.exec([LUCY, path], {"cwd": ROOT, "timeout_ms": 30000})
+    let expected = expected_failures.contains(filename)
+    if expected and !result.get("success") {
+        passed += 1
+        println "XFAIL " + filename
+    } else if !expected and result.get("success") {
+        passed += 1
+        println "PASS  " + filename
+    } else {
+        failed += 1
+        var failure_label = "FAIL  "
+        if expected { failure_label = "XPASS " }
+        println failure_label + filename
+        if result.get("stdout") != "" { println result.get("stdout") }
+        if result.get("stderr") != "" { println result.get("stderr") }
+        if result.get("timed_out") { println "  test exceeded 30 second timeout" }
+    }
+}
+println "\nLucy tests: " + str(passed) + " passed, " + str(failed) + " failed, " + str(skipped) + " skipped"
+exit(failed == 0 ? 0 : 1)

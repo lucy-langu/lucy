@@ -1,0 +1,48 @@
+name: Lucy CI
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  build-and-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        build_type: [Debug, Release]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DLUCY_ENABLE_SQLITE=OFF
+      - name: Build
+        run: cmake --build build --config ${{ matrix.build_type }} --parallel 2
+      - name: Test
+        run: ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure
+      - name: Verify stdlib manifest
+        run: cmake -E env LUCY_PATH=stdlib ${{ runner.os == 'Windows' && 'build/paw.exe' || 'build/paw' }} stdlib verify
+
+      - name: Run Lucy-native test runner
+        run: cmake -E env LUCY_PATH=stdlib ${{ runner.os == 'Windows' && 'build/paw.exe' || 'build/paw' }} test ${{ runner.os == 'Windows' && 'build/lucy.exe' || 'build/lucy' }} tests
+
+      - name: Exercise Lucy project scaffold
+        run: cmake -E env LUCY_PATH=stdlib ${{ runner.os == 'Windows' && 'build/paw.exe' || 'build/paw' }} new ci_sample ci_sample
+      - name: Run scaffolded project and smoke test
+        working-directory: ci_sample
+        run: |
+          cmake -E env LUCY_PATH=../stdlib ${{ runner.os == 'Windows' && '../build/paw.exe' || '../build/paw' }} run start
+          cmake -E env LUCY_PATH=../stdlib ${{ runner.os == 'Windows' && '../build/paw.exe' || '../build/paw' }} run test
+      - name: Verify local package workflow
+        working-directory: ci_sample
+        run: |
+          cmake -E env LUCY_PATH=../stdlib ${{ runner.os == 'Windows' && '../build/paw.exe' || '../build/paw' }} init
+          cmake -E env LUCY_PATH=../stdlib ${{ runner.os == 'Windows' && '../build/paw.exe' || '../build/paw' }} add smoke src/main.lucy 0.1.0
+          cmake -E env LUCY_PATH=../stdlib ${{ runner.os == 'Windows' && '../build/paw.exe' || '../build/paw' }} verify
+          cmake -E env LUCY_PATH=../stdlib ${{ runner.os == 'Windows' && '../build/paw.exe' || '../build/paw' }} update smoke ../tests/fixtures/project_packages/packages/hello_pkg/src/init.lucy 0.2.0
+          cmake -E env LUCY_PATH=../stdlib ${{ runner.os == 'Windows' && '../build/paw.exe' || '../build/paw' }} verify
+          cmake -E env LUCY_PATH=../stdlib ${{ runner.os == 'Windows' && '../build/paw.exe' || '../build/paw' }} remove smoke
+      - name: Build native extension scaffold
+        run: |
+          cmake -E env LUCY_PATH=stdlib ${{ runner.os == 'Windows' && 'build/paw.exe' || 'build/paw' }} extension ci_extension ci_extension
+          cmake -S ci_extension -B ci_extension/build -DLUCY_SOURCE_DIR=${{ github.workspace }} -DLUCY_RUNTIME_DIR=${{ github.workspace }}/build
+          cmake --build ci_extension/build --config ${{ matrix.build_type }} --parallel 2

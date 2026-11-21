@@ -1,0 +1,12 @@
+class NestedImportProbe {
+    func initialize(value) {
+        self.value = value
+    }
+    func get_value() {
+        return self.value
+    }
+}
+
+func nested_import_value() {
+    return "nested-import-ok"
+}

@@ -1,0 +1,19 @@
+# End-to-end example: parse, validate, normalize, and persist JSON configuration.
+let config = data.json.parse(fs.read("projects/fixtures/config.json"))
+if !config.has("service") {
+    throw "ConfigurationError: missing service"
+}
+if !config.has("port") {
+    throw "ConfigurationError: missing port"
+}
+let port = config.get("port")
+if port < 1 or port > 65535 {
+    throw "ConfigurationError: port must be between 1 and 65535"
+}
+let normalized = {
+    service: config.get("service"),
+    port: port,
+    enabled: config.has("enabled") ? config.get("enabled") : true
+}
+fs.write("projects/fixtures/config.normalized.json", data.json.pretty(normalized))
+println "validated " + normalized.get("service") + " on port " + port.to_string()

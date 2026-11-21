@@ -1,9 +1,7 @@
 import http
 
-sock = http.connect("localhost", 0)
 print http.resolve "localhost"
-sock.close()
 
-# HTTP methods are available when a network connection is available.
-client = HTTP.new "https://example.com"
+let client = http.client "https://example.com"
+client.timeout 10
 print client

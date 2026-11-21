@@ -1,0 +1,34 @@
+# Lucy 2.0.1 regression probe: these cases must no longer corrupt data or hang.
+import data
+
+println "utf8-codepoint-length=" + str("Aé🙂".length())
+println "utf8-second-codepoint=" + "Aé🙂".char_at(1)
+println "utf8-reversed=" + "Aé🙂".reverse()
+println "csv-empty=" + data.stringify(data.csv.parse(""))
+println "csv-final-newline=" + data.stringify(data.csv.parse("a,b\n"))
+println "json-surrogate=" + data.stringify(data.parse("\"\\uD83D\\uDE00\""))
+
+var invalid_integer_rejected = false
+try {
+    "12x".to_int()
+} catch Exception as error {
+    invalid_integer_rejected = true
+}
+assert invalid_integer_rejected
+
+var invalid_float_rejected = false
+try {
+    "1.25abc".to_float()
+} catch Exception as error {
+    invalid_float_rejected = true
+}
+assert invalid_float_rejected
+
+var empty_replace_rejected = false
+try {
+    "abc".replace("", "")
+} catch Exception as error {
+    empty_replace_rejected = true
+}
+assert empty_replace_rejected
+println "invalid inputs rejected"

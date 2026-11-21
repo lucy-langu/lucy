@@ -17,11 +17,11 @@ contexts:
       push: shell
     - match: '\b(true|false|nil)\b'
       scope: constant.language.lucy
-    - match: '\b(if|else|while|for|foreach|loop|end|return|break|continue|try|catch|finally|throw|import|from|as|in)\b'
+    - match: '\b(if|unless|else|while|repeat|for|foreach|loop|switch|case|default|return|break|continue|try|catch|finally|throw|import|from|as|in|let|var|const|global|new|self|super)\b'
       scope: keyword.control.lucy
     - match: '\b(const|global|new|self|super)\b'
       scope: storage.type.lucy
-    - match: '\b(def|function|class)\b'
+    - match: '\b(func|lambda|class|struct)\b'
       scope: storage.type.lucy
     - match: '\b(0[xX][0-9A-Fa-f]+|[0-9]+(?:\.[0-9]+)?)\b'
       scope: constant.numeric.lucy

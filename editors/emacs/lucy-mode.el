@@ -1,8 +1,8 @@
 ;;; lucy-mode.el --- Major mode for Lucy -*- lexical-binding: t; -*-
 
 (defconst lucy-keywords
-  '("if" "else" "while" "for" "foreach" "loop" "function" "def"
-    "class" "return" "break" "continue" "end" "try" "catch" "finally"
+  '("if" "unless" "else" "while" "repeat" "for" "foreach" "loop" "switch" "case" "default" "func" "lambda"
+    "class" "struct" "return" "break" "continue" "try" "catch" "finally"
     "throw" "import" "from" "as" "const" "global" "in" "new" "self" "super"))
 
 (defconst lucy-font-lock-keywords

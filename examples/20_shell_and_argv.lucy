@@ -1,9 +1,9 @@
 import system
 
-print "Arguments:"
-for arg in system.argv()
-    print arg
-end
+print("Arguments:")
+for arg in system.argv() {
+    print(arg)
+}
 
-output = `echo Lucy`
-print output
+let output = `echo Lucy`
+print(output)

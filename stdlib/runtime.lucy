@@ -1,284 +1,290 @@
 # Lucy runtime utilities. Reflection, callable helpers, and collection algorithms.
 
 # Kernel-style convenience functions.
-class Kernel
-    def printf(format_string, values = [])
+class Kernel {
+    func printf(format_string, values = []) {
         return __kernel_printf(format_string, values)
-    end
+    }
 
-    def p(value)
+    func p(value) {
         return print(value)
-    end
+    }
 
-    def pp(value)
+    func pp(value) {
         return print(value)
-    end
+    }
 
-    def format(format_string, values = [])
+    func format(format_string, values = []) {
         return __kernel_format(format_string, values)
-    end
+    }
 
-    def sprintf(format_string, values = [])
+    func sprintf(format_string, values = []) {
         return self.format(format_string, values)
-    end
+    }
 
-    def catch(callback)
-        try
+    func catch(callback) {
+        try {
             return callback()
-        catch Exception as error
+        }
+        catch Exception as error {
             return error
-        end
-    end
+        }
+    }
 
-    def rescue(callback, handler)
-        try
+    func rescue(callback, handler) {
+        try {
             return callback()
-        catch Exception as error
+        }
+        catch Exception as error {
             return handler(error)
-        end
-    end
+        }
+    }
 
-    def ensure(callback, cleanup)
-        try
+    func ensure(callback, cleanup) {
+        try {
             return callback()
-        finally
+        }
+        finally {
             cleanup()
-        end
-    end
+        }
+    }
 
-    def system(command)
+    func system(command) {
         return __kernel_system(command)
-    end
+    }
 
-    def spawn(command)
+    func spawn(command) {
         return __process_spawn(command)
-    end
+    }
 
-    def trap(signal_number, callback)
+    func trap(signal_number, callback) {
         return __signal_trap(signal_number, callback)
-    end
+    }
 
-    def global_variables()
+    func global_variables() {
         return __kernel_global_variables()
-    end
+    }
 
-    def local_variables()
+    func local_variables() {
         return __kernel_local_variables()
-    end
+    }
 
-    def methods(value)
+    func methods(value) {
         return __kernel_methods(value)
-    end
+    }
 
-    def respond_to?(value, name)
+    func respond_to?(value, name) {
         return __kernel_respond_to(value, name)
-    end
+    }
 
-    def send(value, name, args = [])
+    func send(value, name, args = []) {
         return __kernel_send(value, name, args)
-    end
+    }
 
-    def inspect(value)
+    func inspect(value) {
         return __kernel_inspect(value)
-    end
+    }
 
-    def to_a(value)
+    func to_a(value) {
         return __kernel_to_a(value)
-    end
+    }
 
-    def to_h(value)
+    func to_h(value) {
         return __kernel_to_h(value)
-    end
+    }
 
-    def to_sym(value)
+    func to_sym(value) {
         return __kernel_to_sym(value)
-    end
+    }
 
-    def ancestors(value)
+    func ancestors(value) {
         return __kernel_ancestors(value)
-    end
+    }
 
-    def superclass(value)
+    func superclass(value) {
         return __kernel_superclass(value)
-    end
+    }
 
-    def singleton_class(value)
+    func singleton_class(value) {
         return type(value)
-    end
+    }
 
-    def proc(callback)
+    func proc(callback) {
         return callback
-    end
+    }
 
-    def lambda(callback)
+    func lambda(callback) {
         return callback
-    end
-end
+    }
+}
 
 kernel = Kernel.new()
 
 # Collection helpers built from Lucy's array and map primitives.
-class Collections
-    def first(items)
+class Collections {
+    func first(items) {
         return items.first()
-    end
+    }
 
-    def last(items)
+    func last(items) {
         return items.last()
-    end
+    }
 
-    def reverse(items)
+    func reverse(items) {
         result = []
         i = items.length() - 1
-        while i >= 0
+        while i >= 0 {
             result.push(items[i])
             i -= 1
-        end
+        }
         return result
-    end
+    }
 
-    def contains(items, value)
+    func contains(items, value) {
         return items.contains(value)
-    end
+    }
 
-    def count(items, value)
+    func count(items, value) {
         return items.count(value)
-    end
+    }
 
-    def index(items, value)
+    func index(items, value) {
         return items.index(value)
-    end
+    }
 
-    def compact(items)
+    func compact(items) {
         result = []
-        for item in items
-            if item
+        for item in items {
+            if item {
                 result.push(item)
-            end
-        end
+            }
+        }
         return result
-    end
+    }
 
-    def unique(items)
+    func unique(items) {
         result = []
-        for item in items
-            if !result.contains(item)
+        for item in items {
+            if !result.contains(item) {
                 result.push(item)
-            end
-        end
+            }
+        }
         return result
-    end
+    }
 
-    def flatten(items)
+    func flatten(items) {
         result = []
-        for item in items
-            if type(item) == "array"
+        for item in items {
+            if type(item) == "array" {
                 nested = self.flatten(item)
-                for value in nested
+                for value in nested {
                     result.push(value)
-                end
-            else
+                }
+            } else {
                 result.push(item)
-            end
-        end
+            }
+        }
         return result
-    end
+    }
 
-    def sum(items)
+    func sum(items) {
         return sum(items)
-    end
+    }
 
-    def min(items)
-        if items.length() == 0
+    func min(items) {
+        if items.length() == 0 {
             return nil
-        end
+        }
         result = items[0]
-        for item in items
-            if item < result
+        for item in items {
+            if item < result {
                 result = item
-            end
-        end
+            }
+        }
         return result
-    end
+    }
 
-    def max(items)
-        if items.length() == 0
+    func max(items) {
+        if items.length() == 0 {
             return nil
-        end
+        }
         result = items[0]
-        for item in items
-            if item > result
+        for item in items {
+            if item > result {
                 result = item
-            end
-        end
+            }
+        }
         return result
-    end
-end
+    }
+}
 
 collections = Collections.new()
 
 # Flat public runtime API. Reflection and callable helpers are one level under `runtime`.
-def printf(format_string, values = [])
+func printf(format_string, values = []) {
     return __kernel_printf(format_string, values)
-end
+}
 
-def format(format_string, values = [])
+func format(format_string, values = []) {
     return __kernel_format(format_string, values)
-end
+}
 
-def catch(callback)
-    try
+func catch(callback) {
+    try {
         return callback()
-    catch Exception as error
+    }
+    catch Exception as error {
         return error
-    end
-end
+    }
+}
 
-def rescue(callback, handler)
-    try
+func rescue(callback, handler) {
+    try {
         return callback()
-    catch Exception as error
+    }
+    catch Exception as error {
         return handler(error)
-    end
-end
+    }
+}
 
-def ensure(callback, cleanup)
-    try
+func ensure(callback, cleanup) {
+    try {
         return callback()
-    finally
+    }
+    finally {
         cleanup()
-    end
-end
+    }
+}
 
-def methods(value)
+func methods(value) {
     return __kernel_methods(value)
-end
+}
 
-def responds(value, name)
+func responds(value, name) {
     return __kernel_respond_to(value, name)
-end
+}
 
-def call(value, name, args = [])
+func call(value, name, args = []) {
     return __kernel_send(value, name, args)
-end
+}
 
-def inspect(value)
+func inspect(value) {
     return __kernel_inspect(value)
-end
+}
 
-def variables()
+func variables() {
     return __kernel_local_variables()
-end
+}
 
-def globals()
+func globals() {
     return __kernel_global_variables()
-end
+}
 
-def ancestors(value)
+func ancestors(value) {
     return __kernel_ancestors(value)
-end
+}
 
-def superclass(value)
+func superclass(value) {
     return __kernel_superclass(value)
-end
+}
 

@@ -1,0 +1,3 @@
+let discovered = modules_info()
+assert(discovered.has("fs"), "module discovery should include fs")
+assert(discovered["fs"].contains("fs.lucy"), "module discovery should return a source path")
