@@ -1,0 +1,90 @@
+# Graph algorithms expect Graph from graph.lucy. Vertices are string IDs.
+func breadth_first_search(graph, start) {
+    let visited = {}
+    let order = []
+    if !graph.has_vertex(start) {
+        return order
+    }
+    let queue = [start]
+    visited.set(start, true)
+    var head = 0
+    while head < queue.length() {
+        let vertex = queue[head]
+        head += 1
+        order.push(vertex)
+        for neighbor in graph.neighbors(vertex) {
+            if !visited.has(neighbor) {
+                visited.set(neighbor, true)
+                queue.push(neighbor)
+            }
+        }
+    }
+    return order
+}
+
+func depth_first_search(graph, start) {
+    let visited = {}
+    let order = []
+    if !graph.has_vertex(start) {
+        return order
+    }
+    let stack = [start]
+    while stack.length() > 0 {
+        let vertex = stack.pop()
+        if !visited.has(vertex) {
+            visited.set(vertex, true)
+            order.push(vertex)
+            let neighbors = graph.neighbors(vertex)
+            var i = neighbors.length() - 1
+            while i >= 0 {
+                if !visited.has(neighbors[i]) {
+                    stack.push(neighbors[i])
+                }
+                i -= 1
+            }
+        }
+    }
+    return order
+}
+
+func dijkstra(graph, start) {
+    let distances = {}
+    let visited = {}
+    let vertices = graph.vertices()
+    for vertex in vertices {
+        distances.set(vertex, nil)
+    }
+    if !graph.has_vertex(start) {
+        return distances
+    }
+    distances.set(start, 0)
+    while true {
+        var current = nil
+        var best = nil
+        for vertex in vertices {
+            let distance = distances.get(vertex)
+            if !visited.has(vertex) and distance != nil {
+                if best == nil or distance < best {
+                    best = distance
+                    current = vertex
+                }
+            }
+        }
+        if current == nil {
+            break
+        }
+        visited.set(current, true)
+        for neighbor in graph.neighbors(current) {
+            let weight = graph.edge_weight(current, neighbor)
+            if weight < 0 {
+                return nil
+            }
+            let candidate = best + weight
+            let old = distances.get(neighbor)
+            if old == nil or candidate < old {
+                distances.set(neighbor, candidate)
+            }
+        }
+    }
+    return distances
+}

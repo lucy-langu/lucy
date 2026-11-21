@@ -1,0 +1,24 @@
+# LucyDS public API
+# This entry point intentionally re-exports only the supported public types
+# and functions. Implementation modules live beside this file so imports are
+# resolved relative to the package entry point by Lucy 2.0.7.
+
+from linked_list import LinkedList
+from doubly_linked_list import DoublyLinkedList
+from stack import Stack
+from queue import Queue
+from deque import Deque
+from hash_table import HashTable
+from binary_search_tree import BinarySearchTree
+from avl_tree import AVLTree
+from binary_heap import BinaryHeap
+from trie import Trie
+from graph import Graph
+from union_find import UnionFind
+
+from searching import linear_search, binary_search, lower_bound
+from sorting import bubble_sort, selection_sort, insertion_sort, merge_sort, quick_sort
+from graph_algorithms import breadth_first_search, depth_first_search, dijkstra
+
+# Backwards-friendly short name used by the original LucyDS examples.
+let DoublyLinked = DoublyLinkedList

@@ -1,0 +1,181 @@
+class _DLNode {
+    func initialize(value) {
+        self.value = value
+        self.next = nil
+        self.prev = nil
+    }
+}
+
+class DoublyLinkedList {
+    func initialize() {
+        self.head = nil
+        self.tail = nil
+        self.count = 0
+    }
+
+    func append(value) {
+        let node = _DLNode.new(value)
+        if self.tail == nil {
+            self.head = node
+            self.tail = node
+        } else {
+            node.prev = self.tail
+            self.tail.next = node
+            self.tail = node
+        }
+        self.count += 1
+        return self
+    }
+
+    func prepend(value) {
+        let node = _DLNode.new(value)
+        if self.head == nil {
+            self.head = node
+            self.tail = node
+        } else {
+            node.next = self.head
+            self.head.prev = node
+            self.head = node
+        }
+        self.count += 1
+        return self
+    }
+
+    func get(index) {
+        if index < 0 or index >= self.count {
+            return nil
+        }
+        var current = nil
+        if index < int(self.count / 2) {
+            current = self.head
+            var i = 0
+            while i < index {
+                current = current.next
+                i += 1
+            }
+        } else {
+            current = self.tail
+            var i = self.count - 1
+            while i > index {
+                current = current.prev
+                i -= 1
+            }
+        }
+        return current.value
+    }
+
+    func insert(index, value) {
+        if index < 0 or index > self.count {
+            return false
+        }
+        if index == 0 {
+            self.prepend(value)
+            return true
+        }
+        if index == self.count {
+            self.append(value)
+            return true
+        }
+        var current = self.head
+        var i = 0
+        while i < index {
+            current = current.next
+            i += 1
+        }
+        let node = _DLNode.new(value)
+        node.prev = current.prev
+        node.next = current
+        current.prev.next = node
+        current.prev = node
+        self.count += 1
+        return true
+    }
+
+    func remove_at(index) {
+        if index < 0 or index >= self.count {
+            return nil
+        }
+        var current = self.head
+        var i = 0
+        while i < index {
+            current = current.next
+            i += 1
+        }
+        if current.prev == nil {
+            self.head = current.next
+        } else {
+            current.prev.next = current.next
+        }
+        if current.next == nil {
+            self.tail = current.prev
+        } else {
+            current.next.prev = current.prev
+        }
+        self.count -= 1
+        if self.count == 0 {
+            self.head = nil
+            self.tail = nil
+        }
+        return current.value
+    }
+
+    func remove(value) {
+        var current = self.head
+        var i = 0
+        while current != nil {
+            if current.value == value {
+                self.remove_at(i)
+                return true
+            }
+            current = current.next
+            i += 1
+        }
+        return false
+    }
+
+    func contains(value) {
+        var current = self.head
+        while current != nil {
+            if current.value == value {
+                return true
+            }
+            current = current.next
+        }
+        return false
+    }
+
+    func size() {
+        return self.count
+    }
+
+    func is_empty() {
+        return self.count == 0
+    }
+
+    func clear() {
+        self.head = nil
+        self.tail = nil
+        self.count = 0
+        return self
+    }
+
+    func to_array() {
+        let result = []
+        var current = self.head
+        while current != nil {
+            result.push(current.value)
+            current = current.next
+        }
+        return result
+    }
+
+    func to_array_reverse() {
+        let result = []
+        var current = self.tail
+        while current != nil {
+            result.push(current.value)
+            current = current.prev
+        }
+        return result
+    }
+}

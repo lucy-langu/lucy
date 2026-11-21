@@ -1,0 +1,124 @@
+class _AVLNode {
+    func initialize(value) {
+        self.value = value
+        self.left = nil
+        self.right = nil
+        self.height = 1
+    }
+}
+
+class AVLTree {
+    func initialize() {
+        self.root = nil
+        self.count = 0
+    }
+    private func _height(node) {
+        if node == nil {
+            return 0
+        }
+        return node.height
+    }
+    private func _max(a, b) {
+        if a > b {
+            return a
+        }
+        return b
+    }
+    private func _update(node) {
+        node.height = self._max(self._height(node.left), self._height(node.right)) + 1
+    }
+    private func _balance(node) {
+        if node == nil {
+            return 0
+        }
+        return self._height(node.left) - self._height(node.right)
+    }
+    private func _rotate_right(y) {
+        let x = y.left
+        let middle = x.right
+        x.right = y
+        y.left = middle
+        self._update(y)
+        self._update(x)
+        return x
+    }
+    private func _rotate_left(x) {
+        let y = x.right
+        let middle = y.left
+        y.left = x
+        x.right = middle
+        self._update(x)
+        self._update(y)
+        return y
+    }
+    func insert(value) {
+        let before = self.count
+        self.root = self._insert(self.root, value)
+        return self.count > before
+    }
+    private func _insert(node, value) {
+        if node == nil {
+            self.count += 1
+            return _AVLNode.new(value)
+        }
+        if value < node.value {
+            node.left = self._insert(node.left, value)
+        } else if value > node.value {
+            node.right = self._insert(node.right, value)
+        } else {
+            return node
+        }
+        self._update(node)
+        let balance = self._balance(node)
+        if balance > 1 and value < node.left.value {
+            return self._rotate_right(node)
+        }
+        if balance < -1 and value > node.right.value {
+            return self._rotate_left(node)
+        }
+        if balance > 1 and value > node.left.value {
+            node.left = self._rotate_left(node.left)
+            return self._rotate_right(node)
+        }
+        if balance < -1 and value < node.right.value {
+            node.right = self._rotate_right(node.right)
+            return self._rotate_left(node)
+        }
+        return node
+    }
+    func contains(value) {
+        var current = self.root
+        while current != nil {
+            if value == current.value {
+                return true
+            } else if value < current.value {
+                current = current.left
+            } else {
+                current = current.right
+            }
+        }
+        return false
+    }
+    func inorder() {
+        let result = []
+        self._walk(self.root, result)
+        return result
+    }
+    private func _walk(node, result) {
+        if node == nil {
+            return
+        }
+        self._walk(node.left, result)
+        result.push(node.value)
+        self._walk(node.right, result)
+    }
+    func size() {
+        return self.count
+    }
+    func height() {
+        return self._height(self.root)
+    }
+    func is_empty() {
+        return self.count == 0
+    }
+}

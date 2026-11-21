@@ -1,0 +1,110 @@
+# Vertices are string identifiers. Adjacency is stored in maps because Lucy
+# maps require string keys. Edge weights are numeric.
+class Graph {
+    func initialize(directed = false) {
+        self.directed = directed
+        self.adjacency = {}
+        self.edge_count = 0
+    }
+    func add_vertex(vertex) {
+        if type(vertex) != "string" {
+            return false
+        }
+        if self.adjacency.has(vertex) {
+            return false
+        }
+        self.adjacency.set(vertex, {})
+        return true
+    }
+    func has_vertex(vertex) {
+        return self.adjacency.has(vertex)
+    }
+    func add_edge(from_vertex, to_vertex, weight = 1) {
+        if type(from_vertex) != "string" or type(to_vertex) != "string" {
+            return false
+        }
+        if !self.has_vertex(from_vertex) {
+            self.add_vertex(from_vertex)
+        }
+        if !self.has_vertex(to_vertex) {
+            self.add_vertex(to_vertex)
+        }
+        let from_edges = self.adjacency.get(from_vertex)
+        if !from_edges.has(to_vertex) {
+            self.edge_count += 1
+        }
+        from_edges.set(to_vertex, weight)
+        if !self.directed {
+            let to_edges = self.adjacency.get(to_vertex)
+            to_edges.set(from_vertex, weight)
+        }
+        return true
+    }
+    func has_edge(from_vertex, to_vertex) {
+        if !self.has_vertex(from_vertex) {
+            return false
+        }
+        return self.adjacency.get(from_vertex).has(to_vertex)
+    }
+    func edge_weight(from_vertex, to_vertex) {
+        if !self.has_edge(from_vertex, to_vertex) {
+            return nil
+        }
+        return self.adjacency.get(from_vertex).get(to_vertex)
+    }
+    func neighbors(vertex) {
+        if !self.has_vertex(vertex) {
+            return []
+        }
+        return self.adjacency.get(vertex).keys()
+    }
+    func vertices() {
+        return self.adjacency.keys()
+    }
+    func remove_edge(from_vertex, to_vertex) {
+        if !self.has_edge(from_vertex, to_vertex) {
+            return false
+        }
+        self.adjacency.get(from_vertex).delete(to_vertex)
+        if !self.directed {
+            self.adjacency.get(to_vertex).delete(from_vertex)
+        }
+        self.edge_count -= 1
+        return true
+    }
+    func remove_vertex(vertex) {
+        if !self.has_vertex(vertex) {
+            return false
+        }
+        let neighbors = self.neighbors(vertex)
+        for neighbor in neighbors {
+            if !self.directed {
+                self.adjacency.get(neighbor).delete(vertex)
+            }
+            self.edge_count -= 1
+        }
+        self.adjacency.delete(vertex)
+        if self.directed {
+            let keys = self.adjacency.keys()
+            for key in keys {
+                if self.adjacency.get(key).has(vertex) {
+                    self.adjacency.get(key).delete(vertex)
+                    self.edge_count -= 1
+                }
+            }
+        }
+        return true
+    }
+    func vertex_count() {
+        return self.adjacency.keys().length()
+    }
+    func size() {
+        return self.vertex_count()
+    }
+    func edges_count() {
+        return self.edge_count
+    }
+    func is_directed() {
+        return self.directed
+    }
+}

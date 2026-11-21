@@ -1,0 +1,146 @@
+func _copy_array(items) {
+    let result = []
+    for value in items {
+        result.push(value)
+    }
+    return result
+}
+
+func bubble_sort(items) {
+    let result = _copy_array(items)
+    let n = result.length()
+    var i = 0
+    while i < n {
+        var j = 0
+        while j < n - i - 1 {
+            if result[j] > result[j + 1] {
+                let temp = result[j]
+                result[j] = result[j + 1]
+                result[j + 1] = temp
+            }
+            j += 1
+        }
+        i += 1
+    }
+    return result
+}
+
+func selection_sort(items) {
+    let result = _copy_array(items)
+    let n = result.length()
+    var i = 0
+    while i < n {
+        var smallest = i
+        var j = i + 1
+        while j < n {
+            if result[j] < result[smallest] {
+                smallest = j
+            }
+            j += 1
+        }
+        if smallest != i {
+            let temp = result[i]
+            result[i] = result[smallest]
+            result[smallest] = temp
+        }
+        i += 1
+    }
+    return result
+}
+
+func insertion_sort(items) {
+    let result = _copy_array(items)
+    var i = 1
+    while i < result.length() {
+        let value = result[i]
+        var j = i - 1
+        while j >= 0 and result[j] > value {
+            result[j + 1] = result[j]
+            j -= 1
+        }
+        result[j + 1] = value
+        i += 1
+    }
+    return result
+}
+
+func merge_sort(items) {
+    if items.length() <= 1 {
+        return _copy_array(items)
+    }
+    let middle = int(items.length() / 2)
+    var left = []
+    var right = []
+    var i = 0
+    while i < middle {
+        left.push(items[i])
+        i += 1
+    }
+    while i < items.length() {
+        right.push(items[i])
+        i += 1
+    }
+    left = merge_sort(left)
+    right = merge_sort(right)
+    return _merge(left, right)
+}
+
+func _merge(left, right) {
+    let result = []
+    var i = 0
+    var j = 0
+    while i < left.length() and j < right.length() {
+        if left[i] <= right[j] {
+            result.push(left[i])
+            i += 1
+        } else {
+            result.push(right[j])
+            j += 1
+        }
+    }
+    while i < left.length() {
+        result.push(left[i])
+        i += 1
+    }
+    while j < right.length() {
+        result.push(right[j])
+        j += 1
+    }
+    return result
+}
+
+func quick_sort(items) {
+    let result = _copy_array(items)
+    _quick_sort_range(result, 0, result.length() - 1)
+    return result
+}
+
+func _quick_sort_range(items, low, high) {
+    if low >= high {
+        return
+    }
+    let pivot = items[int((low + high) / 2)]
+    var i = low
+    var j = high
+    while i <= j {
+        while items[i] < pivot {
+            i += 1
+        }
+        while items[j] > pivot {
+            j -= 1
+        }
+        if i <= j {
+            let temp = items[i]
+            items[i] = items[j]
+            items[j] = temp
+            i += 1
+            j -= 1
+        }
+    }
+    if low < j {
+        _quick_sort_range(items, low, j)
+    }
+    if i < high {
+        _quick_sort_range(items, i, high)
+    }
+}

@@ -1,0 +1,42 @@
+class Deque {
+    func initialize() {
+        self.items = []
+    }
+    func push_front(value) {
+        self.items.unshift(value)
+        return self.items.length()
+    }
+    func push_back(value) {
+        self.items.push(value)
+        return self.items.length()
+    }
+    func pop_front() {
+        return self.items.shift()
+    }
+    func pop_back() {
+        return self.items.pop()
+    }
+    func front() {
+        return self.items.first()
+    }
+    func back() {
+        return self.items.last()
+    }
+    func size() {
+        return self.items.length()
+    }
+    func is_empty() {
+        return self.items.length() == 0
+    }
+    func clear() {
+        self.items.clear()
+        return self
+    }
+    func to_array() {
+        let result = []
+        for value in self.items {
+            result.push(value)
+        }
+        return result
+    }
+}

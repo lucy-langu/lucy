@@ -1,0 +1,64 @@
+# Disjoint Set Union (Union-Find). Elements are string identifiers.
+class UnionFind {
+    func initialize() {
+        self.parent = {}
+        self.rank = {}
+        self.count = 0
+    }
+    func add(value) {
+        if type(value) != "string" or self.parent.has(value) {
+            return false
+        }
+        self.parent.set(value, value)
+        self.rank.set(value, 0)
+        self.count += 1
+        return true
+    }
+    func find(value) {
+        if !self.parent.has(value) {
+            return nil
+        }
+        var parent_value = self.parent.get(value)
+        if parent_value != value {
+            parent_value = self.find(parent_value)
+            self.parent.set(value, parent_value)
+        }
+        return parent_value
+    }
+    func union(first, second) {
+        let root_a = self.find(first)
+        let root_b = self.find(second)
+        if root_a == nil or root_b == nil {
+            return false
+        }
+        if root_a == root_b {
+            return false
+        }
+        let rank_a = self.rank.get(root_a)
+        let rank_b = self.rank.get(root_b)
+        if rank_a < rank_b {
+            self.parent.set(root_a, root_b)
+        } else if rank_a > rank_b {
+            self.parent.set(root_b, root_a)
+        } else {
+            self.parent.set(root_b, root_a)
+            self.rank.set(root_a, rank_a + 1)
+        }
+        self.count -= 1
+        return true
+    }
+    func connected(first, second) {
+        let root_a = self.find(first)
+        let root_b = self.find(second)
+        if root_a == nil or root_b == nil {
+            return false
+        }
+        return root_a == root_b
+    }
+    func components() {
+        return self.count
+    }
+    func size() {
+        return self.parent.keys().length()
+    }
+}

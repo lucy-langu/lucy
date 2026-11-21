@@ -1,0 +1,20 @@
+import lucyds
+
+let numbers = lucyds.LinkedList.new()
+numbers.append(30)
+numbers.append(10)
+numbers.append(20)
+
+println "Linked list:"
+println numbers.to_array()
+
+println "Sorted copy:"
+println lucyds.merge_sort(numbers.to_array())
+
+let graph = lucyds.Graph.new()
+graph.add_edge("start", "middle", 4)
+graph.add_edge("middle", "finish", 7)
+
+let distances = lucyds.dijkstra(graph, "start")
+println "Distance to finish:"
+println distances.get("finish")
